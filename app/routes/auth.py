@@ -6,7 +6,6 @@ from app.database import get_db, User
 
 router = APIRouter()
 
-
 @router.post("/auth/register", tags=["auth"])
 async def register_user(user: UserRegistrationRequest, db: Session = Depends(get_db)):
     existing_user = (
@@ -31,7 +30,6 @@ async def register_user(user: UserRegistrationRequest, db: Session = Depends(get
         "message": f"User {user.username} registered successfully",
         "email": user.email,
     }
-
 
 @router.post("/auth/login", tags=["auth"])
 async def login_user(user: UserLoginRequest, db: Session = Depends(get_db)):

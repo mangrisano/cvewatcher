@@ -15,4 +15,6 @@ dependencies = [
 ]
 
 [tool.uv]
-dev-dependencies = []
+dev-dependencies = [
+    "types-sqlalchemy>=1.4.53.38",
+]

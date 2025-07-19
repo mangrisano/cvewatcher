@@ -2,10 +2,8 @@ import datetime
 from typing import Optional
 from pydantic import BaseModel, EmailStr, field_validator
 
-
 class HealthResponse(BaseModel):
     status: str
-
 
 class UserRegistrationRequest(BaseModel):
     username: str
@@ -19,7 +17,6 @@ class UserRegistrationRequest(BaseModel):
             raise ValueError("Password must be at least 8 characters long")
         return password
 
-
 class UserLoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -30,13 +27,11 @@ class UserLoginRequest(BaseModel):
             raise ValueError("Password must be at least 8 characters long")
         return password
 
-
 class AssetCreate(BaseModel):
     name: str
     version: Optional[str] = None
     cpe: Optional[str] = None
     description: Optional[str] = None
-
 
 class AssetResponse(BaseModel):
     id: int

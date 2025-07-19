@@ -1,8 +1,3 @@
-"""
-NIST NVD API Client
-Service for retrieving CVEs from the official NIST NVD API
-"""
-
 import json
 import logging
 from datetime import datetime, timedelta
@@ -14,10 +9,8 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class CVEData:
-    """Represents a CVE retrieved from the NIST API"""
 
     cve_id: str
     summary: str
@@ -28,37 +21,17 @@ class CVEData:
     affected_products: List[Dict[str, Any]]
     references: List[str]
 
-
 class NistNvdClient:
-    """Client for the NIST NVD 2.0 API"""
 
     BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize the NIST NVD client
-
-        Args:
-            api_key: Optional API key for higher rate limits
-        """
         self.api_key = api_key
         self.session_headers = {"User-Agent": "CVEWatcher/1.0 (Python)"}
         if api_key:
             self.session_headers["apiKey"] = api_key
 
     def _make_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Execute an HTTP request to the NIST API
-
-        Args:
-            params: Query parameters
-
-        Returns:
-            JSON response from the API
-
-        Raises:
-            Exception: If the request fails
-        """
         query_string = urlencode(params)
         url = f"{self.BASE_URL}?{query_string}"
 
@@ -90,22 +63,6 @@ class NistNvdClient:
         results_per_page: int = 20,
         start_index: int = 0,
     ) -> List[CVEData]:
-        """
-        Search CVEs in the NIST NVD API
-
-        Args:
-            cpe_name: CPE name to filter CVEs
-            keyword: Keyword to search
-            pub_start_date: Publication start date
-            pub_end_date: Publication end date
-            mod_start_date: Modification start date
-            mod_end_date: Modification end date
-            results_per_page: Number of results per page (max 2000)
-            start_index: Starting index
-
-        Returns:
-            List of CVEData objects
-        """
         params: Dict[str, Any] = {
             "resultsPerPage": min(results_per_page, 2000),
             "startIndex": start_index,
@@ -134,16 +91,6 @@ class NistNvdClient:
     def get_recent_cves(
         self, days: int = 7, cpe_name: Optional[str] = None
     ) -> List[CVEData]:
-        """
-        Retrieves CVEs published in the last specified days
-
-        Args:
-            days: Number of days back to search
-            cpe_name: Optional CPE name to filter
-
-        Returns:
-            List of recent CVEs
-        """
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
 
@@ -157,16 +104,6 @@ class NistNvdClient:
     def search_cves_for_product(
         self, product_name: str, version: Optional[str] = None
     ) -> List[CVEData]:
-        """
-        Search CVEs for a specific product
-
-        Args:
-            product_name: Product name
-            version: Specific version (optional)
-
-        Returns:
-            List of CVEs affecting the product
-        """
         keyword = product_name
         if version:
             keyword = f"{product_name} {version}"
@@ -174,15 +111,6 @@ class NistNvdClient:
         return self.search_cves(keyword=keyword, results_per_page=100)
 
     def _parse_cve_response(self, response: Dict[str, Any]) -> List[CVEData]:
-        """
-        Parses the NIST API response into CVEData objects
-
-        Args:
-            response: JSON response from the API
-
-        Returns:
-            List of CVEData objects
-        """
         cves = []
 
         try:
@@ -300,6 +228,5 @@ class NistNvdClient:
         except ValueError as e:
             logger.warning(f"Unable to parse date '{date_string}': {e}")
             return None
-
 
 nist_client = NistNvdClient()

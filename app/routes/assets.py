@@ -1,11 +1,13 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from datetime import datetime
 from app.models import AssetCreate, AssetResponse
 from app.database.connection import get_db
 from app.database.models import Asset
 from app.dependencies import get_current_user
 from app.services.nist_nvd import nist_client
+from app.services.cve_monitoring import CVEMonitoringService
 
 router = APIRouter()
 
@@ -21,22 +23,13 @@ async def register_asset(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Register a new asset to monitor for CVEs.
-
-    You can specify:
-    - name: Software/hardware name (e.g., "Apache HTTP Server")
-    - version: Version number (e.g., "2.4.41")
-    - cpe: CPE identifier for precise matching (e.g., "cpe:2.3:a:apache:http_server:2.4.41:*:*:*:*:*:*:*")
-    - description: Optional description
-    """
     try:
-        # Check if asset already exists for this user
+        user_email = current_user.get("sub")
         existing = (
             db.query(Asset)
             .filter(
                 Asset.name == asset_data.name,
-                Asset.user_email == current_user.get("email"),
+                Asset.user_email == user_email,
                 Asset.version == asset_data.version,
             )
             .first()
@@ -48,13 +41,12 @@ async def register_asset(
                 detail=f"Asset '{asset_data.name}' version '{asset_data.version}' already exists",
             )
 
-        # Create new asset
         new_asset = Asset(
             name=asset_data.name,
-            version=asset_data.version,
-            cpe=asset_data.cpe,
-            user_email=current_user.get("email"),
-            description=asset_data.description,
+            version=asset_data.version if asset_data.version else None,
+            cpe=asset_data.cpe if asset_data.cpe else None,
+            user_email=user_email,
+            description=asset_data.description if asset_data.description else None,
         )
 
         db.add(new_asset)
@@ -65,16 +57,16 @@ async def register_asset(
 
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="Error creating asset")
+    except Exception as e:
+        print(f"Asset creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating asset: {str(e)}")
 
 
 @router.get("/assets", tags=["assets"], response_model=List[AssetResponse])
 async def get_my_assets(
     current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    """Get all assets registered by the current user."""
-    assets = db.query(Asset).filter(Asset.user_email == current_user.get("email")).all()
+    assets = db.query(Asset).filter(Asset.user_email == current_user.get("sub")).all()
     return [AssetResponse.model_validate(asset) for asset in assets]
 
 
@@ -84,10 +76,9 @@ async def get_asset(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get details of a specific asset."""
     asset = (
         db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("email"))
+        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
         .first()
     )
 
@@ -103,11 +94,9 @@ async def get_asset_vulnerabilities(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get all CVEs affecting a specific asset."""
-    # Get the asset
     asset = (
         db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("email"))
+        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
         .first()
     )
 
@@ -117,7 +106,6 @@ async def get_asset_vulnerabilities(
     try:
         vulnerabilities = []
 
-        # Build search queries
         search_queries = []
 
         asset_name = getattr(asset, "name", None)
@@ -126,7 +114,6 @@ async def get_asset_vulnerabilities(
 
         if asset_name:
             search_queries.append(asset_name)
-            # Add variations
             name_lower = asset_name.lower()
             search_queries.append(name_lower.replace(" ", ""))
             search_queries.append(name_lower.replace(" ", "-"))
@@ -137,18 +124,13 @@ async def get_asset_vulnerabilities(
         if asset_version and asset_name:
             search_queries.append(f"{asset_name} {asset_version}")
 
-        # Remove duplicates
         search_queries = list(set(search_queries))
 
-        # Search for CVEs
-        for query in search_queries[
-            :3
-        ]:  # Limit to first 3 queries to avoid too many API calls
+        for query in search_queries[:3]:
             try:
                 cves = nist_client.search_cves(keyword=query, results_per_page=50)
 
                 for cve in cves:
-                    # Check if CVE is relevant
                     if asset_name and asset_name.lower() in cve.summary.lower():
                         vulnerabilities.append(
                             {
@@ -167,7 +149,6 @@ async def get_asset_vulnerabilities(
                 print(f"Error searching for {query}: {e}")
                 continue
 
-        # Remove duplicates by CVE ID
         unique_cves = {}
         for vuln in vulnerabilities:
             cve_id = vuln["cve_id"]
@@ -197,10 +178,9 @@ async def delete_asset(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete an asset from monitoring."""
     asset = (
         db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("email"))
+        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
         .first()
     )
 
@@ -209,3 +189,83 @@ async def delete_asset(
 
     db.delete(asset)
     db.commit()
+
+
+@router.get("/assets/{asset_id}/monitor", tags=["assets"])
+async def monitor_asset_cves(
+    asset_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    asset = (
+        db.query(Asset)
+        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
+        .first()
+    )
+
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    try:
+        monitoring_service = CVEMonitoringService(db)
+        result = await monitoring_service._monitor_single_asset(asset)
+
+        return {
+            "message": f"Monitoring completed for asset '{asset.name}'",
+            "monitoring_result": result,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error monitoring asset: {str(e)}")
+
+
+@router.get("/monitoring/report", tags=["assets"])
+async def get_monitoring_report(
+    days: int = 7,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        monitoring_service = CVEMonitoringService(db)
+        user_email = current_user.get("sub") or ""
+        report = await monitoring_service.get_monitoring_report(
+            user_email=user_email, days=days
+        )
+        return report
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error generating report: {str(e)}"
+        )
+
+
+@router.post("/monitoring/scan-all", tags=["assets"])
+async def scan_all_assets(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        monitoring_service = CVEMonitoringService(db)
+
+        user_assets = (
+            db.query(Asset).filter(Asset.user_email == current_user.get("sub")).all()
+        )
+
+        if not user_assets:
+            return {"message": "No assets found to monitor"}
+
+        scan_results = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "user_email": current_user.get("sub"),
+            "total_assets_scanned": len(user_assets),
+            "asset_results": [],
+        }
+
+        for asset in user_assets:
+            result = await monitoring_service._monitor_single_asset(asset)
+            scan_results["asset_results"].append(result)
+
+        return scan_results
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error scanning assets: {str(e)}")

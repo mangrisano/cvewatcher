@@ -1,18 +1,10 @@
-#!/usr/bin/env python3
-"""
-Test Asset Management Features
-"""
-
 import requests
-import json
 
 BASE_URL = "http://localhost:8000"
-
 
 def test_asset_management():
     print("🔍 Testing Asset Management Features")
 
-    # Login to get token
     login_data = {"email": "m.angrisano@namirial.com", "password": "newpassword123"}
 
     login_response = requests.post(f"{BASE_URL}/login", json=login_data)
@@ -25,7 +17,6 @@ def test_asset_management():
 
     print("✅ Login successful")
 
-    # Test 1: Register a new asset
     print("\n📦 Test 1: Register Apache HTTP Server")
     asset_data = {
         "name": "Apache HTTP Server",
@@ -46,7 +37,6 @@ def test_asset_management():
         print(f"❌ Asset registration failed: {response.text}")
         return
 
-    # Test 2: Get all my assets
     print("\n📋 Test 2: Get my assets")
     response = requests.get(f"{BASE_URL}/assets", headers=headers)
     if response.status_code == 200:
@@ -58,7 +48,6 @@ def test_asset_management():
         print(f"❌ Failed to get assets: {response.text}")
         return
 
-    # Test 3: Get vulnerabilities for the asset
     print(f"\n🚨 Test 3: Get vulnerabilities for asset {asset_id}")
     response = requests.get(
         f"{BASE_URL}/assets/{asset_id}/vulnerabilities", headers=headers
@@ -69,7 +58,6 @@ def test_asset_management():
         print(f"✅ Found {len(vulns)} vulnerabilities")
         print(f"   Search queries used: {result.get('search_queries_used', [])}")
 
-        # Show first few vulnerabilities
         for i, vuln in enumerate(vulns[:3]):
             print(
                 f"   {i + 1}. {vuln['cve_id']} - {vuln['severity']} ({vuln.get('score', 'N/A')})"
@@ -78,7 +66,6 @@ def test_asset_management():
     else:
         print(f"❌ Failed to get vulnerabilities: {response.text}")
 
-    # Test 4: Register another asset (WordPress)
     print("\n📦 Test 4: Register WordPress")
     asset_data = {
         "name": "WordPress",
@@ -91,26 +78,25 @@ def test_asset_management():
         asset = response.json()
         wordpress_id = asset["id"]
         print(f"✅ WordPress registered: ID {wordpress_id}")
+
+        print("\n🚨 Test 5: Get vulnerabilities for WordPress")
+        response = requests.get(
+            f"{BASE_URL}/assets/{wordpress_id}/vulnerabilities", headers=headers
+        )
+        if response.status_code == 200:
+            result = response.json()
+            vulns = result["vulnerabilities"]
+            print(f"✅ Found {len(vulns)} WordPress vulnerabilities")
+
+            for i, vuln in enumerate(vulns[:2]):
+                print(f"   {i + 1}. {vuln['cve_id']} - {vuln['severity']}")
+        else:
+            print(f"❌ Failed to get WordPress vulnerabilities: {response.text}")
     else:
         print(f"❌ WordPress registration failed: {response.text}")
-
-    # Test 5: Get vulnerabilities for WordPress
-    print(f"\n🚨 Test 5: Get vulnerabilities for WordPress")
-    response = requests.get(
-        f"{BASE_URL}/assets/{wordpress_id}/vulnerabilities", headers=headers
-    )
-    if response.status_code == 200:
-        result = response.json()
-        vulns = result["vulnerabilities"]
-        print(f"✅ Found {len(vulns)} WordPress vulnerabilities")
-
-        for i, vuln in enumerate(vulns[:2]):
-            print(f"   {i + 1}. {vuln['cve_id']} - {vuln['severity']}")
-    else:
-        print(f"❌ Failed to get WordPress vulnerabilities: {response.text}")
+        print("⚠️ Skipping WordPress vulnerability test")
 
     print("\n🎉 Asset management tests completed!")
-
 
 if __name__ == "__main__":
     try:

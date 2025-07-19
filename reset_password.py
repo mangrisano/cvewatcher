@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Password Reset Utility for CVE Watcher
-Use this script to reset a user's password or create a new user
-"""
 
 import sys
 from app.database.connection import get_db
@@ -11,7 +7,6 @@ from app.utils.auth import hash_password
 
 
 def reset_user_password(email: str, new_password: str):
-    """Reset password for an existing user"""
     try:
         with next(get_db()) as db:
             user = db.query(User).filter(User.email == email).first()
@@ -20,7 +15,6 @@ def reset_user_password(email: str, new_password: str):
                 print(f"❌ User with email {email} not found!")
                 return False
 
-            # Update password
             user.password_hash = hash_password(new_password)  # type: ignore
             db.commit()
 
@@ -35,10 +29,8 @@ def reset_user_password(email: str, new_password: str):
 
 
 def create_new_user(email: str, username: str, password: str):
-    """Create a new user"""
     try:
         with next(get_db()) as db:
-            # Check if user exists
             existing_user = (
                 db.query(User)
                 .filter((User.email == email) | (User.username == username))
@@ -51,7 +43,6 @@ def create_new_user(email: str, username: str, password: str):
                 print(f"   Username: {existing_user.username}")
                 return False
 
-            # Create new user
             hashed_password = hash_password(password)
             new_user = User(
                 username=username, email=email, password_hash=hashed_password
@@ -72,7 +63,6 @@ def create_new_user(email: str, username: str, password: str):
 
 
 def list_users():
-    """List all users in the database"""
     try:
         with next(get_db()) as db:
             users = db.query(User).all()

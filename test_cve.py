@@ -1,14 +1,8 @@
-#!/usr/bin/env python3
-"""
-Test script to verify CVE integration
-"""
-
 import json
 import urllib.request
 import urllib.parse
 
 BASE_URL = "http://127.0.0.1:8000"
-
 
 def test_cve_integration():
     print("🧪 Test CVE Integration")
@@ -91,7 +85,6 @@ def test_cve_integration():
         import traceback
 
         traceback.print_exc()
-
 
 if __name__ == "__main__":
     test_cve_integration()

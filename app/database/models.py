@@ -2,7 +2,6 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, Float, JSON
 from sqlalchemy.sql import func
 from app.database.connection import Base
 
-
 class User(Base):
     __tablename__ = "users"
 
@@ -14,7 +13,6 @@ class User(Base):
 
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"
-
 
 class Asset(Base):
     __tablename__ = "assets"
@@ -30,11 +28,10 @@ class Asset(Base):
     def __repr__(self):
         return f"<Asset(name='{self.name}', cpe='{self.cpe}')>"
 
-
 class CVE(Base):
     __tablename__ = "cves"
 
-    id = Column(String(20), primary_key=True)  # CVE-2024-1234
+    id = Column(String(20), primary_key=True)  
     summary = Column(Text)
     severity = Column(String(20))
     score = Column(Float)

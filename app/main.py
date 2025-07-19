@@ -12,11 +12,9 @@ app = FastAPI(
     version="0.1.0",
 )
 
-
 @app.on_event("startup")
 async def startup_event():
     create_tables()
-
 
 app.include_router(auth_router)
 app.include_router(misc_router)

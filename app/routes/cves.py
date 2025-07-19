@@ -1,8 +1,3 @@
-"""
-CVE Routes
-Endpoints for CVE management and vulnerability monitoring
-"""
-
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -14,8 +9,6 @@ router = APIRouter(prefix="/cves", tags=["CVE"])
 
 
 class CVEResponse(BaseModel):
-    """Response for a single CVE"""
-
     cve_id: str
     summary: Optional[str]
     severity: Optional[str]
@@ -29,8 +22,6 @@ class CVEResponse(BaseModel):
 
 
 class VulnerabilityResponse(BaseModel):
-    """Response for a vulnerability found in user assets"""
-
     asset_id: int
     asset_name: str
     asset_version: Optional[str]
@@ -46,10 +37,6 @@ async def fetch_recent_cves(
     days: int = Query(default=7, ge=1, le=30, description="Days back to search"),
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Retrieve and save recent CVEs from NIST NVD
-    Requires user authentication
-    """
     try:
         stored_count = cve_service.fetch_and_store_recent_cves(days=days)
         return {
@@ -68,26 +55,23 @@ async def get_recent_cves(
     limit: int = Query(default=20, ge=1, le=100, description="Number of CVE to return"),
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Retrieve recent CVEs saved in the database
-    """
     try:
         cves = cve_service.get_stored_cves(limit=limit)
 
         response = []
         for cve in cves:
             cve_response = CVEResponse(
-                cve_id=str(cve.id),  # type: ignore
-                summary=str(cve.summary) if cve.summary else None,  # type: ignore
-                severity=str(cve.severity) if cve.severity else None,  # type: ignore
+                cve_id=str(cve.id),
+                summary=str(cve.summary) if cve.summary else None,
+                severity=str(cve.severity) if cve.severity else None,
                 score=float(cve.score) if cve.score else None,  # type: ignore
-                publish_date=cve.publish_date.isoformat() if cve.publish_date else None,  # type: ignore
+                publish_date=cve.publish_date.isoformat() if cve.publish_date else None,
                 modified_date=cve.modified_date.isoformat()
                 if cve.modified_date is not None
-                else None,  # type: ignore
-                affected_products=cve.affected_products
+                else None,
+                affected_products=cve.affected_products  # type: ignore
                 if cve.affected_products is not None
-                else [],  # type: ignore
+                else [],
             )
             response.append(cve_response)
 
@@ -100,9 +84,6 @@ async def get_recent_cves(
 
 @router.get("/vulnerabilities", response_model=List[VulnerabilityResponse])
 async def check_my_vulnerabilities(current_user: dict = Depends(get_current_user)):
-    """
-    Check vulnerabilities for all assets of the current user
-    """
     try:
         user_email = current_user.get("sub")
         if not user_email:
@@ -141,9 +122,6 @@ async def search_cves(
     ),
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Search CVEs for a specific product in the NIST NVD API
-    """
     try:
         cves = cve_service.search_cves_for_asset(product, version)
 

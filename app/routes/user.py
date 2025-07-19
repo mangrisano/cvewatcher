@@ -6,7 +6,6 @@ from app.models import AssetCreate, AssetResponse
 
 router = APIRouter()
 
-
 @router.get("/user", tags=["user"])
 async def get_user_profile(
     current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
@@ -24,7 +23,6 @@ async def get_user_profile(
         "created_at": db_user.created_at,
     }
 
-
 @router.get("/user/assets", tags=["user"], response_model=list[AssetResponse])
 async def get_user_assets(
     current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
@@ -32,7 +30,6 @@ async def get_user_assets(
     user_email = current_user.get("sub")
     assets = db.query(Asset).filter(Asset.user_email == user_email).all()
     return assets
-
 
 @router.post("/user/assets", tags=["user"], response_model=AssetResponse)
 async def create_user_asset(
@@ -55,7 +52,6 @@ async def create_user_asset(
     db.refresh(db_asset)
 
     return db_asset
-
 
 @router.delete("/user/assets/{asset_id}", tags=["user"])
 async def delete_user_asset(
