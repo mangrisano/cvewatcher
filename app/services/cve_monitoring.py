@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,7 @@ class CVEMonitoringService:
             assets = self.db.query(Asset).all()
 
             monitoring_results = {
-                "timestamp": datetime.utcnow(),
+                "timestamp": datetime.now(timezone.utc),
                 "total_assets_monitored": len(assets),
                 "asset_results": [],
                 "summary": {
@@ -68,7 +68,7 @@ class CVEMonitoringService:
 
         except Exception as e:
             logger.error(f"Error in monitor_all_assets: {e}")
-            return {"error": str(e), "timestamp": datetime.utcnow()}
+            return {"error": str(e), "timestamp": datetime.now(timezone.utc)}
 
     async def _monitor_single_asset(self, asset: Asset) -> dict[str, Any]:
         try:
@@ -97,7 +97,7 @@ class CVEMonitoringService:
                 "total_vulnerabilities": len(current_vulnerabilities),
                 "new_vulnerabilities": new_vulnerabilities,
                 "existing_vulnerabilities": len(existing_cves),
-                "last_monitored": datetime.utcnow(),
+                "last_monitored": datetime.now(timezone.utc),
                 "status": "success",
             }
 
@@ -120,7 +120,7 @@ class CVEMonitoringService:
         pub_start_date = None
         pub_end_date = None
         if days > 0:
-            pub_end_date = datetime.utcnow()
+            pub_end_date = datetime.now(timezone.utc)
             pub_start_date = pub_end_date - timedelta(days=days)
 
         for query in search_queries[:3]:
@@ -314,8 +314,9 @@ class CVEMonitoringService:
                         logger.info(f"Searching with keyword: {query}")
                         query_cves = self.nist_client.search_cves(
                             keyword=query,
-                            pub_start_date=datetime.utcnow() - timedelta(days=days),
-                            pub_end_date=datetime.utcnow(),
+                            pub_start_date=datetime.now(timezone.utc)
+                            - timedelta(days=days),
+                            pub_end_date=datetime.now(timezone.utc),
                             results_per_page=100,
                         )
                         logger.info(
@@ -373,7 +374,7 @@ class CVEMonitoringService:
             report = {
                 "user_email": user_email,
                 "report_period_days": days,
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
                 "total_assets": len(user_assets),
                 "assets": [
                     {
@@ -462,7 +463,7 @@ class CVEMonitoringService:
             )
 
             return {
-                "scan_date": datetime.utcnow(),
+                "scan_date": datetime.now(timezone.utc),
                 "since_date": since_date,
                 "total_new_findings": len(new_findings),
                 "findings": new_findings,

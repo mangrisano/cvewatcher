@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
+from enum import StrEnum
 from app.models import AssetCreate, AssetResponse
 from app.database.connection import get_db
 from app.database.models import Asset
@@ -90,7 +91,10 @@ async def get_asset_vulnerabilities(
 ):
     asset = (
         db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
+        .filter(
+            Asset.id == asset_id,
+            Asset.user_email == current_user.get("sub"),
+        )
         .first()
     )
 
@@ -224,7 +228,7 @@ async def scan_all_assets(
             return {"message": "No assets found to monitor"}
 
         scan_results = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "user_email": current_user.get("sub"),
             "total_assets_scanned": len(user_assets),
             "asset_results": [],
