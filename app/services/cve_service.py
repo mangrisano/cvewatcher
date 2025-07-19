@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.services.nist_nvd import nist_client, CVEData
@@ -36,14 +36,14 @@ class CVEService:
 
     def search_cves_for_asset(
         self, asset_name: str, version: Optional[str] = None
-    ) -> List[CVEData]:
+    ) -> list[CVEData]:
         try:
             return self.nist_client.search_cves_for_product(asset_name, version)
         except Exception as e:
             logger.error(f"Error in CVE search for asset {asset_name}: {e}")
             raise
 
-    def check_assets_vulnerabilities(self, user_email: str) -> List[dict]:
+    def check_assets_vulnerabilities(self, user_email: str) -> list[dict]:
         vulnerabilities = []
 
         try:
@@ -121,7 +121,7 @@ class CVEService:
         logger.debug(f"Salvato nuovo CVE: {cve_data.cve_id}")
         return True
 
-    def get_stored_cves(self, limit: int = 50) -> List[CVE]:
+    def get_stored_cves(self, limit: int = 50) -> list[CVE]:
         try:
             with next(get_db()) as db:
                 cves = (

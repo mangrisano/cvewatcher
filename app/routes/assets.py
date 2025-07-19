@@ -1,4 +1,3 @@
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -9,20 +8,15 @@ from app.dependencies import get_current_user
 from app.services.nist_nvd import nist_client
 from app.services.cve_monitoring import CVEMonitoringService
 
-router = APIRouter()
+router = APIRouter(prefix="/assets", tags=["Assets"])
 
 
-@router.post(
-    "/assets",
-    response_model=AssetResponse,
-    status_code=status.HTTP_201_CREATED,
-    tags=["assets"],
-)
-async def register_asset(
+@router.post("/", response_model=AssetResponse)
+async def create_asset(
     asset_data: AssetCreate,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> AssetResponse:
     try:
         user_email = current_user.get("sub")
         existing = (
@@ -62,7 +56,7 @@ async def register_asset(
         raise HTTPException(status_code=500, detail=f"Error creating asset: {str(e)}")
 
 
-@router.get("/assets", tags=["assets"], response_model=List[AssetResponse])
+@router.get("/", response_model=list[AssetResponse])
 async def get_my_assets(
     current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
 ):
@@ -70,7 +64,7 @@ async def get_my_assets(
     return [AssetResponse.model_validate(asset) for asset in assets]
 
 
-@router.get("/assets/{asset_id}", tags=["assets"], response_model=AssetResponse)
+@router.get("/{asset_id}", response_model=AssetResponse)
 async def get_asset(
     asset_id: int,
     current_user: dict = Depends(get_current_user),
@@ -88,7 +82,7 @@ async def get_asset(
     return AssetResponse.model_validate(asset)
 
 
-@router.get("/assets/{asset_id}/vulnerabilities", tags=["assets"])
+@router.get("/{asset_id}/vulnerabilities")
 async def get_asset_vulnerabilities(
     asset_id: int,
     current_user: dict = Depends(get_current_user),
@@ -170,9 +164,31 @@ async def get_asset_vulnerabilities(
         )
 
 
-@router.delete(
-    "/assets/{asset_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["assets"]
-)
+@router.patch("/{asset_id}", response_model=AssetResponse)
+async def update_asset(
+    asset_id: int,
+    asset_data: AssetCreate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    asset = (
+        db.query(Asset)
+        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
+        .first()
+    )
+
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    for key, value in asset_data.model_dump().items():
+        setattr(asset, key, value)
+
+    db.commit()
+    db.refresh(asset)
+    return AssetResponse.model_validate(asset)
+
+
+@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_asset(
     asset_id: int,
     current_user: dict = Depends(get_current_user),
@@ -191,7 +207,7 @@ async def delete_asset(
     db.commit()
 
 
-@router.get("/assets/{asset_id}/monitor", tags=["assets"])
+@router.get("/{asset_id}/monitor")
 async def monitor_asset_cves(
     asset_id: int,
     current_user: dict = Depends(get_current_user),
@@ -219,7 +235,7 @@ async def monitor_asset_cves(
         raise HTTPException(status_code=500, detail=f"Error monitoring asset: {str(e)}")
 
 
-@router.get("/monitoring/report", tags=["assets"])
+@router.get("/monitoring/report")
 async def get_monitoring_report(
     days: int = 7,
     current_user: dict = Depends(get_current_user),
@@ -239,7 +255,7 @@ async def get_monitoring_report(
         )
 
 
-@router.post("/monitoring/scan-all", tags=["assets"])
+@router.post("/monitoring/scan-all")
 async def scan_all_assets(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),

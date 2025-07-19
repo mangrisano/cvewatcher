@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import Optional, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from datetime import datetime
@@ -15,7 +15,7 @@ class AssetService:
         self.cve_service = CVEService()
 
     async def create_asset(
-        self, user_email: str, asset_data: AssetCreate
+        self, asset_data: AssetCreate, user_email: str
     ) -> AssetResponse:
         existing = (
             self.db.query(Asset)
@@ -48,7 +48,7 @@ class AssetService:
 
         return AssetResponse.model_validate(db_asset)
 
-    async def get_user_assets(self, user_email: str) -> List[AssetResponse]:
+    async def get_user_assets(self, user_email: str) -> list[AssetResponse]:
         assets = self.db.query(Asset).filter(Asset.user_email == user_email).all()
         return [AssetResponse.model_validate(asset) for asset in assets]
 
@@ -80,7 +80,7 @@ class AssetService:
 
     async def get_asset_vulnerabilities(
         self, asset: AssetResponse
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         vulnerabilities = []
 
         search_queries = self._build_search_queries(asset)
@@ -116,7 +116,7 @@ class AssetService:
 
         return list(unique_cves.values())
 
-    async def scan_asset_for_cves(self, asset: AssetResponse) -> Dict[str, Any]:
+    async def scan_asset_for_cves(self, asset: AssetResponse) -> dict[str, Any]:
         scan_timestamp = datetime.utcnow()
 
         existing_cves = await self.get_asset_vulnerabilities(asset)
@@ -138,7 +138,7 @@ class AssetService:
             "vulnerabilities": new_vulnerabilities,
         }
 
-    def _build_search_queries(self, asset: AssetResponse) -> List[str]:
+    def _build_search_queries(self, asset: AssetResponse) -> list[str]:
         queries = []
 
         if asset.name:
@@ -167,7 +167,7 @@ class AssetService:
 
         return list(set(queries))
 
-    def _parse_cpe(self, cpe: str) -> Optional[Dict[str, Optional[str]]]:
+    def _parse_cpe(self, cpe: str) -> Optional[dict[str, Optional[str]]]:
         try:
             parts = cpe.split(":")
             if len(parts) >= 5:
@@ -190,7 +190,7 @@ class AssetService:
         return True
 
     def _is_relevant_to_asset(
-        self, vuln_data: Dict[str, Any], asset: AssetResponse
+        self, vuln_data: dict[str, Any], asset: AssetResponse
     ) -> bool:
         cve_item = vuln_data.get("cve", {})
 

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -15,7 +15,7 @@ class CVEResponse(BaseModel):
     score: Optional[float]
     publish_date: Optional[str]
     modified_date: Optional[str]
-    affected_products: Optional[List[dict]]
+    affected_products: Optional[list[dict]]
 
     class Config:
         from_attributes = True
@@ -50,7 +50,7 @@ async def fetch_recent_cves(
         )
 
 
-@router.get("/recent", response_model=List[CVEResponse])
+@router.get("/recent", response_model=list[CVEResponse])
 async def get_recent_cves(
     limit: int = Query(default=20, ge=1, le=100, description="Number of CVE to return"),
     current_user: dict = Depends(get_current_user),
@@ -82,7 +82,7 @@ async def get_recent_cves(
         )
 
 
-@router.get("/vulnerabilities", response_model=List[VulnerabilityResponse])
+@router.get("/vulnerabilities", response_model=list[VulnerabilityResponse])
 async def check_my_vulnerabilities(current_user: dict = Depends(get_current_user)):
     try:
         user_email = current_user.get("sub")

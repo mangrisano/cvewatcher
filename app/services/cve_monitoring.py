@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import Any
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -16,7 +16,7 @@ class CVEMonitoringService:
         self.db = db
         self.nist_client = nist_client
 
-    async def monitor_all_assets(self) -> Dict[str, Any]:
+    async def monitor_all_assets(self) -> dict[str, Any]:
         try:
             assets = self.db.query(Asset).all()
 
@@ -58,7 +58,7 @@ class CVEMonitoringService:
             logger.error(f"Error in monitor_all_assets: {e}")
             return {"error": str(e), "timestamp": datetime.utcnow()}
 
-    async def _monitor_single_asset(self, asset: Asset) -> Dict[str, Any]:
+    async def _monitor_single_asset(self, asset: Asset) -> dict[str, Any]:
         try:
             asset_response = AssetResponse.model_validate(asset)
 
@@ -100,7 +100,7 @@ class CVEMonitoringService:
 
     async def _get_asset_vulnerabilities(
         self, asset: AssetResponse
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         vulnerabilities = []
         search_queries = self._build_search_queries(asset)
 
@@ -146,7 +146,7 @@ class CVEMonitoringService:
 
         return vulnerabilities_list
 
-    def _build_search_queries(self, asset: AssetResponse) -> List[str]:
+    def _build_search_queries(self, asset: AssetResponse) -> list[str]:
         queries = []
 
         if asset.name:
@@ -170,10 +170,10 @@ class CVEMonitoringService:
             return True
         return False
 
-    def _get_existing_cves_for_asset(self, asset: Asset) -> List[CVE]:
+    def _get_existing_cves_for_asset(self, asset: Asset) -> list[CVE]:
         return self.db.query(CVE).all()
 
-    async def _store_cve_for_asset(self, vuln_data: Dict[str, Any], asset: Asset):
+    async def _store_cve_for_asset(self, vuln_data: dict[str, Any], asset: Asset):
         try:
             existing_cve = (
                 self.db.query(CVE).filter(CVE.id == vuln_data["cve_id"]).first()
@@ -216,7 +216,7 @@ class CVEMonitoringService:
 
     async def get_monitoring_report(
         self, user_email: str, days: int = 7
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         try:
             user_assets = (
                 self.db.query(Asset).filter(Asset.user_email == user_email).all()
@@ -297,7 +297,7 @@ class CVEMonitoringService:
             logger.error(f"Error generating monitoring report: {e}")
             return {"error": str(e)}
 
-    async def scan_for_new_cves_since(self, since_date: datetime) -> Dict[str, Any]:
+    async def scan_for_new_cves_since(self, since_date: datetime) -> dict[str, Any]:
         try:
             assets = self.db.query(Asset).all()
             new_findings = []

@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Optional, Any
 from urllib.parse import urlencode
 import urllib.request
 import urllib.error
@@ -9,20 +9,20 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class CVEData:
-
     cve_id: str
     summary: str
     severity: Optional[str]
     score: Optional[float]
     publish_date: Optional[datetime]
     modified_date: Optional[datetime]
-    affected_products: List[Dict[str, Any]]
-    references: List[str]
+    affected_products: list[dict[str, Any]]
+    references: list[str]
+
 
 class NistNvdClient:
-
     BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
     def __init__(self, api_key: Optional[str] = None):
@@ -31,7 +31,7 @@ class NistNvdClient:
         if api_key:
             self.session_headers["apiKey"] = api_key
 
-    def _make_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _make_request(self, params: dict[str, Any]) -> dict[str, Any]:
         query_string = urlencode(params)
         url = f"{self.BASE_URL}?{query_string}"
 
@@ -62,8 +62,8 @@ class NistNvdClient:
         mod_end_date: Optional[datetime] = None,
         results_per_page: int = 20,
         start_index: int = 0,
-    ) -> List[CVEData]:
-        params: Dict[str, Any] = {
+    ) -> list[CVEData]:
+        params: dict[str, Any] = {
             "resultsPerPage": min(results_per_page, 2000),
             "startIndex": start_index,
         }
@@ -90,7 +90,7 @@ class NistNvdClient:
 
     def get_recent_cves(
         self, days: int = 7, cpe_name: Optional[str] = None
-    ) -> List[CVEData]:
+    ) -> list[CVEData]:
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
 
@@ -103,14 +103,14 @@ class NistNvdClient:
 
     def search_cves_for_product(
         self, product_name: str, version: Optional[str] = None
-    ) -> List[CVEData]:
+    ) -> list[CVEData]:
         keyword = product_name
         if version:
             keyword = f"{product_name} {version}"
 
         return self.search_cves(keyword=keyword, results_per_page=100)
 
-    def _parse_cve_response(self, response: Dict[str, Any]) -> List[CVEData]:
+    def _parse_cve_response(self, response: dict[str, Any]) -> list[CVEData]:
         cves = []
 
         try:
@@ -228,5 +228,6 @@ class NistNvdClient:
         except ValueError as e:
             logger.warning(f"Unable to parse date '{date_string}': {e}")
             return None
+
 
 nist_client = NistNvdClient()
