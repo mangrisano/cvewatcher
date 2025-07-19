@@ -111,7 +111,7 @@ class CVEMonitoringService:
             }
 
     async def _get_asset_vulnerabilities(
-        self, asset: AssetResponse, days: int = 0
+        self, asset: AssetResponse, days: int = 0, severity_filter: str | None = None
     ) -> list[dict[str, Any]]:
         vulnerabilities = []
         search_queries = self._build_search_queries(asset)
@@ -162,6 +162,16 @@ class CVEMonitoringService:
                 unique_cves[cve_id] = vuln
 
         vulnerabilities_list = list(unique_cves.values())
+
+        # Apply severity filter if specified
+        if severity_filter:
+            severity_filter_upper = severity_filter.upper()
+            vulnerabilities_list = [
+                vuln
+                for vuln in vulnerabilities_list
+                if vuln.get("severity", "").upper() == severity_filter_upper
+            ]
+
         vulnerabilities_list.sort(
             key=lambda x: (
                 -self._get_severity_priority(x.get("severity")),

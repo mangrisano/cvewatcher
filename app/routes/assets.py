@@ -11,6 +11,13 @@ from app.services.cve_monitoring import CVEMonitoringService
 router = APIRouter(prefix="/assets", tags=["Assets"])
 
 
+class SeverityLevel(StrEnum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
 @router.post("/", response_model=AssetResponse)
 async def create_asset(
     asset_data: AssetCreate,
@@ -86,6 +93,7 @@ async def get_asset(
 async def get_asset_vulnerabilities(
     asset_id: int,
     days: int = 30,
+    severity: SeverityLevel | None = None,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -104,8 +112,11 @@ async def get_asset_vulnerabilities(
     try:
         monitoring_service = CVEMonitoringService(db)
         asset_response = AssetResponse.model_validate(asset)
+
         vulnerabilities = await monitoring_service._get_asset_vulnerabilities(
-            asset_response, days=days
+            asset_response,
+            days=days,
+            severity_filter=severity.value if severity else None,
         )
 
         return {
