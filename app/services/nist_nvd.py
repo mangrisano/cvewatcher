@@ -98,7 +98,7 @@ class NistNvdClient:
             cpe_name=cpe_name,
             pub_start_date=start_date,
             pub_end_date=end_date,
-            results_per_page=100,
+            results_per_page=2000,
         )
 
     def search_cves_for_product(

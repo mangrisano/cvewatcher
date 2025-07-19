@@ -5,7 +5,6 @@ from app.models import AssetCreate, AssetResponse
 from app.database.connection import get_db
 from app.database.models import Asset
 from app.dependencies import get_current_user
-from app.services.nist_nvd import nist_client
 from app.services.cve_monitoring import CVEMonitoringService
 
 router = APIRouter(prefix="/assets", tags=["Assets"])
@@ -85,6 +84,7 @@ async def get_asset(
 @router.get("/{asset_id}/vulnerabilities")
 async def get_asset_vulnerabilities(
     asset_id: int,
+    days: int = 30,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -98,64 +98,17 @@ async def get_asset_vulnerabilities(
         raise HTTPException(status_code=404, detail="Asset not found")
 
     try:
-        vulnerabilities = []
-
-        search_queries = []
-
-        asset_name = getattr(asset, "name", None)
-        asset_cpe = getattr(asset, "cpe", None)
-        asset_version = getattr(asset, "version", None)
-
-        if asset_name:
-            search_queries.append(asset_name)
-            name_lower = asset_name.lower()
-            search_queries.append(name_lower.replace(" ", ""))
-            search_queries.append(name_lower.replace(" ", "-"))
-
-        if asset_cpe:
-            search_queries.append(asset_cpe)
-
-        if asset_version and asset_name:
-            search_queries.append(f"{asset_name} {asset_version}")
-
-        search_queries = list(set(search_queries))
-
-        for query in search_queries[:3]:
-            try:
-                cves = nist_client.search_cves(keyword=query, results_per_page=50)
-
-                for cve in cves:
-                    if asset_name and asset_name.lower() in cve.summary.lower():
-                        vulnerabilities.append(
-                            {
-                                "cve_id": cve.cve_id,
-                                "summary": cve.summary,
-                                "severity": cve.severity,
-                                "score": cve.score,
-                                "publish_date": cve.publish_date.isoformat()
-                                if cve.publish_date
-                                else None,
-                                "relevance_reason": f"Matches asset name '{asset_name}'",
-                            }
-                        )
-
-            except Exception as e:
-                print(f"Error searching for {query}: {e}")
-                continue
-
-        unique_cves = {}
-        for vuln in vulnerabilities:
-            cve_id = vuln["cve_id"]
-            if cve_id not in unique_cves:
-                unique_cves[cve_id] = vuln
-
-        final_vulnerabilities = list(unique_cves.values())
+        monitoring_service = CVEMonitoringService(db)
+        asset_response = AssetResponse.model_validate(asset)
+        vulnerabilities = await monitoring_service._get_asset_vulnerabilities(
+            asset_response, days=days
+        )
 
         return {
-            "asset": AssetResponse.model_validate(asset),
-            "vulnerabilities": final_vulnerabilities,
-            "total_vulnerabilities": len(final_vulnerabilities),
-            "search_queries_used": search_queries[:3],
+            "asset": asset_response,
+            "vulnerabilities": vulnerabilities,
+            "total_vulnerabilities": len(vulnerabilities),
+            "days_searched": days,
         }
 
     except Exception as e:

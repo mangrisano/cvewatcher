@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy.orm import Session
 
@@ -38,9 +38,9 @@ class CVEMonitoringService:
                 monitoring_results["asset_results"].append(asset_result)
 
                 monitoring_results["summary"]["new_vulnerabilities"] += len(
-                    asset_result["new_vulnerabilities"]
+                    asset_result.get("new_vulnerabilities", [])
                 )
-                for vuln in asset_result["new_vulnerabilities"]:
+                for vuln in asset_result.get("new_vulnerabilities", []):
                     severity = vuln.get("severity", "").upper()
                     if severity == "CRITICAL":
                         monitoring_results["summary"]["critical_vulnerabilities"] += 1
@@ -51,7 +51,6 @@ class CVEMonitoringService:
                     elif severity == "LOW":
                         monitoring_results["summary"]["low_vulnerabilities"] += 1
 
-            # Sort asset results by the most recent vulnerability date in each asset
             monitoring_results["asset_results"].sort(
                 key=lambda asset_result: (
                     max(
@@ -112,14 +111,27 @@ class CVEMonitoringService:
             }
 
     async def _get_asset_vulnerabilities(
-        self, asset: AssetResponse
+        self, asset: AssetResponse, days: int = 0
     ) -> list[dict[str, Any]]:
         vulnerabilities = []
         search_queries = self._build_search_queries(asset)
 
+        # Set up date filtering if days > 0
+        pub_start_date = None
+        pub_end_date = None
+        if days > 0:
+            pub_end_date = datetime.utcnow()
+            pub_start_date = pub_end_date - timedelta(days=days)
+
         for query in search_queries[:3]:
             try:
-                cves = self.nist_client.search_cves(keyword=query, results_per_page=100)
+                # Use date range filtering at the API level for better results
+                cves = self.nist_client.search_cves(
+                    keyword=query,
+                    results_per_page=100,
+                    pub_start_date=pub_start_date,
+                    pub_end_date=pub_end_date,
+                )
 
                 for cve in cves:
                     if self._is_relevant_to_asset(cve, asset):
@@ -136,6 +148,7 @@ class CVEMonitoringService:
                                 if cve.modified_date
                                 else None,
                                 "relevance_reason": f"Matches asset name '{asset.name}'",
+                                "cve_url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve.cve_id}",
                             }
                         )
             except Exception as e:
@@ -144,20 +157,40 @@ class CVEMonitoringService:
 
         unique_cves = {}
         for vuln in vulnerabilities:
-            cve_id = vuln["cve_id"]
+            cve_id = vuln.get("cve_id")
             if cve_id not in unique_cves:
                 unique_cves[cve_id] = vuln
 
         vulnerabilities_list = list(unique_cves.values())
         vulnerabilities_list.sort(
             key=lambda x: (
-                x.get("publish_date") or "1900-01-01T00:00:00",
-                x.get("modified_date") or "1900-01-01T00:00:00",
-            ),
-            reverse=True,
+                -self._get_severity_priority(x.get("severity")),
+                -(
+                    datetime.fromisoformat(
+                        x.get("publish_date", "1900-01-01T00:00:00").replace(
+                            "Z", "+00:00"
+                        )
+                    ).timestamp()
+                    if x.get("publish_date")
+                    else 0
+                ),
+                -(
+                    datetime.fromisoformat(
+                        x.get("modified_date", "1900-01-01T00:00:00").replace(
+                            "Z", "+00:00"
+                        )
+                    ).timestamp()
+                    if x.get("modified_date")
+                    else 0
+                ),
+            )
         )
 
         return vulnerabilities_list
+
+    def _get_severity_priority(self, severity: str) -> int:
+        severity_map = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+        return severity_map.get(severity or "LOW", 1)
 
     def _build_search_queries(self, asset: AssetResponse) -> list[str]:
         queries = []
@@ -177,10 +210,28 @@ class CVEMonitoringService:
         return list(set(queries))
 
     def _is_relevant_to_asset(self, cve_data, asset: AssetResponse) -> bool:
-        if asset.name and asset.name.lower() in cve_data.summary.lower():
+        summary_lower = cve_data.summary.lower()
+
+        if asset.name:
+            asset_name_lower = asset.name.lower()
+            # Check if asset name is in summary
+            if asset_name_lower in summary_lower:
+                return True
+            # Check if asset name (without spaces or with hyphens) is in summary
+            if asset_name_lower.replace(" ", "") in summary_lower:
+                return True
+            if asset_name_lower.replace(" ", "-") in summary_lower:
+                return True
+
+        if asset.version and asset.version.lower() in summary_lower:
             return True
-        if asset.version and asset.version.lower() in cve_data.summary.lower():
-            return True
+
+        # Check affected products if available
+        if hasattr(cve_data, "affected_products") and cve_data.affected_products:
+            affected_products_str = str(cve_data.affected_products).lower()
+            if asset.name and asset.name.lower() in affected_products_str:
+                return True
+
         return False
 
     def _get_existing_cves_for_asset(self, asset: Asset) -> list[CVE]:
@@ -189,7 +240,7 @@ class CVEMonitoringService:
     async def _store_cve_for_asset(self, vuln_data: dict[str, Any], asset: Asset):
         try:
             existing_cve = (
-                self.db.query(CVE).filter(CVE.id == vuln_data["cve_id"]).first()
+                self.db.query(CVE).filter(CVE.id == vuln_data.get("cve_id")).first()
             )
 
             if not existing_cve:
@@ -197,13 +248,13 @@ class CVEMonitoringService:
                 if vuln_data.get("publish_date"):
                     try:
                         publish_date = datetime.fromisoformat(
-                            vuln_data["publish_date"].replace("Z", "+00:00")
+                            vuln_data.get("publish_date", "").replace("Z", "+00:00")
                         )
                     except Exception:
                         pass
 
                 new_cve = CVE(
-                    id=vuln_data["cve_id"],
+                    id=vuln_data.get("cve_id"),
                     summary=vuln_data.get("summary", ""),
                     severity=vuln_data.get("severity"),
                     score=vuln_data.get("score"),
@@ -220,7 +271,7 @@ class CVEMonitoringService:
                 self.db.add(new_cve)
                 self.db.commit()
                 logger.info(
-                    f"Stored new CVE: {vuln_data['cve_id']} for asset {asset.name}"
+                    f"Stored new CVE: {vuln_data.get('cve_id')} for asset {asset.name}"
                 )
 
         except Exception as e:
@@ -245,58 +296,33 @@ class CVEMonitoringService:
                 f"Generating monitoring report for {len(user_assets)} assets over {days} days"
             )
 
-            # Instead of only checking local DB, fetch fresh CVEs from NIST for each asset
             all_relevant_cves = []
 
             for asset in user_assets:
                 logger.info(f"Searching for CVEs related to asset: {asset.name}")
 
-                # Build search queries for this asset
-                search_queries = []
-                if asset.name:
-                    search_queries.append(asset.name)
-                    # For "sudo", also search for common variations
-                    if asset.name.lower() == "sudo":
-                        search_queries.extend(
-                            [
-                                "privilege",  # More flexible - catches "privilege assignment", "privilege escalation", etc.
-                                "escalation",
-                                "superuser",
-                                "root access",
-                            ]
-                        )
-                    search_queries.append(asset.name.lower())
-                    search_queries.append(asset.name.replace(" ", "-"))
+                asset_response = AssetResponse.model_validate(asset)
+                search_queries = self._build_search_queries(asset_response)
 
-                if asset.cpe:
-                    search_queries.append(asset.cpe)
-
-                # Get recent CVEs once for this asset
                 try:
-                    logger.info(f"Fetching recent CVEs for last {days} days")
-                    fresh_cves = self.nist_client.get_recent_cves(
-                        days=days, cpe_name=None
+                    logger.info(
+                        f"Searching for CVEs related to {asset.name} in last {days} days"
                     )
-                    logger.info(f"Found {len(fresh_cves)} total recent CVEs")
 
-                    # Filter for relevance to this asset using all search queries
-                    for cve_data in fresh_cves:
-                        asset_cpe_str = str(asset.cpe) if asset.cpe else ""
+                    # Search for each query term separately to ensure we don't miss anything
+                    for query in search_queries:
+                        logger.info(f"Searching with keyword: {query}")
+                        query_cves = self.nist_client.search_cves(
+                            keyword=query,
+                            pub_start_date=datetime.utcnow() - timedelta(days=days),
+                            pub_end_date=datetime.utcnow(),
+                            results_per_page=100,
+                        )
+                        logger.info(
+                            f"Found {len(query_cves)} CVEs for keyword '{query}'"
+                        )
 
-                        # Check if CVE is relevant to any of our search queries
-                        is_relevant = False
-                        matched_query = None
-
-                        for query in search_queries[:4]:
-                            if query.lower() in cve_data.summary.lower() or (
-                                asset_cpe_str
-                                and asset_cpe_str in str(cve_data.affected_products)
-                            ):
-                                is_relevant = True
-                                matched_query = query
-                                break
-
-                        if is_relevant:
+                        for cve_data in query_cves:
                             cve_dict = {
                                 "cve_id": cve_data.cve_id,
                                 "summary": cve_data.summary,
@@ -306,17 +332,18 @@ class CVEMonitoringService:
                                 if cve_data.publish_date
                                 else None,
                                 "asset_name": asset.name,
-                                "matched_query": matched_query,
+                                "matched_query": query,
+                                "cve_url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_data.cve_id}",
                             }
 
                             # Avoid duplicates
                             if not any(
-                                existing["cve_id"] == cve_dict["cve_id"]
+                                existing.get("cve_id") == cve_dict.get("cve_id")
                                 for existing in all_relevant_cves
                             ):
                                 all_relevant_cves.append(cve_dict)
                                 logger.info(
-                                    f"Found relevant CVE: {cve_dict['cve_id']} (matched: {matched_query})"
+                                    f"Found relevant CVE: {cve_dict.get('cve_id')} (matched: {query})"
                                 )
 
                 except Exception as e:
@@ -325,12 +352,23 @@ class CVEMonitoringService:
 
             logger.info(f"Found {len(all_relevant_cves)} relevant CVEs")
 
-            # Sort all CVEs by publish date with most recent first
             all_relevant_cves.sort(
-                key=lambda x: x.get("publish_date") or "1900-01-01T00:00:00",
-                reverse=True,
+                key=lambda x: (
+                    -self._get_severity_priority(x.get("severity")),
+                    -(
+                        datetime.fromisoformat(
+                            x.get("publish_date", "1900-01-01T00:00:00").replace(
+                                "Z", "+00:00"
+                            )
+                        ).timestamp()
+                        if x.get("publish_date")
+                        else 0
+                    ),
+                )
             )
-            logger.info("Sorted CVEs by publish date (most recent first)")
+            logger.info(
+                "Sorted CVEs by severity (highest first), then by publish date (most recent first)"
+            )
 
             report = {
                 "user_email": user_email,
@@ -346,9 +384,7 @@ class CVEMonitoringService:
                     }
                     for asset in user_assets
                 ],
-                "recent_vulnerabilities": all_relevant_cves[
-                    :50
-                ],  # Limit to 50 most recent
+                "recent_vulnerabilities": all_relevant_cves[:50],
                 "vulnerability_summary": {
                     "total_recent": len(all_relevant_cves),
                     "critical": sum(
@@ -413,6 +449,7 @@ class CVEMonitoringService:
                                         "publish_date": cve.publish_date.isoformat()
                                         if cve.publish_date
                                         else None,
+                                        "cve_url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve.cve_id}",
                                     }
                                 )
                     except Exception as e:
