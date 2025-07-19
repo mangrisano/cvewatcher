@@ -15,3 +15,5 @@ wheels/
 # Database files
 *.sqlite3
 *.db
+
+utils/
