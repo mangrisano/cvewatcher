@@ -3,33 +3,33 @@ SHELL := /bin/bash
 
 .PHONY: help dev start install clean test
 
-help: ## Mostra questo messaggio di aiuto
-	@echo "Comandi disponibili:"
+help: ## Show this help message
+	@echo "Available commands:"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-dev: ## Avvia il server in modalità development con reload automatico
-	@echo "🚀 Avvio server FastAPI in modalità development..."
+dev: ## Start development server with auto-reload
+	@echo "🚀 Starting FastAPI server in development mode..."
 	PATH="$$HOME/.local/bin:$$PATH" uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-start: ## Avvia il server in modalità produzione
-	@echo "🚀 Avvio server FastAPI in modalità produzione..."
+start: ## Start production server
+	@echo "🚀 Starting FastAPI server in production mode..."
 	PATH="$$HOME/.local/bin:$$PATH" uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-install: ## Installa le dipendenze
-	@echo "📦 Installazione dipendenze..."
+install: ## Install dependencies
+	@echo "📦 Installing dependencies..."
 	PATH="$$HOME/.local/bin:$$PATH" uv sync
 
-clean: ## Pulisce la cache e i file temporanei
-	@echo "🧹 Pulizia cache..."
+clean: ## Clean cache and temporary files
+	@echo "🧹 Cleaning cache..."
 	PATH="$$HOME/.local/bin:$$PATH" uv cache clean
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -name "*.pyc" -delete
 
-test: ## Esegue i test (quando li aggiungerai)
-	@echo "🧪 Esecuzione test..."
-	PATH="$$HOME/.local/bin:$$PATH" uv run pytest
+test: ## Run tests
+	@echo "🧪 Running tests..."
+	PATH="$$HOME/.local/bin:$$PATH" uv run python test_cve.py
 
-add: ## Aggiunge una nuova dipendenza (uso: make add PACKAGE=nome_pacchetto)
-	@if [ -z "$(PACKAGE)" ]; then echo "❌ Specificare PACKAGE=nome_pacchetto"; exit 1; fi
-	@echo "📦 Aggiunta dipendenza: $(PACKAGE)"
+add: ## Add a new dependency (usage: make add PACKAGE=package_name)
+	@if [ -z "$(PACKAGE)" ]; then echo "❌ Please specify PACKAGE=package_name"; exit 1; fi
+	@echo "📦 Adding dependency: $(PACKAGE)"
 	PATH="$$HOME/.local/bin:$$PATH" uv add $(PACKAGE)
