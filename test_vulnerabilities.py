@@ -55,7 +55,7 @@ def test_vulnerabilities():
         try:
             error_body = e.read().decode()
             print(f"   Error details: {error_body}")
-        except:
+        except Exception:
             pass
         return False
     except Exception as e:
