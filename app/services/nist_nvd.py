@@ -1,0 +1,305 @@
+"""
+NIST NVD API Client
+Service for retrieving CVEs from the official NIST NVD API
+"""
+
+import json
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
+from urllib.parse import urlencode
+import urllib.request
+import urllib.error
+from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CVEData:
+    """Represents a CVE retrieved from the NIST API"""
+
+    cve_id: str
+    summary: str
+    severity: Optional[str]
+    score: Optional[float]
+    publish_date: Optional[datetime]
+    modified_date: Optional[datetime]
+    affected_products: List[Dict[str, Any]]
+    references: List[str]
+
+
+class NistNvdClient:
+    """Client for the NIST NVD 2.0 API"""
+
+    BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+
+    def __init__(self, api_key: Optional[str] = None):
+        """
+        Initialize the NIST NVD client
+
+        Args:
+            api_key: Optional API key for higher rate limits
+        """
+        self.api_key = api_key
+        self.session_headers = {"User-Agent": "CVEWatcher/1.0 (Python)"}
+        if api_key:
+            self.session_headers["apiKey"] = api_key
+
+    def _make_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute an HTTP request to the NIST API
+
+        Args:
+            params: Query parameters
+
+        Returns:
+            JSON response from the API
+
+        Raises:
+            Exception: If the request fails
+        """
+        query_string = urlencode(params)
+        url = f"{self.BASE_URL}?{query_string}"
+
+        request = urllib.request.Request(url, headers=self.session_headers)
+
+        try:
+            with urllib.request.urlopen(request) as response:
+                if response.status != 200:
+                    raise Exception(f"HTTP {response.status}: {response.reason}")
+
+                data = json.loads(response.read().decode())
+                return data
+
+        except urllib.error.URLError as e:
+            logger.error(f"NIST API connection error: {e}")
+            raise Exception(f"Connection error: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Error in parsing JSON: {e}")
+            raise Exception(f"Invalid API response: {e}")
+
+    def search_cves(
+        self,
+        cpe_name: Optional[str] = None,
+        keyword: Optional[str] = None,
+        pub_start_date: Optional[datetime] = None,
+        pub_end_date: Optional[datetime] = None,
+        mod_start_date: Optional[datetime] = None,
+        mod_end_date: Optional[datetime] = None,
+        results_per_page: int = 20,
+        start_index: int = 0,
+    ) -> List[CVEData]:
+        """
+        Search CVEs in the NIST NVD API
+
+        Args:
+            cpe_name: CPE name to filter CVEs
+            keyword: Keyword to search
+            pub_start_date: Publication start date
+            pub_end_date: Publication end date
+            mod_start_date: Modification start date
+            mod_end_date: Modification end date
+            results_per_page: Number of results per page (max 2000)
+            start_index: Starting index
+
+        Returns:
+            List of CVEData objects
+        """
+        params: Dict[str, Any] = {
+            "resultsPerPage": min(results_per_page, 2000),
+            "startIndex": start_index,
+        }
+
+        if cpe_name:
+            params["cpeName"] = cpe_name
+        if keyword:
+            params["keywordSearch"] = keyword
+        if pub_start_date:
+            params["pubStartDate"] = pub_start_date.strftime("%Y-%m-%dT%H:%M:%S.000")
+        if pub_end_date:
+            params["pubEndDate"] = pub_end_date.strftime("%Y-%m-%dT%H:%M:%S.000")
+        if mod_start_date:
+            params["modStartDate"] = mod_start_date.strftime("%Y-%m-%dT%H:%M:%S.000")
+        if mod_end_date:
+            params["modEndDate"] = mod_end_date.strftime("%Y-%m-%dT%H:%M:%S.000")
+
+        try:
+            response = self._make_request(params)
+            return self._parse_cve_response(response)
+        except Exception as e:
+            logger.error(f"Error in CVE search: {e}")
+            raise
+
+    def get_recent_cves(
+        self, days: int = 7, cpe_name: Optional[str] = None
+    ) -> List[CVEData]:
+        """
+        Retrieves CVEs published in the last specified days
+
+        Args:
+            days: Number of days back to search
+            cpe_name: Optional CPE name to filter
+
+        Returns:
+            List of recent CVEs
+        """
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+
+        return self.search_cves(
+            cpe_name=cpe_name,
+            pub_start_date=start_date,
+            pub_end_date=end_date,
+            results_per_page=100,
+        )
+
+    def search_cves_for_product(
+        self, product_name: str, version: Optional[str] = None
+    ) -> List[CVEData]:
+        """
+        Search CVEs for a specific product
+
+        Args:
+            product_name: Product name
+            version: Specific version (optional)
+
+        Returns:
+            List of CVEs affecting the product
+        """
+        keyword = product_name
+        if version:
+            keyword = f"{product_name} {version}"
+
+        return self.search_cves(keyword=keyword, results_per_page=100)
+
+    def _parse_cve_response(self, response: Dict[str, Any]) -> List[CVEData]:
+        """
+        Parses the NIST API response into CVEData objects
+
+        Args:
+            response: JSON response from the API
+
+        Returns:
+            List of CVEData objects
+        """
+        cves = []
+
+        try:
+            vulnerabilities = response.get("vulnerabilities", [])
+
+            for vuln in vulnerabilities:
+                cve_item = vuln.get("cve", {})
+
+                cve_id = cve_item.get("id", "")
+
+                descriptions = cve_item.get("descriptions", [])
+                summary = ""
+                for desc in descriptions:
+                    if desc.get("lang") == "en":
+                        summary = desc.get("value", "")
+                        break
+
+                metrics = cve_item.get("metrics", {})
+                score_v31 = None
+                score_v30 = None
+                score_v2 = None
+
+                if "cvssMetricV31" in metrics and metrics.get("cvssMetricV31"):
+                    cvss_data = metrics.get("cvssMetricV31", [{}])[0].get(
+                        "cvssData", {}
+                    )
+                    score_v31 = cvss_data.get("baseScore")
+                elif "cvssMetricV30" in metrics and metrics.get("cvssMetricV30"):
+                    cvss_data = metrics.get("cvssMetricV30", [{}])[0].get(
+                        "cvssData", {}
+                    )
+                    score_v30 = cvss_data.get("baseScore")
+                elif "cvssMetricV2" in metrics and metrics.get("cvssMetricV2"):
+                    cvss_data = metrics.get("cvssMetricV2", [{}])[0].get("cvssData", {})
+                    score_v2 = cvss_data.get("baseScore")
+
+                score = score_v31 or score_v30 or score_v2 or 0.0
+
+                if score >= 9.0:
+                    severity = "CRITICAL"
+                elif score >= 7.0:
+                    severity = "HIGH"
+                elif score >= 4.0:
+                    severity = "MEDIUM"
+                else:
+                    severity = "LOW"
+
+                publish_date = self._parse_datetime(cve_item.get("published"))
+                modified_date = self._parse_datetime(cve_item.get("lastModified"))
+
+                affected_products = []
+                configurations = cve_item.get("configurations", [])
+                for config in configurations:
+                    nodes = config.get("nodes", [])
+                    for node in nodes:
+                        cpe_matches = node.get("cpeMatch", [])
+                        for match in cpe_matches:
+                            if match.get("vulnerable", False):
+                                product_info = {
+                                    "cpe": match.get("criteria", ""),
+                                    "version_start": match.get("versionStartIncluding"),
+                                    "version_end": match.get("versionEndExcluding"),
+                                    "version_start_excluding": match.get(
+                                        "versionStartExcluding"
+                                    ),
+                                    "version_end_including": match.get(
+                                        "versionEndIncluding"
+                                    ),
+                                }
+                                affected_products.append(product_info)
+
+                references = []
+                refs = cve_item.get("references", [])
+                for ref in refs:
+                    url = ref.get("url", "")
+                    if url:
+                        references.append(url)
+
+                cve_data = CVEData(
+                    cve_id=cve_id,
+                    summary=summary,
+                    severity=severity,
+                    score=score,
+                    publish_date=publish_date,
+                    modified_date=modified_date,
+                    affected_products=affected_products,
+                    references=references,
+                )
+
+                cves.append(cve_data)
+
+        except Exception as e:
+            logger.error(f"Error parsing CVE response: {e}")
+            raise Exception(f"Error parsing: {e}")
+
+        return cves
+
+    def _parse_datetime(self, date_string: Optional[str]) -> Optional[datetime]:
+        if not date_string:
+            return None
+
+        try:
+            if date_string.endswith("Z"):
+                date_string = date_string[:-1]
+            elif "+" in date_string:
+                date_string = date_string.split("+")[0]
+            elif date_string.count(":") == 3:
+                date_string = date_string.rsplit(":", 1)[0]
+
+            if "." in date_string:
+                return datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S.%f")
+            else:
+                return datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S")
+
+        except ValueError as e:
+            logger.warning(f"Unable to parse date '{date_string}': {e}")
+            return None
+
+
+nist_client = NistNvdClient()
