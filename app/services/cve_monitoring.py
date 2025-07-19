@@ -1,8 +1,7 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
 
 from app.database.models import Asset, CVE
 from app.services.nist_nvd import nist_client
@@ -51,6 +50,20 @@ class CVEMonitoringService:
                         monitoring_results["summary"]["medium_vulnerabilities"] += 1
                     elif severity == "LOW":
                         monitoring_results["summary"]["low_vulnerabilities"] += 1
+
+            # Sort asset results by the most recent vulnerability date in each asset
+            monitoring_results["asset_results"].sort(
+                key=lambda asset_result: (
+                    max(
+                        [
+                            vuln.get("publish_date", "1900-01-01T00:00:00")
+                            for vuln in asset_result.get("new_vulnerabilities", [])
+                        ],
+                        default="1900-01-01T00:00:00",
+                    )
+                ),
+                reverse=True,
+            )
 
             return monitoring_results
 
@@ -228,30 +241,101 @@ class CVEMonitoringService:
                     "total_assets": 0,
                 }
 
-            since_date = datetime.utcnow() - timedelta(days=days)
-
-            user_relevant_cves = []
-            asset_names = {asset.name.lower() for asset in user_assets}
-
-            recent_cves = (
-                self.db.query(CVE)
-                .filter(CVE.publish_date >= since_date)
-                .order_by(desc(CVE.publish_date))
-                .all()
+            logger.info(
+                f"Generating monitoring report for {len(user_assets)} assets over {days} days"
             )
 
-            for cve in recent_cves:
-                cve_summary_lower = cve.summary.lower()
+            # Instead of only checking local DB, fetch fresh CVEs from NIST for each asset
+            all_relevant_cves = []
 
-                for asset_name in asset_names:
-                    if asset_name in cve_summary_lower:
-                        user_relevant_cves.append(cve)
-                        break
+            for asset in user_assets:
+                logger.info(f"Searching for CVEs related to asset: {asset.name}")
+
+                # Build search queries for this asset
+                search_queries = []
+                if asset.name:
+                    search_queries.append(asset.name)
+                    # For "sudo", also search for common variations
+                    if asset.name.lower() == "sudo":
+                        search_queries.extend(
+                            [
+                                "privilege",  # More flexible - catches "privilege assignment", "privilege escalation", etc.
+                                "escalation",
+                                "superuser",
+                                "root access",
+                            ]
+                        )
+                    search_queries.append(asset.name.lower())
+                    search_queries.append(asset.name.replace(" ", "-"))
+
+                if asset.cpe:
+                    search_queries.append(asset.cpe)
+
+                # Get recent CVEs once for this asset
+                try:
+                    logger.info(f"Fetching recent CVEs for last {days} days")
+                    fresh_cves = self.nist_client.get_recent_cves(
+                        days=days, cpe_name=None
+                    )
+                    logger.info(f"Found {len(fresh_cves)} total recent CVEs")
+
+                    # Filter for relevance to this asset using all search queries
+                    for cve_data in fresh_cves:
+                        asset_cpe_str = str(asset.cpe) if asset.cpe else ""
+
+                        # Check if CVE is relevant to any of our search queries
+                        is_relevant = False
+                        matched_query = None
+
+                        for query in search_queries[:4]:
+                            if query.lower() in cve_data.summary.lower() or (
+                                asset_cpe_str
+                                and asset_cpe_str in str(cve_data.affected_products)
+                            ):
+                                is_relevant = True
+                                matched_query = query
+                                break
+
+                        if is_relevant:
+                            cve_dict = {
+                                "cve_id": cve_data.cve_id,
+                                "summary": cve_data.summary,
+                                "severity": cve_data.severity,
+                                "score": cve_data.score,
+                                "publish_date": cve_data.publish_date.isoformat()
+                                if cve_data.publish_date
+                                else None,
+                                "asset_name": asset.name,
+                                "matched_query": matched_query,
+                            }
+
+                            # Avoid duplicates
+                            if not any(
+                                existing["cve_id"] == cve_dict["cve_id"]
+                                for existing in all_relevant_cves
+                            ):
+                                all_relevant_cves.append(cve_dict)
+                                logger.info(
+                                    f"Found relevant CVE: {cve_dict['cve_id']} (matched: {matched_query})"
+                                )
+
+                except Exception as e:
+                    logger.error(f"Error fetching CVEs for asset {asset.name}: {e}")
+                    continue
+
+            logger.info(f"Found {len(all_relevant_cves)} relevant CVEs")
+
+            # Sort all CVEs by publish date with most recent first
+            all_relevant_cves.sort(
+                key=lambda x: x.get("publish_date") or "1900-01-01T00:00:00",
+                reverse=True,
+            )
+            logger.info("Sorted CVEs by publish date (most recent first)")
 
             report = {
                 "user_email": user_email,
                 "report_period_days": days,
-                "generated_at": datetime.utcnow(),
+                "generated_at": datetime.utcnow().isoformat(),
                 "total_assets": len(user_assets),
                 "assets": [
                     {
@@ -262,33 +346,33 @@ class CVEMonitoringService:
                     }
                     for asset in user_assets
                 ],
-                "recent_vulnerabilities": [
-                    {
-                        "cve_id": cve.id,
-                        "summary": cve.summary,
-                        "severity": cve.severity,
-                        "score": cve.score,
-                        "publish_date": str(cve.publish_date),
-                    }
-                    for cve in user_relevant_cves[:20]
-                ],
+                "recent_vulnerabilities": all_relevant_cves[
+                    :50
+                ],  # Limit to 50 most recent
                 "vulnerability_summary": {
-                    "total_recent": len(user_relevant_cves),
+                    "total_recent": len(all_relevant_cves),
                     "critical": sum(
                         1
-                        for cve in user_relevant_cves
-                        if str(cve.severity) == "CRITICAL"
+                        for cve in all_relevant_cves
+                        if str(cve.get("severity", "")).upper() == "CRITICAL"
                     ),
                     "high": sum(
-                        1 for cve in user_relevant_cves if str(cve.severity) == "HIGH"
+                        1
+                        for cve in all_relevant_cves
+                        if str(cve.get("severity", "")).upper() == "HIGH"
                     ),
                     "medium": sum(
-                        1 for cve in user_relevant_cves if str(cve.severity) == "MEDIUM"
+                        1
+                        for cve in all_relevant_cves
+                        if str(cve.get("severity", "")).upper() == "MEDIUM"
                     ),
                     "low": sum(
-                        1 for cve in user_relevant_cves if str(cve.severity) == "LOW"
+                        1
+                        for cve in all_relevant_cves
+                        if str(cve.get("severity", "")).upper() == "LOW"
                     ),
                 },
+                "data_source": "NIST NVD API (live data)",
             }
 
             return report
