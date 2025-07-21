@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -90,34 +91,40 @@ class AssetService:
                 cves = self.nist_client.search_cves(keyword=query, results_per_page=100)
 
                 if cves:
-                    for cve_data in cves:
-                        if self._is_relevant_to_cve_data(cve_data, asset):
-                            vuln_dict = {
+                    vulnerabilities.extend(
+                        [
+                            {
                                 "cve": {
-                                    "id": cve_data.cve_id,
-                                    "summary": cve_data.summary,
-                                    "severity": cve_data.severity,
-                                    "score": cve_data.score,
-                                    "published_date": cve_data.publish_date,
-                                    "modified_date": cve_data.modified_date,
+                                    "id": cve.cve_id,
+                                    "summary": cve.summary,
+                                    "severity": cve.severity,
+                                    "score": cve.score,
+                                    "published_date": cve.publish_date,
+                                    "modified_date": cve.modified_date,
                                 }
                             }
-                            vulnerabilities.append(vuln_dict)
+                            for cve in cves
+                            if self._is_relevant_to_cve_data(cve, asset)
+                        ]
+                    )
 
             except Exception as e:
-                print(f"Error searching for {query}: {e}")
+                logging.warning(f"Error searching for {query}: {e}")
                 continue
 
-        unique_cves = {}
+        seen_ids = set()
+        unique_vulns = []
         for vuln in vulnerabilities:
             cve_id = vuln.get("cve", {}).get("id")
-            if cve_id and cve_id not in unique_cves:
-                unique_cves[cve_id] = vuln
-
-        return list(unique_cves.values())
+            if cve_id and cve_id not in seen_ids:
+                seen_ids.add(cve_id)
+                unique_vulns.append(vuln)
+        return unique_vulns
 
     async def scan_asset_for_cves(self, asset: AssetResponse) -> dict[str, Any]:
-        scan_timestamp = datetime.utcnow()
+        from datetime import timezone
+
+        scan_timestamp = datetime.now(timezone.utc)
 
         existing_cves = await self.get_asset_vulnerabilities(asset)
         existing_count = len(existing_cves)
