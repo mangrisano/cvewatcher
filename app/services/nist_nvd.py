@@ -193,7 +193,6 @@ class NistNvdClient:
             try:
                 return datetime.fromisoformat(date_string)
             except ValueError:
-                # Fallback for formats not handled by fromisoformat
                 if "+" in date_string:
                     date_string = date_string.split("+")[0]
                 elif date_string.count(":") == 3:
