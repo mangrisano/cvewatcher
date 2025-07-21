@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from uuid import UUID
 
 from app.dependencies import get_current_user
 from app.services.cve_service import cve_service
@@ -22,7 +23,7 @@ class CVEResponse(BaseModel):
 
 
 class VulnerabilityResponse(BaseModel):
-    asset_id: int
+    asset_id: UUID
     asset_name: str
     asset_version: Optional[str]
     cve_id: str
