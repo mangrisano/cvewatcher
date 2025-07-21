@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: cvewatcher_app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////dbdata/cvewatcher.db
+    volumes:
+      - dbdata:/dbdata
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16
+    container_name: cvewatcher_db
+    environment:
+      POSTGRES_USER: cveuser
+      POSTGRES_PASSWORD: cvepass
+      POSTGRES_DB: cvewatcher
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  dbdata:
+  pgdata:
