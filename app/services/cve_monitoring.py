@@ -116,16 +116,13 @@ class CVEMonitoringService:
         vulnerabilities = []
         search_queries = self._build_search_queries(asset)
 
-        # Set up date filtering if days > 0
         pub_start_date = None
         pub_end_date = None
         if days > 0:
             pub_end_date = datetime.now(timezone.utc)
             pub_start_date = pub_end_date - timedelta(days=days)
-
-        for query in search_queries[:3]:
+        for query in search_queries:
             try:
-                # Use date range filtering at the API level for better results
                 cves = self.nist_client.search_cves(
                     keyword=query,
                     results_per_page=100,
@@ -155,15 +152,14 @@ class CVEMonitoringService:
                 logger.error(f"Error searching for {query}: {e}")
                 continue
 
-        unique_cves = {}
-        for vuln in vulnerabilities:
-            cve_id = vuln.get("cve_id")
-            if cve_id not in unique_cves:
-                unique_cves[cve_id] = vuln
+        vulnerabilities_list = list(
+            {
+                vuln.get("cve_id"): vuln
+                for vuln in vulnerabilities
+                if vuln.get("cve_id")
+            }.values()
+        )
 
-        vulnerabilities_list = list(unique_cves.values())
-
-        # Apply severity filter if specified
         if severity_filter:
             severity_filter_upper = severity_filter.upper()
             vulnerabilities_list = [
@@ -224,10 +220,8 @@ class CVEMonitoringService:
 
         if asset.name:
             asset_name_lower = asset.name.lower()
-            # Check if asset name is in summary
             if asset_name_lower in summary_lower:
                 return True
-            # Check if asset name (without spaces or with hyphens) is in summary
             if asset_name_lower.replace(" ", "") in summary_lower:
                 return True
             if asset_name_lower.replace(" ", "-") in summary_lower:
@@ -236,7 +230,6 @@ class CVEMonitoringService:
         if asset.version and asset.version.lower() in summary_lower:
             return True
 
-        # Check affected products if available
         if hasattr(cve_data, "affected_products") and cve_data.affected_products:
             affected_products_str = str(cve_data.affected_products).lower()
             if asset.name and asset.name.lower() in affected_products_str:
