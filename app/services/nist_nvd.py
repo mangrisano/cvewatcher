@@ -118,36 +118,26 @@ class NistNvdClient:
 
             for vuln in vulnerabilities:
                 cve_item = vuln.get("cve", {})
-
                 cve_id = cve_item.get("id", "")
-
                 descriptions = cve_item.get("descriptions", [])
-                summary = ""
-                for desc in descriptions:
-                    if desc.get("lang") == "en":
-                        summary = desc.get("value", "")
-                        break
+                summary = next(
+                    (
+                        desc.get("value", "")
+                        for desc in descriptions
+                        if desc.get("lang") == "en"
+                    ),
+                    "",
+                )
 
                 metrics = cve_item.get("metrics", {})
-                score_v31 = None
-                score_v30 = None
-                score_v2 = None
-
-                if "cvssMetricV31" in metrics and metrics.get("cvssMetricV31"):
-                    cvss_data = metrics.get("cvssMetricV31", [{}])[0].get(
-                        "cvssData", {}
-                    )
-                    score_v31 = cvss_data.get("baseScore")
-                elif "cvssMetricV30" in metrics and metrics.get("cvssMetricV30"):
-                    cvss_data = metrics.get("cvssMetricV30", [{}])[0].get(
-                        "cvssData", {}
-                    )
-                    score_v30 = cvss_data.get("baseScore")
-                elif "cvssMetricV2" in metrics and metrics.get("cvssMetricV2"):
-                    cvss_data = metrics.get("cvssMetricV2", [{}])[0].get("cvssData", {})
-                    score_v2 = cvss_data.get("baseScore")
-
-                score = score_v31 or score_v30 or score_v2 or 0.0
+                score = 0.0
+                for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+                    metric = metrics.get(key)
+                    if metric:
+                        cvss_data = metric[0].get("cvssData", {})
+                        score = cvss_data.get("baseScore", 0.0)
+                        if score:
+                            break
 
                 if score >= 9.0:
                     severity = "CRITICAL"
@@ -161,33 +151,25 @@ class NistNvdClient:
                 publish_date = self._parse_datetime(cve_item.get("published"))
                 modified_date = self._parse_datetime(cve_item.get("lastModified"))
 
-                affected_products = []
-                configurations = cve_item.get("configurations", [])
-                for config in configurations:
-                    nodes = config.get("nodes", [])
-                    for node in nodes:
-                        cpe_matches = node.get("cpeMatch", [])
-                        for match in cpe_matches:
-                            if match.get("vulnerable", False):
-                                product_info = {
-                                    "cpe": match.get("criteria", ""),
-                                    "version_start": match.get("versionStartIncluding"),
-                                    "version_end": match.get("versionEndExcluding"),
-                                    "version_start_excluding": match.get(
-                                        "versionStartExcluding"
-                                    ),
-                                    "version_end_including": match.get(
-                                        "versionEndIncluding"
-                                    ),
-                                }
-                                affected_products.append(product_info)
+                affected_products = [
+                    {
+                        "cpe": match.get("criteria", ""),
+                        "version_start": match.get("versionStartIncluding"),
+                        "version_end": match.get("versionEndExcluding"),
+                        "version_start_excluding": match.get("versionStartExcluding"),
+                        "version_end_including": match.get("versionEndIncluding"),
+                    }
+                    for config in cve_item.get("configurations", [])
+                    for node in config.get("nodes", [])
+                    for match in node.get("cpeMatch", [])
+                    if match.get("vulnerable", False)
+                ]
 
-                references = []
-                refs = cve_item.get("references", [])
-                for ref in refs:
-                    url = ref.get("url", "")
-                    if url:
-                        references.append(url)
+                references = [
+                    ref.get("url", "")
+                    for ref in cve_item.get("references", [])
+                    if ref.get("url", "")
+                ]
 
                 cve_data = CVEData(
                     cve_id=cve_id,
