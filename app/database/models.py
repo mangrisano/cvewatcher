@@ -1,6 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, Float, JSON
+from uuid import uuid4
 from sqlalchemy.sql import func
 from app.database.connection import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -14,10 +16,11 @@ class User(Base):
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"
 
+
 class Asset(Base):
     __tablename__ = "assets"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid4()))
     name = Column(String(100), nullable=False)
     version = Column(String(50), nullable=True)
     cpe = Column(String(255), nullable=True)
@@ -28,10 +31,11 @@ class Asset(Base):
     def __repr__(self):
         return f"<Asset(name='{self.name}', cpe='{self.cpe}')>"
 
+
 class CVE(Base):
     __tablename__ = "cves"
 
-    id = Column(String(20), primary_key=True)  
+    id = Column(String(20), primary_key=True)
     summary = Column(Text)
     severity = Column(String(20))
     score = Column(Float)
