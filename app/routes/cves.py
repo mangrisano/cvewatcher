@@ -32,7 +32,7 @@ class VulnerabilityResponse(BaseModel):
     publish_date: Optional[str]
 
 
-@router.post("/fetch-recent")
+@router.get("/fetch-recent")
 async def fetch_recent_cves(
     days: int = Query(default=7, ge=1, le=30, description="Days back to search"),
     current_user: dict = Depends(get_current_user),
