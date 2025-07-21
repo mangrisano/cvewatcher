@@ -2,9 +2,8 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
-from urllib.parse import urlencode
-import urllib.request
-import urllib.error
+
+import httpx
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -32,20 +31,13 @@ class NistNvdClient:
             self.session_headers["apiKey"] = api_key
 
     def _make_request(self, params: dict[str, Any]) -> dict[str, Any]:
-        query_string = urlencode(params)
-        url = f"{self.BASE_URL}?{query_string}"
-
-        request = urllib.request.Request(url, headers=self.session_headers)
-
         try:
-            with urllib.request.urlopen(request) as response:
-                if response.status != 200:
-                    raise Exception(f"HTTP {response.status}: {response.reason}")
-
-                data = json.loads(response.read().decode())
-                return data
-
-        except urllib.error.URLError as e:
+            response = httpx.get(
+                self.BASE_URL, headers=self.session_headers, params=params, timeout=30
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
             logger.error(f"NIST API connection error: {e}")
             raise Exception(f"Connection error: {e}")
         except json.JSONDecodeError as e:
@@ -196,16 +188,21 @@ class NistNvdClient:
 
         try:
             if date_string.endswith("Z"):
-                date_string = date_string[:-1]
-            elif "+" in date_string:
-                date_string = date_string.split("+")[0]
-            elif date_string.count(":") == 3:
-                date_string = date_string.rsplit(":", 1)[0]
+                date_string = date_string[:-1] + "+00:00"
 
-            if "." in date_string:
-                return datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S.%f")
-            else:
-                return datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S")
+            try:
+                return datetime.fromisoformat(date_string)
+            except ValueError:
+                # Fallback for formats not handled by fromisoformat
+                if "+" in date_string:
+                    date_string = date_string.split("+")[0]
+                elif date_string.count(":") == 3:
+                    date_string = date_string.rsplit(":", 1)[0]
+
+                if "." in date_string:
+                    return datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S.%f")
+                else:
+                    return datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S")
 
         except ValueError as e:
             logger.warning(f"Unable to parse date '{date_string}': {e}")
