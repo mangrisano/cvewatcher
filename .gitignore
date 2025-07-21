@@ -10,7 +10,6 @@ wheels/
 .venv
 
 # Credential files
-*.txt
 
 # Database files
 *.sqlite3
