@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
 from urllib.parse import urlencode
 import urllib.request
@@ -91,7 +91,7 @@ class NistNvdClient:
     def get_recent_cves(
         self, days: int = 7, cpe_name: Optional[str] = None
     ) -> list[CVEData]:
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
 
         return self.search_cves(
