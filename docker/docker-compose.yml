@@ -9,11 +9,18 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:////dbdata/cvewatcher.db
+      - DATABASE_URL=postgresql://cveuser:cvepass@db:5432/cvewatcher
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
     volumes:
-      - dbdata:/dbdata
+      - ../app:/app/app:ro
+      - ../requirements.txt:/app/requirements.txt:ro
+      - ../pyproject.toml:/app/pyproject.toml:ro
+      - ../alembic:/app/alembic:ro
+      - ../alembic.ini:/app/alembic.ini:ro
     depends_on:
       - db
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   db:
     image: postgres:16
@@ -28,5 +35,4 @@ services:
       - pgdata:/var/lib/postgresql/data
 
 volumes:
-  dbdata:
   pgdata:
