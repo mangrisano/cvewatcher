@@ -32,6 +32,10 @@ class UserLoginRequest(BaseModel):
         return password
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 class AssetCreate(BaseModel):
     name: str
     version: Optional[str] = None
