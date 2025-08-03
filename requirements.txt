@@ -6,3 +6,4 @@ alembic
 python-jose
 uvicorn
 pydantic[email]
+psycopg2-binary
