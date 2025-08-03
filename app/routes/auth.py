@@ -82,7 +82,6 @@ async def refresh_access_token(
         if not db_user:
             raise HTTPException(status_code=401, detail="User not found")
 
-        # Create new access token
         new_access_token = create_access_token(data={"sub": user_email})
 
         return {
