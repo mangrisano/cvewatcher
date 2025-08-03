@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, Float, JSON
 from uuid import uuid4
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import UUID
 from app.database.connection import Base
 
 
@@ -20,7 +21,7 @@ class User(Base):
 class Asset(Base):
     __tablename__ = "assets"
 
-    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid4()))
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid4)
     name = Column(String(100), nullable=False)
     version = Column(String(50), nullable=True)
     cpe = Column(String(255), nullable=True)

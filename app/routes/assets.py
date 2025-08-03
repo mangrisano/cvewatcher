@@ -1,3 +1,4 @@
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -73,7 +74,7 @@ async def get_my_assets(
 
 @router.get("/{asset_id}", response_model=AssetResponse)
 async def get_asset(
-    asset_id: int,
+    asset_id: UUID,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -91,7 +92,7 @@ async def get_asset(
 
 @router.get("/{asset_id}/vulnerabilities")
 async def get_asset_vulnerabilities(
-    asset_id: int,
+    asset_id: UUID,
     days: int = 30,
     severity: SeverityLevel | None = None,
     current_user: dict = Depends(get_current_user),
@@ -134,7 +135,7 @@ async def get_asset_vulnerabilities(
 
 @router.patch("/{asset_id}", response_model=AssetResponse)
 async def update_asset(
-    asset_id: int,
+    asset_id: UUID,
     asset_data: AssetCreate,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -158,7 +159,7 @@ async def update_asset(
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_asset(
-    asset_id: int,
+    asset_id: UUID,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -177,7 +178,7 @@ async def delete_asset(
 
 @router.get("/{asset_id}/monitor")
 async def monitor_asset_cves(
-    asset_id: int,
+    asset_id: UUID,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
