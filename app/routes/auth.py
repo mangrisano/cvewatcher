@@ -8,7 +8,6 @@ from app.utils.auth import (
     verify_password,
     verify_refresh_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    REFRESH_TOKEN_EXPIRE_DAYS,
 )
 from app.database import get_db, User
 
