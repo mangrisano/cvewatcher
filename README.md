@@ -28,6 +28,7 @@ CVE Watcher helps organizations and developers monitor their software assets for
 - `POST /auth/register` - Register new user
 - `POST /auth/login` - User login
 - `POST /auth/refresh` - Refresh access token
+- `POST /auth/logout` - Logout user
 
 ### Asset Management
 - `POST /assets/` - Create new asset
