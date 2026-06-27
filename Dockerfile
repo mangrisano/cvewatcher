@@ -21,7 +21,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8000
 
 ENV PYTHONUNBUFFERED=1
-ENV DATABASE_URL=postgresql://cveuser:cvepass@db:5432/cvewatcher
 
 # Run Alembic migrations (optional, comment if not needed)
 # RUN alembic upgrade head
