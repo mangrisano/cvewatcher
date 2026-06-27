@@ -3,6 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.utils.auth import verify_access_token
 
+
 def get_current_user(
     authorization: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
 ) -> dict:
