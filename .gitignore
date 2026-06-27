@@ -18,4 +18,5 @@ wheels/
 *.sqlite3
 *.db
 
-utils/
+# Standalone demo scripts (not part of the app)
+/utils/
