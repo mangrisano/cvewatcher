@@ -11,6 +11,10 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
+class NvdUnavailableError(Exception):
+    """Raised when the NVD API cannot be reached or keeps failing."""
+
+
 @dataclass
 class CVEData:
     cve_id: str
@@ -71,11 +75,11 @@ class NistNvdClient:
                 continue
             except httpx.HTTPError as e:
                 logger.error(f"NIST API connection error: {e}")
-                raise Exception(f"Connection error: {e}")
+                raise NvdUnavailableError(f"Connection error: {e}")
             except json.JSONDecodeError as e:
                 logger.error(f"Error in parsing JSON: {e}")
                 raise Exception(f"Invalid API response: {e}")
-        raise Exception(
+        raise NvdUnavailableError(
             f"NIST API request failed after {self.MAX_RETRIES} attempts: {last_error}"
         )
 

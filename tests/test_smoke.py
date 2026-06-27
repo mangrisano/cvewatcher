@@ -102,6 +102,38 @@ def test_assets_require_authentication(client):
     assert response.status_code in (401, 403)
 
 
+def test_vulnerabilities_returns_503_when_nvd_unavailable(client, monkeypatch):
+    from app.services import cve_monitoring
+    from app.services.nist_nvd import NvdUnavailableError
+
+    client.post(
+        "/auth/register",
+        json={
+            "username": "erin",
+            "email": "erin@example.com",
+            "password": "Password123",
+        },
+    )
+    token = client.post(
+        "/auth/login",
+        json={"email": "erin@example.com", "password": "Password123"},
+    ).json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    asset_id = client.post(
+        "/assets/", headers=headers, json={"name": "openssl"}
+    ).json()["id"]
+
+    def boom(*args, **kwargs):
+        raise NvdUnavailableError("NVD down")
+
+    monkeypatch.setattr(cve_monitoring.nist_client, "search_cves", boom)
+
+    response = client.get(f"/assets/{asset_id}/vulnerabilities", headers=headers)
+    assert response.status_code == 503
+    assert "NVD" in response.json()["detail"]
+
+
 def test_asset_list_pagination(client):
     client.post(
         "/auth/register",

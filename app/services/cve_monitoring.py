@@ -3,10 +3,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
+from packaging.version import InvalidVersion, Version
 from sqlalchemy.orm import Session
 
 from app.database.models import Asset, CVE
-from app.services.nist_nvd import nist_client
+from app.services.nist_nvd import nist_client, NvdUnavailableError
 from app.models import AssetResponse
 
 logger = logging.getLogger(__name__)
@@ -113,45 +114,26 @@ class CVEMonitoringService:
     async def _get_asset_vulnerabilities(
         self, asset: AssetResponse, days: int = 0, severity_filter: str | None = None
     ) -> list[dict[str, Any]]:
-        vulnerabilities = []
-        search_queries = self._build_search_queries(asset)
-
         pub_start_date = None
         pub_end_date = None
         if days > 0:
             pub_end_date = datetime.now(timezone.utc)
             pub_start_date = pub_end_date - timedelta(days=days)
-        for query in search_queries:
-            try:
-                cves = await run_in_threadpool(
-                    self.nist_client.search_cves,
-                    keyword=query,
-                    results_per_page=100,
-                    pub_start_date=pub_start_date,
-                    pub_end_date=pub_end_date,
-                )
 
-                for cve in cves:
-                    if self._is_relevant_to_asset(cve, asset):
-                        vulnerabilities.append(
-                            {
-                                "cve_id": cve.cve_id,
-                                "summary": cve.summary,
-                                "severity": cve.severity,
-                                "score": cve.score,
-                                "publish_date": cve.publish_date.isoformat()
-                                if cve.publish_date
-                                else None,
-                                "modified_date": cve.modified_date.isoformat()
-                                if cve.modified_date
-                                else None,
-                                "relevance_reason": f"Matches asset name '{asset.name}'",
-                                "cve_url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve.cve_id}",
-                            }
-                        )
-            except Exception as e:
-                logger.error(f"Error searching for {query}: {e}")
-                continue
+        cpe_name = self._full_cpe(asset.cpe)
+        if cpe_name:
+            vulnerabilities, nvd_failed = await self._search_by_cpe(
+                asset, cpe_name, pub_start_date, pub_end_date
+            )
+        else:
+            vulnerabilities, nvd_failed = await self._search_by_keyword(
+                asset, pub_start_date, pub_end_date
+            )
+
+        if nvd_failed and not vulnerabilities:
+            raise NvdUnavailableError(
+                "Could not retrieve vulnerabilities: the NVD service is unavailable."
+            )
 
         vulnerabilities_list = list(
             {
@@ -195,6 +177,111 @@ class CVEMonitoringService:
 
         return vulnerabilities_list
 
+    async def _search_by_cpe(
+        self,
+        asset: AssetResponse,
+        cpe_name: str,
+        pub_start_date: datetime | None,
+        pub_end_date: datetime | None,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Precise lookup: let NVD resolve the CPE (version-aware, server-side).
+
+        When an asset declares a CPE we trust NVD's matching engine, which
+        evaluates version ranges in each CVE configuration. This avoids both the
+        100-result keyword cap and the false positives/negatives of text search.
+        """
+        try:
+            cves = await run_in_threadpool(
+                self.nist_client.search_cves,
+                cpe_name=cpe_name,
+                results_per_page=2000,
+                pub_start_date=pub_start_date,
+                pub_end_date=pub_end_date,
+            )
+        except NvdUnavailableError as e:
+            logger.error(f"NVD unavailable for CPE {cpe_name}: {e}")
+            return [], True
+        except Exception as e:
+            logger.error(f"Error searching CPE {cpe_name}: {e}")
+            return [], False
+
+        reason = f"NVD matched CPE '{cpe_name}'"
+        return [self._vuln_dict(cve, reason) for cve in cves], False
+
+    async def _search_by_keyword(
+        self,
+        asset: AssetResponse,
+        pub_start_date: datetime | None,
+        pub_end_date: datetime | None,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Fallback lookup when no CPE is known: keyword search + local filtering.
+
+        Less precise than a CPE lookup (NVD keyword search is capped at 100
+        results and matches free text), so each candidate is filtered locally by
+        product identity and version range via ``_is_relevant_to_asset``.
+        """
+        vulnerabilities: list[dict[str, Any]] = []
+        nvd_failed = False
+        for query in self._build_search_queries(asset):
+            try:
+                cves = await run_in_threadpool(
+                    self.nist_client.search_cves,
+                    keyword=query,
+                    results_per_page=100,
+                    pub_start_date=pub_start_date,
+                    pub_end_date=pub_end_date,
+                )
+            except NvdUnavailableError as e:
+                logger.error(f"NVD unavailable while searching for {query}: {e}")
+                nvd_failed = True
+                continue
+            except Exception as e:
+                logger.error(f"Error searching for {query}: {e}")
+                continue
+
+            for cve in cves:
+                if self._is_relevant_to_asset(cve, asset):
+                    vulnerabilities.append(
+                        self._vuln_dict(cve, f"Matches asset name '{asset.name}'")
+                    )
+
+        return vulnerabilities, nvd_failed
+
+    def _vuln_dict(self, cve, reason: str) -> dict[str, Any]:
+        return {
+            "cve_id": cve.cve_id,
+            "summary": cve.summary,
+            "severity": cve.severity,
+            "score": cve.score,
+            "publish_date": cve.publish_date.isoformat() if cve.publish_date else None,
+            "modified_date": cve.modified_date.isoformat()
+            if cve.modified_date
+            else None,
+            "relevance_reason": reason,
+            "cve_url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve.cve_id}",
+        }
+
+    @staticmethod
+    def _full_cpe(cpe: str | None) -> str | None:
+        """Return a well-formed CPE 2.3 name usable with NVD's ``cpeName`` filter.
+
+        NVD requires a fully specified 13-component CPE 2.3 URI. User-provided
+        values are trimmed and padded with ``*`` so that partial CPEs such as
+        ``cpe:2.3:a:f5:nginx:1.24.0`` still resolve. Anything that is not a CPE
+        2.3 string returns ``None`` so the caller falls back to keyword search.
+        """
+        if not cpe:
+            return None
+        cpe = cpe.strip()
+        if not cpe.lower().startswith("cpe:2.3:"):
+            return None
+        parts = cpe.split(":")
+        if len(parts) < 13:
+            parts += ["*"] * (13 - len(parts))
+        elif len(parts) > 13:
+            parts = parts[:13]
+        return ":".join(parts)
+
     def _get_severity_priority(self, severity: str) -> int:
         severity_map = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
         return severity_map.get(severity or "LOW", 1)
@@ -217,26 +304,110 @@ class CVEMonitoringService:
         return list(set(queries))
 
     def _is_relevant_to_asset(self, cve_data, asset: AssetResponse) -> bool:
-        summary_lower = cve_data.summary.lower()
+        name_variants = self._name_variants(asset.name)
+        affected = getattr(cve_data, "affected_products", None) or []
+        product_matches = [
+            product
+            for product in affected
+            if self._cpe_matches_name(product.get("cpe", ""), name_variants)
+        ]
 
-        if asset.name:
-            asset_name_lower = asset.name.lower()
-            if asset_name_lower in summary_lower:
-                return True
-            if asset_name_lower.replace(" ", "") in summary_lower:
-                return True
-            if asset_name_lower.replace(" ", "-") in summary_lower:
-                return True
+        # Authoritative path: the CVE declares affected CPEs. Trust them over
+        # free-text. This filters out third-party products that merely mention
+        # the asset name in their description (e.g. "X, used in NGINX, ...").
+        if affected:
+            if not product_matches:
+                return False
+            # Version-aware filtering: keep the CVE only if the asset version
+            # falls inside a vulnerable range (e.g. drops "nginx before 1.13.6"
+            # for an asset running 1.24.0).
+            if asset.version:
+                return any(
+                    self._version_affected(asset.version, product)
+                    for product in product_matches
+                )
+            return True
+
+        # No CPE data at all: best-effort relevance from the free-text summary.
+        summary_lower = cve_data.summary.lower()
+        if name_variants and any(variant in summary_lower for variant in name_variants):
+            return True
 
         if asset.version and asset.version.lower() in summary_lower:
             return True
 
-        if hasattr(cve_data, "affected_products") and cve_data.affected_products:
-            affected_products_str = str(cve_data.affected_products).lower()
-            if asset.name and asset.name.lower() in affected_products_str:
-                return True
-
         return False
+
+    @staticmethod
+    def _name_variants(name: str | None) -> set[str]:
+        if not name:
+            return set()
+        lower = name.lower()
+        return {lower, lower.replace(" ", ""), lower.replace(" ", "-")}
+
+    @staticmethod
+    def _cpe_matches_name(cpe: str, name_variants: set[str]) -> bool:
+        if not cpe or not name_variants:
+            return False
+        parts = cpe.split(":")
+        # CPE 2.3 format: cpe:2.3:part:vendor:product:version:...
+        product = parts[4].lower() if len(parts) > 4 else ""
+        if not product:
+            return False
+
+        def normalize(value: str) -> str:
+            return value.replace(" ", "").replace("-", "").replace("_", "")
+
+        # Exact (separator-insensitive) product match, so "nginx" does NOT match
+        # a different product such as "nginx_proxy_manager".
+        product_norm = normalize(product)
+        return any(normalize(variant) == product_norm for variant in name_variants)
+
+    @staticmethod
+    def _version_affected(asset_version: str, product: dict) -> bool:
+        try:
+            version = Version(asset_version)
+        except InvalidVersion:
+            # Unparseable asset version: do not drop the CVE.
+            return True
+
+        bounds = [
+            (product.get("version_start"), "ge"),  # versionStartIncluding
+            (product.get("version_start_excluding"), "gt"),  # versionStartExcluding
+            (product.get("version_end"), "lt"),  # versionEndExcluding
+            (product.get("version_end_including"), "le"),  # versionEndIncluding
+        ]
+        has_range = False
+        for raw_bound, op in bounds:
+            if not raw_bound:
+                continue
+            has_range = True
+            try:
+                bound = Version(str(raw_bound))
+            except InvalidVersion:
+                continue
+            if op == "ge" and not version >= bound:
+                return False
+            if op == "gt" and not version > bound:
+                return False
+            if op == "lt" and not version < bound:
+                return False
+            if op == "le" and not version <= bound:
+                return False
+        if has_range:
+            return True
+
+        # No range: fall back to the exact version encoded in the CPE, if any.
+        parts = product.get("cpe", "").split(":")
+        cpe_version = parts[5] if len(parts) > 5 else ""
+        if cpe_version and cpe_version not in ("*", "-"):
+            try:
+                return Version(cpe_version) == version
+            except InvalidVersion:
+                return cpe_version == asset_version
+
+        # Product-level CPE with no version info: assume affected.
+        return True
 
     def _get_existing_cves_for_asset(self, asset: Asset) -> list[CVE]:
         existing_cves = []

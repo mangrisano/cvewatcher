@@ -4,8 +4,7 @@ import httpx
 import pytest
 
 from app.services import nist_nvd
-from app.services.nist_nvd import NistNvdClient
-
+from app.services.nist_nvd import NistNvdClient, NvdUnavailableError
 
 SAMPLE_RESPONSE = {
     "vulnerabilities": [
@@ -168,3 +167,27 @@ def test_make_request_retries_on_timeout(monkeypatch):
     client = NistNvdClient()
     assert client._make_request({}) == {"vulnerabilities": []}
     assert calls["n"] == 2
+
+
+def test_make_request_raises_unavailable_on_connection_error(monkeypatch):
+    def boom(*args, **kwargs):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(nist_nvd.httpx, "get", boom)
+    monkeypatch.setattr(nist_nvd.time, "sleep", lambda *_: None)
+
+    client = NistNvdClient()
+    with pytest.raises(NvdUnavailableError):
+        client._make_request({})
+
+
+def test_make_request_raises_unavailable_after_max_retries(monkeypatch):
+    monkeypatch.setattr(
+        nist_nvd.httpx, "get", lambda *a, **k: FakeResponse(status_code=503)
+    )
+    monkeypatch.setattr(nist_nvd.time, "sleep", lambda *_: None)
+
+    client = NistNvdClient()
+    with pytest.raises(NvdUnavailableError):
+        # 503 raises HTTPStatusError -> wrapped as NvdUnavailableError.
+        client._make_request({})

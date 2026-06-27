@@ -9,6 +9,7 @@ from app.database.connection import get_db
 from app.database.models import Asset
 from app.dependencies import get_current_user
 from app.services.cve_monitoring import CVEMonitoringService
+from app.services.nist_nvd import NvdUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,11 @@ async def get_asset_vulnerabilities(
             "days_searched": days,
         }
 
+    except NvdUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"NVD service is currently unavailable. Please retry later. ({e})",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error retrieving vulnerabilities: {str(e)}"
