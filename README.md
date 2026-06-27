@@ -1,29 +1,67 @@
-# CVE Watcher
+<div align="center">
 
-A FastAPI-based application for monitoring and tracking CVE (Common Vulnerabilities and Exposures) vulnerabilities for your software assets.
+# 🛡️ CVE Watcher
 
-## Overview
+[![CI](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml)
+[![Container](https://img.shields.io/badge/ghcr.io-cvewatcher-2496ED?logo=docker&logoColor=white)](https://github.com/mangrisano/cvewatcher/pkgs/container/cvewatcher)
+[![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-CVE Watcher helps organizations and developers monitor their software assets for security vulnerabilities by:
+**Asset inventory · NVD-powered CVE matching · CPE auto-resolution · Severity & time filters · Background monitoring · Web dashboard · Dockerized**
 
-- **Asset Management**: Track your software components, versions, and CPE identifiers
-- **CVE Monitoring**: Automatically monitor for new vulnerabilities affecting your assets
-- **Real-time Alerts**: Get notified when new CVEs are discovered for your tracked software
-- **Vulnerability Reports**: Generate detailed reports on security issues affecting your infrastructure
-- **User Management**: Secure user authentication and authorization
+[Quick start](#quick-start) · [Features](#features) · [How matching works](#how-vulnerability-matching-works) · [Dashboard](#web-dashboard) · [API](#api-endpoints) · [Deployment](#deployment) · [Issues](https://github.com/mangrisano/cvewatcher/issues)
+
+</div>
+
+> **Tell it what software you run. Learn which CVEs actually affect it.**
+> CVE Watcher keeps an inventory of your assets and matches each one against the
+> NIST NVD — precisely by CPE, automatically by product name, or by keyword as a
+> last resort. Self-hosted, JWT-secured, with a no-build web dashboard and a
+> clean JSON API.
+
+CVE Watcher is a self-hostable FastAPI service that turns the list of software
+you run into an always-current view of the vulnerabilities affecting it. You
+register assets (a name and a version is enough), and it queries the NIST NVD on
+demand or on a schedule, then deduplicates and ranks findings by severity.
+
+```bash
+# add an asset — just a name and a version — and list its CVEs
+# (full walk-through in the End-to-End Example below)
+curl -s "$BASE/assets/$ASSET/vulnerabilities" -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+# → 2 vulnerabilities  (CVE-2023-44487 HIGH 7.5 · CVE-2025-23419 MEDIUM 4.3)
+```
 
 ## Features
 
-- 🔐 **User Authentication**: Secure JWT-based authentication system
-- 📦 **Asset Tracking**: Manage your software inventory with detailed metadata
-- 🔍 **CVE Monitoring**: Integration with NIST NVD for real-time vulnerability data
-- 📊 **Severity Filtering**: Filter vulnerabilities by severity level (Critical, High, Medium, Low)
-- 📈 **Reporting**: Generate monitoring reports and vulnerability summaries
-- 🎯 **Targeted Scanning**: Monitor specific assets or scan all assets at once
-- 🔄 **Real-time Updates**: Automatic vulnerability detection and updates
-- ⏰ **Background Monitoring**: Optional scheduler that periodically scans every asset
-- 🔔 **Notifications**: Alert on newly discovered vulnerabilities (console and webhook)
-- 🖥️ **Web Dashboard**: Single-page UI to manage assets and review vulnerabilities
+- **Asset inventory** — track software with name, version, optional CPE and description, scoped per user.
+- **Precise CVE matching** — NVD `cpeName` lookups evaluate version ranges server-side (no keyword 100-result cap).
+- **Automatic CPE resolution** — derive a CPE from a product name via the NVD CPE dictionary.
+- **Keyword fallback** — free-text NVD search with local product/version filtering to cut the noise.
+- **Triage filters** — filter findings by severity and time window (last 30/90/365 days).
+- **Background monitoring** — opt-in scheduler that rescans assets and alerts on new CVEs.
+- **Web dashboard** — single-page UI (vanilla JS + Tailwind, no build step).
+- **Secure JSON API** — JWT auth, per-user isolation, OpenAPI docs at `/docs` and `/redoc`.
+- **Self-hosted** — PostgreSQL + Alembic migrations, shipped as a Docker image on GHCR.
+
+## Requirements
+
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose (recommended), **or**
+- Python >= 3.12 and a PostgreSQL database for a local run
+
+## Quick start
+
+```bash
+git clone https://github.com/mangrisano/cvewatcher.git
+cd cvewatcher
+docker compose up --build
+```
+
+Then open:
+
+- API — http://localhost:8000
+- Interactive docs (Swagger UI) — http://localhost:8000/docs
+- Web dashboard — http://localhost:8000/dashboard
 
 ## Web Dashboard
 
@@ -43,112 +81,29 @@ If the NIST NVD service cannot be reached, the dashboard shows an explicit
 warning banner instead of an empty list — an empty result is only displayed
 when NVD genuinely reports no matching CVEs.
 
-### Screenshots
-
-| Sign in | Asset inventory |
-| --- | --- |
-| ![Sign in screen](docs/screenshots/login.png) | ![Asset dashboard with CPE and keyword badges](docs/screenshots/dashboard.png) |
-
-| Add an asset | Vulnerabilities for an asset |
-| --- | --- |
-| ![Add asset modal with optional CPE field](docs/screenshots/add-asset.png) | ![Vulnerability list with severity badges](docs/screenshots/vulnerabilities.png) |
-
-The card badges tell you how an asset is matched: a green **CPE** badge means a
-precise CPE lookup, a grey **keyword** badge means name-based matching.
-
 ## How Vulnerability Matching Works
 
-CVE Watcher resolves the vulnerabilities of an asset in one of three ways,
-chosen automatically per asset:
+CVE Watcher matches an asset to CVEs in three ways, chosen automatically:
 
-### 1. CPE lookup (precise, preferred)
+1. **CPE lookup** — if the asset has a CPE 2.3 id, the query is delegated to
+   NVD's `cpeName` filter, which evaluates version ranges server-side. Partial
+   CPEs are padded to the full 13-component form.
+2. **Automatic CPE resolution** — with no CPE, the product name is looked up in
+   NVD's CPE dictionary (applications, operating systems and hardware),
+   following `deprecatedBy` links. A candidate matches only on an exact
+   (separator-insensitive) `product` or `vendor+product`, so `Apache HTTP
+Server` resolves to `apache:http_server` while `nginx` never pulls in
+   `nginx_proxy_manager`. The asset version is injected and the lookup from
+   step 1 runs for each resolved pair.
+3. **Keyword search** — last resort when the name can't be resolved: an NVD
+   keyword search filtered locally by product identity and version range,
+   falling back to the CVE summary when a CVE carries no CPE data.
 
-When an asset declares a **CPE 2.3** identifier (e.g.
-`cpe:2.3:a:f5:nginx:1.24.0`), the query is delegated to NVD's `cpeName`
-filter. NVD evaluates the version ranges declared in every CVE configuration
-server-side, so the result contains exactly the CVEs that affect that product
-and version. Partial CPEs are padded to the full 13-component form before the
-lookup. This path avoids both the keyword 100-result cap and the false
-positives/negatives of free-text search.
-
-### 2. Automatic CPE resolution (when no CPE is given)
-
-If an asset has no CPE, CVE Watcher first tries to **derive one from the product
-name** using NVD's CPE dictionary (`/cpes/2.0`). Matching application CPEs are
-collected — following `deprecatedBy` links so historical vendors resolve to
-their current names (e.g. `igor_sysoev` → `nginx` → `f5`) — and the asset
-version is injected into each. The precise `cpeName` lookup from step 1 is then
-run for every resolved vendor/product pair and the results merged. This means a
-plain `nginx` / `1.24.0` asset returns the same accurate CVEs as one with an
-explicit CPE, without the user having to know the CPE string.
-
-### 3. Keyword search with local filtering (last resort)
-
-When the name cannot be resolved to a CPE, CVE Watcher falls back to an NVD
-keyword search and then filters each candidate locally to cut the noise of
-free-text matching:
-
-- **Product identity** — a candidate is kept only if one of its affected-product
-  CPEs matches the asset name (separator-insensitive exact match), so `nginx`
-  no longer matches unrelated products such as `nginx_proxy_manager`.
-- **Version range** — if the asset has a version, the candidate must declare a
-  version range (or exact CPE version) that actually includes it; CVEs fixed in
-  earlier releases are dropped.
-- **Text fallback** — when a CVE carries no CPE data at all, the asset name (and
-  version, if present) is matched against the CVE summary.
-
-> Tip: providing a CPE explicitly still helps when a product name is ambiguous
-> or its vendor differs from the common name (e.g. Apache HTTP Server is
-> `cpe:2.3:a:apache:http_server`). Look one up in the
+> **You usually only need a name and a version** — a CPE is an optional
+> precision lever. Provide one when the name you track differs from the
+> canonical token (e.g. `IIS` is
+> `cpe:2.3:a:microsoft:internet_information_services`); look it up in the
 > [NVD CPE dictionary](https://nvd.nist.gov/products/cpe/search).
-
-### Worked examples
-
-What actually happens for three assets monitoring **nginx 1.24.0**:
-
-| Asset input                                                     | Path taken              | What CVE Watcher does                                                                                                                                                 | Result                                                       |
-| --------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `name=nginx`, `version=1.24.0`, `cpe=cpe:2.3:a:f5:nginx:1.24.0` | **1. CPE lookup**       | Pads the CPE to `cpe:2.3:a:f5:nginx:1.24.0:*:*:*:*:*:*:*` and asks NVD `?cpeName=…`                                                                                   | The CVEs whose configs include 1.24.0                        |
-| `name=nginx`, `version=1.24.0`, no CPE                          | **2. Auto resolution**  | Looks `nginx` up in `/cpes/2.0`, finds vendors `nginx` and `f5`, builds `cpe:2.3:a:nginx:nginx:1.24.0:*…` and `cpe:2.3:a:f5:nginx:1.24.0:*…`, queries both and merges | **Same** CVEs as the explicit-CPE asset                      |
-| `name=nginx proxy manager`, no CPE                              | **3. Keyword + filter** | Resolution finds no exact `nginx_proxy_manager` application match by that name, falls back to keyword search and filters by product identity + version                | Only CVEs whose affected CPE is really `nginx_proxy_manager` |
-
-For the two nginx assets above, the live NVD data currently returns the same two
-findings (sorted by severity):
-
-```json
-{
-  "asset": {
-    "id": "…",
-    "name": "nginx",
-    "version": "1.24.0",
-    "cpe": null,
-    "description": "edge reverse proxy"
-  },
-  "total_vulnerabilities": 2,
-  "days_searched": 0,
-  "vulnerabilities": [
-    {
-      "cve_id": "CVE-2023-44487",
-      "severity": "HIGH",
-      "score": 7.5,
-      "summary": "The HTTP/2 protocol allows a denial of service (…the Rapid Reset attack).",
-      "relevance_reason": "NVD matched CPE 'cpe:2.3:a:f5:nginx:1.24.0:*:*:*:*:*:*:*'",
-      "cve_url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2023-44487"
-    },
-    {
-      "cve_id": "CVE-2025-23419",
-      "severity": "MEDIUM",
-      "score": 4.3,
-      "summary": "When multiple server blocks share the same … TLS session reuse …",
-      "relevance_reason": "NVD matched CPE 'cpe:2.3:a:f5:nginx:1.24.0:*:*:*:*:*:*:*'",
-      "cve_url": "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-23419"
-    }
-  ]
-}
-```
-
-The key takeaway: **you usually only need a name and a version.** Adding a CPE is
-an optional precision lever, not a requirement.
 
 ## Background Monitoring & Notifications
 
@@ -216,28 +171,29 @@ newly detected CVEs trigger notifications.
 - **Container**: Docker & Docker Compose
 - **External API**: NIST NVD API integration
 
-## Quick Start
+## Deployment
 
-### Using Docker (Recommended)
+CVE Watcher ships as a Docker image and a Compose stack (app + PostgreSQL).
 
-1. Clone the repository:
-
-```bash
-git clone https://github.com/mangrisano/cvewatcher.git
-cd cvewatcher
-```
-
-2. Start the application:
+### Docker Compose
 
 ```bash
-docker-compose up --build
+docker compose up --build -d      # start app + database in the background
+docker compose logs -f app        # follow the application logs
+docker compose down               # stop and remove the stack
 ```
 
-3. Access the API:
+### Prebuilt image (GHCR)
 
-- API: http://localhost:8000
-- Interactive API docs: http://localhost:8000/docs
-- Alternative docs: http://localhost:8000/redoc
+Every tagged release publishes `ghcr.io/mangrisano/cvewatcher`. Point your own
+Compose file or `docker run` at it instead of building locally:
+
+```bash
+docker pull ghcr.io/mangrisano/cvewatcher:latest
+```
+
+Provide the database URL and secrets through environment variables (see
+`.env.example`); never ship the defaults to production.
 
 ## End-to-End Example (curl)
 
@@ -285,6 +241,17 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities?severity=HIGH&days=365" \
 > If NVD is unreachable the endpoint returns **HTTP 503** rather than an empty
 > list, so an empty `vulnerabilities` array always means "no known CVEs", never
 > "the lookup failed".
+
+## Development
+
+```bash
+uv sync                                 # install dependencies into .venv
+uv run ruff check app tests             # lint
+uv run ruff format --check app tests    # formatting check
+uv run pytest -q                        # run the test suite
+```
+
+The test suite mocks the NIST NVD client, so it never touches the network.
 
 ## Contributing
 
