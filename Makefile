@@ -27,7 +27,7 @@ clean: ## Clean cache and temporary files
 
 test: ## Run tests
 	@echo "🧪 Running tests..."
-	PATH="$$HOME/.local/bin:$$PATH" uv run python test_cve.py
+	PATH="$$HOME/.local/bin:$$PATH" uv run pytest
 
 add: ## Add a new dependency (usage: make add PACKAGE=package_name)
 	@if [ -z "$(PACKAGE)" ]; then echo "❌ Please specify PACKAGE=package_name"; exit 1; fi
