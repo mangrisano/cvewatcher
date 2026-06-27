@@ -52,14 +52,12 @@ class CVEMonitoringService:
                         monitoring_results["summary"]["low_vulnerabilities"] += 1
 
             monitoring_results["asset_results"].sort(
-                key=lambda asset_result: (
-                    max(
-                        [
-                            vuln.get("publish_date", "1900-01-01T00:00:00")
-                            for vuln in asset_result.get("new_vulnerabilities", [])
-                        ],
-                        default="1900-01-01T00:00:00",
-                    )
+                key=lambda asset_result: max(
+                    [
+                        vuln.get("publish_date", "1900-01-01T00:00:00")
+                        for vuln in asset_result.get("new_vulnerabilities", [])
+                    ],
+                    default="1900-01-01T00:00:00",
                 ),
                 reverse=True,
             )
@@ -238,7 +236,17 @@ class CVEMonitoringService:
         return False
 
     def _get_existing_cves_for_asset(self, asset: Asset) -> list[CVE]:
-        return self.db.query(CVE).all()
+        existing_cves = []
+        for cve in self.db.query(CVE).all():
+            products = cve.affected_products or []
+            if isinstance(products, list) and any(
+                isinstance(product, dict)
+                and product.get("asset_name") == asset.name
+                and product.get("user_email") == asset.user_email
+                for product in products
+            ):
+                existing_cves.append(cve)
+        return existing_cves
 
     async def _store_cve_for_asset(self, vuln_data: dict[str, Any], asset: Asset):
         try:
