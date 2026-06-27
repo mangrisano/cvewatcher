@@ -10,6 +10,7 @@ from app.routes.user import router as user_router
 from app.routes.assets import router as assets_router
 from app.routes.cves import router as cves_router
 from app.database import create_tables
+from app.services.scheduler import start_scheduler, shutdown_scheduler
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -22,7 +23,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting CVE Watcher")
     create_tables()
+    start_scheduler()
     yield
+    shutdown_scheduler()
 
 
 app = FastAPI(
