@@ -220,3 +220,58 @@ def test_asset_with_cpe_uses_precise_nvd_lookup(monkeypatch):
         ],
     )
     assert svc._is_relevant_to_asset(cve, _asset(version="1.24.0")) is True
+
+
+class _FakeCpeClient:
+    def __init__(self, names):
+        self.names = names
+        self.calls = 0
+
+    def find_cpe_names(self, keyword, limit=500):
+        self.calls += 1
+        return self.names
+
+
+def test_resolve_cpes_builds_version_injected_cpes():
+    svc = _service()
+    svc.nist_client = _FakeCpeClient(
+        [
+            "cpe:2.3:a:nginx:nginx:0.1.27:*:*:*:*:*:*:*",
+            "cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*",
+            "cpe:2.3:o:some:os:1:*:*:*:*:*:*:*",  # not an application -> skipped
+            "cpe:2.3:a:jc21:nginx_proxy_manager:1:*:*:*:*:*:*:*",  # other product
+            "cpe:2.3:a:f5:nginx:1.26.0:*:*:*:*:*:*:*",  # dup vendor/product
+        ]
+    )
+    cpes = asyncio.run(svc._resolve_cpes(_asset(name="nginx", version="1.24.0")))
+    # The asset version is injected and each vendor/product pair appears once.
+    assert cpes == [
+        "cpe:2.3:a:nginx:nginx:1.24.0:*:*:*:*:*:*:*",
+        "cpe:2.3:a:f5:nginx:1.24.0:*:*:*:*:*:*:*",
+    ]
+
+
+def test_resolve_cpes_uses_wildcard_when_no_version():
+    svc = _service()
+    svc.nist_client = _FakeCpeClient(["cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*"])
+    cpes = asyncio.run(svc._resolve_cpes(_asset(name="nginx", version=None)))
+    assert cpes == ["cpe:2.3:a:f5:nginx:*:*:*:*:*:*:*:*"]
+
+
+def test_resolve_cpes_returns_empty_when_lookup_fails():
+    svc = _service()
+
+    class _Boom:
+        def find_cpe_names(self, *a, **k):
+            raise RuntimeError("NVD down")
+
+    svc.nist_client = _Boom()
+    assert asyncio.run(svc._resolve_cpes(_asset(name="nginx"))) == []
+
+
+def test_resolve_cpes_without_name_skips_lookup():
+    svc = _service()
+    client = _FakeCpeClient(["cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*"])
+    svc.nist_client = client
+    assert asyncio.run(svc._resolve_cpes(_asset(name=None))) == []
+    assert client.calls == 0

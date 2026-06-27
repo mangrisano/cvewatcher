@@ -191,3 +191,73 @@ def test_make_request_raises_unavailable_after_max_retries(monkeypatch):
     with pytest.raises(NvdUnavailableError):
         # 503 raises HTTPStatusError -> wrapped as NvdUnavailableError.
         client._make_request({})
+
+
+CPE_RESPONSE = {
+    "products": [
+        {
+            "cpe": {
+                "deprecated": True,
+                "cpeName": "cpe:2.3:a:igor_sysoev:nginx:0.1.27:*:*:*:*:*:*:*",
+                "deprecatedBy": [
+                    {"cpeName": "cpe:2.3:a:nginx:nginx:0.1.27:*:*:*:*:*:*:*"}
+                ],
+            }
+        },
+        {
+            "cpe": {
+                "deprecated": False,
+                "cpeName": "cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*",
+            }
+        },
+        {
+            "cpe": {
+                "deprecated": False,
+                "cpeName": "cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*",
+            }
+        },
+    ]
+}
+
+
+def test_find_cpe_names_resolves_and_follows_deprecation(monkeypatch):
+    client = NistNvdClient()
+    captured = {}
+
+    def fake_make_request(params, url=None):
+        captured["url"] = url
+        captured["params"] = params
+        return CPE_RESPONSE
+
+    monkeypatch.setattr(client, "_make_request", fake_make_request)
+
+    names = client.find_cpe_names("nginx")
+
+    # Hits the CPE dictionary endpoint, not the CVE endpoint.
+    assert captured["url"] == NistNvdClient.CPE_BASE_URL
+    assert captured["params"]["keywordSearch"] == "nginx"
+    # Deprecated entry is replaced by its successor; duplicates collapsed.
+    assert names == [
+        "cpe:2.3:a:nginx:nginx:0.1.27:*:*:*:*:*:*:*",
+        "cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*",
+    ]
+
+
+def test_find_cpe_names_is_cached(monkeypatch):
+    client = NistNvdClient()
+    calls = {"n": 0}
+
+    def fake_make_request(params, url=None):
+        calls["n"] += 1
+        return CPE_RESPONSE
+
+    monkeypatch.setattr(client, "_make_request", fake_make_request)
+
+    client.find_cpe_names("nginx")
+    client.find_cpe_names("nginx")
+
+    assert calls["n"] == 1
+
+
+def test_find_cpe_names_empty_keyword_returns_empty():
+    assert NistNvdClient().find_cpe_names("") == []
