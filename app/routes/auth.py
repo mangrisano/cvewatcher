@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 from app.models import UserRegistrationRequest, UserLoginRequest, RefreshTokenRequest
 from app.utils.auth import (
@@ -9,6 +9,7 @@ from app.utils.auth import (
     verify_refresh_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
+from app.utils.rate_limit import login_rate_limiter
 from app.database import get_db, User
 
 router = APIRouter()
@@ -41,14 +42,27 @@ async def register_user(user: UserRegistrationRequest, db: Session = Depends(get
 
 
 @router.post("/auth/login", tags=["auth"])
-async def login_user(user: UserLoginRequest, db: Session = Depends(get_db)):
+async def login_user(
+    user: UserLoginRequest, request: Request, db: Session = Depends(get_db)
+):
+    client_ip = request.client.host if request.client else "unknown"
+    rate_limit_key = f"{user.email.lower()}:{client_ip}"
+
+    retry_after = login_rate_limiter.retry_after(rate_limit_key)
+    if retry_after > 0:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed login attempts. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     db_user = db.query(User).filter(User.email == user.email).first()
 
-    if not db_user:
+    if not db_user or not verify_password(user.password, str(db_user.password_hash)):
+        login_rate_limiter.record_failure(rate_limit_key)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    if not verify_password(user.password, str(db_user.password_hash)):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    login_rate_limiter.reset(rate_limit_key)
 
     access_token = create_access_token(data={"sub": user.email})
     refresh_token = create_refresh_token(data={"sub": user.email})
