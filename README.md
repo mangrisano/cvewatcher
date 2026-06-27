@@ -21,6 +21,24 @@ CVE Watcher helps organizations and developers monitor their software assets for
 - 📈 **Reporting**: Generate monitoring reports and vulnerability summaries
 - 🎯 **Targeted Scanning**: Monitor specific assets or scan all assets at once
 - 🔄 **Real-time Updates**: Automatic vulnerability detection and updates
+- ⏰ **Background Monitoring**: Optional scheduler that periodically scans every asset
+- 🔔 **Notifications**: Alert on newly discovered vulnerabilities (console and webhook)
+
+## Background Monitoring & Notifications
+
+The application can periodically scan every registered asset against the NIST NVD
+and alert on newly discovered vulnerabilities. It is **opt-in** and configured via
+environment variables (see `.env.example`):
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `MONITOR_ENABLED` | `false` | Enable the background scheduler |
+| `MONITOR_INTERVAL_MINUTES` | `360` | Minutes between scans |
+| `NOTIFY_CONSOLE` | `true` | Log new findings via the application logger |
+| `NOTIFY_WEBHOOK_URL` | _(unset)_ | POST new findings as JSON to this URL |
+
+When enabled, a scan runs at startup and then on the configured interval; only
+newly detected CVEs trigger notifications.
 
 ## API Endpoints
 
@@ -64,6 +82,7 @@ CVE Watcher helps organizations and developers monitor their software assets for
 - **Database**: PostgreSQL with SQLAlchemy ORM
 - **Authentication**: JWT with joserfc
 - **Migration**: Alembic
+- **Scheduling**: APScheduler (optional background monitoring)
 - **Container**: Docker & Docker Compose
 - **External API**: NIST NVD API integration
 
