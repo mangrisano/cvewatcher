@@ -1,6 +1,6 @@
 import logging
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -69,9 +69,19 @@ async def create_asset(
 
 @router.get("/", response_model=list[AssetResponse])
 async def get_my_assets(
-    current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
+    limit: int = Query(default=50, ge=1, le=100, description="Max assets to return"),
+    offset: int = Query(default=0, ge=0, description="Number of assets to skip"),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    assets = db.query(Asset).filter(Asset.user_email == current_user.get("sub")).all()
+    assets = (
+        db.query(Asset)
+        .filter(Asset.user_email == current_user.get("sub"))
+        .order_by(Asset.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     return [AssetResponse.model_validate(asset) for asset in assets]
 
 

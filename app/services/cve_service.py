@@ -121,11 +121,15 @@ class CVEService:
         logger.debug(f"Salvato nuovo CVE: {cve_data.cve_id}")
         return True
 
-    def get_stored_cves(self, limit: int = 50) -> list[CVE]:
+    def get_stored_cves(self, limit: int = 50, offset: int = 0) -> list[CVE]:
         try:
             with next(get_db()) as db:
                 cves = (
-                    db.query(CVE).order_by(CVE.publish_date.desc()).limit(limit).all()
+                    db.query(CVE)
+                    .order_by(CVE.publish_date.desc())
+                    .offset(offset)
+                    .limit(limit)
+                    .all()
                 )
                 return cves
         except Exception as e:

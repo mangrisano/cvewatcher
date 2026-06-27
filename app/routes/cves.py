@@ -53,10 +53,11 @@ async def fetch_recent_cves(
 @router.get("/recent", response_model=list[CVEResponse])
 async def get_recent_cves(
     limit: int = Query(default=20, ge=1, le=100, description="Number of CVE to return"),
+    offset: int = Query(default=0, ge=0, description="Number of CVE to skip"),
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        cves = cve_service.get_stored_cves(limit=limit)
+        cves = cve_service.get_stored_cves(limit=limit, offset=offset)
 
         response = []
         for cve in cves:
