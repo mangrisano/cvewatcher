@@ -320,16 +320,21 @@ class CVEMonitoringService:
             if len(parts) < 13:
                 continue
             part, vendor, product = parts[2], parts[3], parts[4]
-            # Only applications, and only an exact (separator-insensitive)
-            # product match, so "nginx" does not pull in "nginx_proxy_manager".
-            if part != "a" or self._normalize(product) not in name_variants:
+            # Applications, operating systems and hardware. Keep only an exact
+            # (separator-insensitive) match on the product or on the
+            # "vendor+product" pair, so "nginx" never pulls in
+            # "nginx_proxy_manager" while "apache http server" still resolves to
+            # apache:http_server.
+            if part not in {"a", "o", "h"}:
+                continue
+            if name_variants.isdisjoint(self._identity_norms(vendor, product)):
                 continue
             key = (vendor, product)
             if key in seen:
                 continue
             seen.add(key)
             resolved.append(
-                ":".join(["cpe", "2.3", "a", vendor, product, version] + ["*"] * 7)
+                ":".join(["cpe", "2.3", part, vendor, product, version] + ["*"] * 7)
             )
             if len(resolved) >= 5:
                 break
@@ -338,6 +343,22 @@ class CVEMonitoringService:
     @staticmethod
     def _normalize(value: str) -> str:
         return value.replace(" ", "").replace("-", "").replace("_", "")
+
+    @staticmethod
+    def _identity_norms(vendor: str, product: str) -> set[str]:
+        """Separator-insensitive identity tokens for a CPE vendor/product pair.
+
+        Includes the bare product and the ``vendor+product`` concatenation so a
+        display name such as "Apache HTTP Server" matches ``apache:http_server``
+        without loosening into substring matches.
+        """
+        normalize = CVEMonitoringService._normalize
+        product_norm = normalize(product.lower())
+        vendor_norm = normalize(vendor.lower())
+        norms = {product_norm}
+        if vendor_norm:
+            norms.add(vendor_norm + product_norm)
+        return norms
 
     def _get_severity_priority(self, severity: str) -> int:
         severity_map = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
@@ -408,17 +429,20 @@ class CVEMonitoringService:
             return False
         parts = cpe.split(":")
         # CPE 2.3 format: cpe:2.3:part:vendor:product:version:...
-        product = parts[4].lower() if len(parts) > 4 else ""
+        if len(parts) <= 4:
+            return False
+        vendor = parts[3]
+        product = parts[4]
         if not product:
             return False
 
-        def normalize(value: str) -> str:
-            return value.replace(" ", "").replace("-", "").replace("_", "")
-
-        # Exact (separator-insensitive) product match, so "nginx" does NOT match
-        # a different product such as "nginx_proxy_manager".
-        product_norm = normalize(product)
-        return any(normalize(variant) == product_norm for variant in name_variants)
+        normalize = CVEMonitoringService._normalize
+        name_norms = {normalize(variant.lower()) for variant in name_variants}
+        identity = CVEMonitoringService._identity_norms(vendor, product)
+        # Exact (separator-insensitive) match on product or vendor+product, so
+        # "nginx" does NOT match "nginx_proxy_manager" but "apache http server"
+        # matches apache:http_server.
+        return not name_norms.isdisjoint(identity)
 
     @staticmethod
     def _version_affected(asset_version: str, product: dict) -> bool:
