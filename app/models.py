@@ -1,7 +1,20 @@
 import datetime
+import re
 from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+
+
+def validate_password_strength(password: str) -> str:
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if not re.search(r"[a-z]", password):
+        raise ValueError("Password must contain a lowercase letter")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Password must contain an uppercase letter")
+    if not re.search(r"\d", password):
+        raise ValueError("Password must contain a digit")
+    return password
 
 
 class HealthResponse(BaseModel):
@@ -16,9 +29,7 @@ class UserRegistrationRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, password: str) -> str:
-        if len(password) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        return password
+        return validate_password_strength(password)
 
 
 class UserLoginRequest(BaseModel):

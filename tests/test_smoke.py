@@ -10,14 +10,14 @@ def test_register_login_and_profile(client):
         json={
             "username": "alice",
             "email": "alice@example.com",
-            "password": "password123",
+            "password": "Password123",
         },
     )
     assert response.status_code == 200
 
     response = client.post(
         "/auth/login",
-        json={"email": "alice@example.com", "password": "password123"},
+        json={"email": "alice@example.com", "password": "Password123"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -44,7 +44,7 @@ def test_login_with_wrong_password(client):
         json={
             "username": "bob",
             "email": "bob@example.com",
-            "password": "password123",
+            "password": "Password123",
         },
     )
     response = client.post(
@@ -60,12 +60,12 @@ def test_asset_crud_flow(client):
         json={
             "username": "carol",
             "email": "carol@example.com",
-            "password": "password123",
+            "password": "Password123",
         },
     )
     token = client.post(
         "/auth/login",
-        json={"email": "carol@example.com", "password": "password123"},
+        json={"email": "carol@example.com", "password": "Password123"},
     ).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
