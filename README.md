@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛡️ CVE Watcher
+<img src="https://raw.githubusercontent.com/mangrisano/cvewatcher/main/docs/logo.svg" alt="CVE Watcher" width="440">
 
 [![CI](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml)
 [![Container](https://img.shields.io/badge/ghcr.io-cvewatcher-2496ED?logo=docker&logoColor=white)](https://github.com/mangrisano/cvewatcher/pkgs/container/cvewatcher)
@@ -54,7 +54,8 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities" -H "Authorization: Bearer $TOKEN" 
 ```bash
 git clone https://github.com/mangrisano/cvewatcher.git
 cd cvewatcher
-docker compose up --build
+cp .env.example .env
+docker compose -f docker/docker-compose.yml up --build
 ```
 
 Then open:
@@ -177,10 +178,14 @@ CVE Watcher ships as a Docker image and a Compose stack (app + PostgreSQL).
 
 ### Docker Compose
 
+The Compose file lives in `docker/`, so pass it with `-f` (or `cd docker`
+first). It reads configuration from `.env` in the repo root — copy
+`.env.example` to `.env` before the first run.
+
 ```bash
-docker compose up --build -d      # start app + database in the background
-docker compose logs -f app        # follow the application logs
-docker compose down               # stop and remove the stack
+docker compose -f docker/docker-compose.yml up --build -d   # start app + database in the background
+docker compose -f docker/docker-compose.yml logs -f app     # follow the application logs
+docker compose -f docker/docker-compose.yml down            # stop and remove the stack
 ```
 
 ### Prebuilt image (GHCR)
