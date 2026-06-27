@@ -30,12 +30,12 @@ The application can periodically scan every registered asset against the NIST NV
 and alert on newly discovered vulnerabilities. It is **opt-in** and configured via
 environment variables (see `.env.example`):
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `MONITOR_ENABLED` | `false` | Enable the background scheduler |
-| `MONITOR_INTERVAL_MINUTES` | `360` | Minutes between scans |
-| `NOTIFY_CONSOLE` | `true` | Log new findings via the application logger |
-| `NOTIFY_WEBHOOK_URL` | _(unset)_ | POST new findings as JSON to this URL |
+| Variable                   | Default   | Description                                 |
+| -------------------------- | --------- | ------------------------------------------- |
+| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler             |
+| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                       |
+| `NOTIFY_CONSOLE`           | `true`    | Log new findings via the application logger |
+| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST new findings as JSON to this URL       |
 
 When enabled, a scan runs at startup and then on the configured interval; only
 newly detected CVEs trigger notifications.
