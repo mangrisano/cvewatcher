@@ -1,7 +1,7 @@
 import datetime
 from uuid import UUID
 from typing import Optional
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 
 class HealthResponse(BaseModel):
@@ -26,6 +26,7 @@ class UserLoginRequest(BaseModel):
     password: str
 
     @field_validator("password")
+    @classmethod
     def validate_password(cls, password: str) -> str:
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters long")
@@ -52,5 +53,4 @@ class AssetResponse(BaseModel):
     description: Optional[str] = None
     created_at: datetime.datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

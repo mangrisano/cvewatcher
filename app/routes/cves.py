@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 
 from app.dependencies import get_current_user
@@ -18,8 +18,7 @@ class CVEResponse(BaseModel):
     modified_date: Optional[str]
     affected_products: Optional[list[dict]]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VulnerabilityResponse(BaseModel):
