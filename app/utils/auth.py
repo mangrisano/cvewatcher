@@ -6,8 +6,9 @@ import os
 from typing import Optional
 
 from fastapi import HTTPException
-from jose import jwt
-from jose.exceptions import JWTError
+from joserfc import jwt
+from joserfc.jwk import OctKey
+from joserfc.errors import JoseError
 
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 _secret_key = os.getenv("JWT_SECRET_KEY")
@@ -16,6 +17,8 @@ if not _secret_key:
     raise ValueError("JWT_SECRET_KEY environment variable is required")
 
 SECRET_KEY: str = _secret_key
+_JWT_KEY = OctKey.import_key(SECRET_KEY)
+_CLAIMS_REGISTRY = jwt.JWTClaimsRegistry()
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -52,11 +55,11 @@ def create_access_token(
 
     to_encode.update(
         {
-            "exp": expire,
-            "iat": datetime.datetime.now(datetime.timezone.utc),
+            "exp": int(expire.timestamp()),
+            "iat": int(datetime.datetime.now(datetime.timezone.utc).timestamp()),
         }
     )
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode({"alg": ALGORITHM}, to_encode, _JWT_KEY)
 
 
 def create_refresh_token(data: dict) -> str:
@@ -66,19 +69,20 @@ def create_refresh_token(data: dict) -> str:
     )
     to_encode.update(
         {
-            "exp": expire,
-            "iat": datetime.datetime.now(datetime.timezone.utc),
+            "exp": int(expire.timestamp()),
+            "iat": int(datetime.datetime.now(datetime.timezone.utc).timestamp()),
             "type": "refresh",
         }
     )
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode({"alg": ALGORITHM}, to_encode, _JWT_KEY)
 
 
 def verify_access_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
+        decoded = jwt.decode(token, _JWT_KEY, algorithms=[ALGORITHM])
+        _CLAIMS_REGISTRY.validate(decoded.claims)
+        return decoded.claims
+    except JoseError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     except Exception:
         raise HTTPException(status_code=401, detail="Error decoding token")
@@ -86,13 +90,17 @@ def verify_access_token(token: str) -> dict:
 
 def verify_refresh_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        decoded = jwt.decode(token, _JWT_KEY, algorithms=[ALGORITHM])
+        _CLAIMS_REGISTRY.validate(decoded.claims)
+        claims = decoded.claims
 
-        if payload.get("type") != "refresh":
+        if claims.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid token type")
 
-        return payload
-    except JWTError:
+        return claims
+    except HTTPException:
+        raise
+    except JoseError:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     except Exception:
         raise HTTPException(status_code=401, detail="Error decoding refresh token")

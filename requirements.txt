@@ -3,7 +3,7 @@ sqlalchemy
 httpx
 pydantic
 alembic
-python-jose
+joserfc
 uvicorn
 pydantic[email]
 psycopg2-binary

@@ -62,7 +62,7 @@ CVE Watcher helps organizations and developers monitor their software assets for
 
 - **Backend**: FastAPI (Python)
 - **Database**: PostgreSQL with SQLAlchemy ORM
-- **Authentication**: JWT with python-jose
+- **Authentication**: JWT with joserfc
 - **Migration**: Alembic
 - **Container**: Docker & Docker Compose
 - **External API**: NIST NVD API integration
