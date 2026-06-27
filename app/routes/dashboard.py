@@ -63,60 +63,38 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         <!-- App view -->
         <section id="appView" class="hidden space-y-8">
 
-            <!-- Add asset -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-lg font-bold mb-4"><i class="fas fa-plus-circle text-blue-600 mr-2"></i>Add asset</h2>
-                <div id="assetError" class="hidden bg-red-100 text-red-700 text-sm rounded px-4 py-2 mb-4"></div>
-                <form onsubmit="createAsset(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input id="assetName" placeholder="Name (e.g. nginx)" required
-                        class="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <input id="assetVersion" placeholder="Version (e.g. 1.24.0)"
-                        class="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <input id="assetCpe" placeholder="CPE (optional)"
-                        class="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <input id="assetDescription" placeholder="Description (optional)"
-                        class="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <div class="md:col-span-2">
-                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                            Add asset
-                        </button>
-                    </div>
-                </form>
+            <!-- Header -->
+            <div class="flex flex-wrap justify-between items-center gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">My assets</h1>
+                    <p class="text-gray-500 text-sm mt-1">Manage your monitored assets and review their known vulnerabilities.</p>
+                </div>
+                <button onclick="openAddModal()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors">
+                    <i class="fas fa-plus mr-2"></i>Add asset
+                </button>
             </div>
 
-            <!-- Asset list -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    <h2 class="text-lg font-bold"><i class="fas fa-server text-blue-600 mr-2"></i>Your assets</h2>
-                    <div class="flex items-center gap-2 text-sm">
-                        <div class="relative">
-                            <i class="fas fa-search absolute left-2 top-2.5 text-gray-400 text-xs"></i>
-                            <input id="filterName" oninput="renderAssets()" placeholder="Filter by name"
-                                class="border rounded pl-7 pr-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <input id="filterVersion" oninput="renderAssets()" placeholder="Filter by version"
-                            class="border rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button onclick="clearAssetFilters()" class="text-gray-500 hover:text-gray-700" title="Clear filters">
-                            <i class="fas fa-times-circle"></i>
-                        </button>
-                    </div>
+            <!-- Filters -->
+            <div class="flex flex-wrap items-center gap-2 text-sm">
+                <div class="relative">
+                    <i class="fas fa-search absolute left-3 top-3 text-gray-400 text-xs"></i>
+                    <input id="filterName" oninput="renderAssets()" placeholder="Filter by name"
+                        class="border rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
-                <div id="assetsEmpty" class="hidden text-gray-400 text-sm">No assets yet. Add one above.</div>
-                <div id="assetsNoMatch" class="hidden text-gray-400 text-sm">No assets match the current filters.</div>
-                <div class="overflow-x-auto">
-                    <table id="assetsTable" class="hidden w-full text-sm">
-                        <thead>
-                            <tr class="text-left text-gray-500 border-b">
-                                <th class="py-2 pr-4">Name</th>
-                                <th class="py-2 pr-4">Version</th>
-                                <th class="py-2 pr-4">Description</th>
-                                <th class="py-2 pr-4"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="assetsBody"></tbody>
-                    </table>
-                </div>
+                <input id="filterVersion" oninput="renderAssets()" placeholder="Filter by version"
+                    class="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="clearAssetFilters()" class="text-gray-500 hover:text-gray-700 px-2" title="Clear filters">
+                    <i class="fas fa-times-circle"></i>
+                </button>
             </div>
+
+            <!-- Asset cards -->
+            <div id="assetsEmpty" class="hidden bg-white rounded-lg border-2 border-dashed border-gray-200 p-12 text-center text-gray-400">
+                <i class="fas fa-box-open text-4xl mb-3 block"></i>No assets yet. Click &quot;Add asset&quot; to start monitoring.
+            </div>
+            <div id="assetsNoMatch" class="hidden text-gray-400 text-sm">No assets match the current filters.</div>
+            <div id="assetsGrid" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
 
             <!-- Vulnerabilities -->
             <div id="vulnCard" class="hidden bg-white rounded-lg shadow p-6">
@@ -171,6 +149,48 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
             </div>
         </section>
     </main>
+
+    <!-- Add asset modal -->
+    <div id="addModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold"><i class="fas fa-plus-circle text-blue-600 mr-2"></i>Add asset</h2>
+                <button onclick="closeAddModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="assetError" class="hidden bg-red-100 text-red-700 text-sm rounded px-4 py-2 mb-4"></div>
+            <form onsubmit="createAsset(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Name</label>
+                    <input id="assetName" placeholder="e.g. nginx" required
+                        class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Version</label>
+                    <input id="assetVersion" placeholder="e.g. 1.24.0"
+                        class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">CPE
+                        <span class="text-gray-400 font-normal">(optional, improves matching)</span></label>
+                    <input id="assetCpe" placeholder="cpe:2.3:a:f5:nginx:1.24.0"
+                        class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Description</label>
+                    <input id="assetDescription" placeholder="(optional)"
+                        class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeAddModal()"
+                        class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Cancel</button>
+                    <button type="submit"
+                        class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Add asset</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Edit asset modal -->
     <div id="editModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
@@ -264,6 +284,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
             allAssets = [];
             document.getElementById("vulnCard").classList.add("hidden");
             document.getElementById("editModal").classList.add("hidden");
+            document.getElementById("addModal").classList.add("hidden");
             document.getElementById("appView").classList.add("hidden");
             document.getElementById("userBox").classList.add("hidden");
             document.getElementById("loginView").classList.remove("hidden");
@@ -273,6 +294,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
             document.getElementById("loginView").classList.add("hidden");
             document.getElementById("appView").classList.remove("hidden");
             document.getElementById("vulnCard").classList.add("hidden");
+            document.getElementById("addModal").classList.add("hidden");
             currentAsset = null;
             const userBox = document.getElementById("userBox");
             userBox.classList.remove("hidden");
@@ -295,14 +317,13 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         }
 
         function renderAssets() {
-            const body = document.getElementById("assetsBody");
-            const table = document.getElementById("assetsTable");
+            const grid = document.getElementById("assetsGrid");
             const empty = document.getElementById("assetsEmpty");
             const noMatch = document.getElementById("assetsNoMatch");
-            body.innerHTML = "";
+            grid.innerHTML = "";
             empty.classList.add("hidden");
             noMatch.classList.add("hidden");
-            table.classList.add("hidden");
+            grid.classList.add("hidden");
 
             if (!allAssets.length) {
                 empty.classList.remove("hidden");
@@ -321,31 +342,52 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                 return;
             }
 
-            table.classList.remove("hidden");
+            grid.classList.remove("hidden");
             for (const a of assets) {
-                const tr = document.createElement("tr");
-                tr.className = "border-b hover:bg-gray-50";
-                tr.innerHTML = `
-                    <td class="py-2 pr-4 font-medium">${escapeHtml(a.name)}</td>
-                    <td class="py-2 pr-4">${escapeHtml(a.version || "-")}</td>
-                    <td class="py-2 pr-4 text-gray-500">${escapeHtml(a.description || "")}</td>
-                    <td class="py-2 pr-4 text-right whitespace-nowrap">
-                        <button class="text-blue-600 hover:underline mr-3">
+                const card = document.createElement("div");
+                card.className = "bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 flex flex-col";
+                const matchBadge = a.cpe
+                    ? `<span class="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800" title="${escapeHtml(a.cpe)}"><i class="fas fa-fingerprint mr-1"></i>CPE</span>`
+                    : `<span class="inline-flex items-center px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600" title="No CPE — matched by keyword"><i class="fas fa-magnifying-glass mr-1"></i>keyword</span>`;
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-3 gap-2">
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-semibold text-gray-800 truncate">${escapeHtml(a.name)}</h3>
+                            ${a.version ? `<p class="text-sm text-gray-500">v${escapeHtml(a.version)}</p>` : ""}
+                        </div>
+                        ${matchBadge}
+                    </div>
+                    <p class="text-sm text-gray-600 flex-1 mb-4">${a.description ? escapeHtml(a.description) : '<span class="text-gray-300 italic">No description</span>'}</p>
+                    <div class="flex items-center gap-4 pt-3 border-t text-sm">
+                        <button class="text-blue-600 hover:text-blue-800 font-medium">
                             <i class="fas fa-bug mr-1"></i>CVEs
                         </button>
-                        <button class="text-gray-600 hover:underline mr-3">
+                        <button class="text-gray-600 hover:text-gray-800">
                             <i class="fas fa-pen mr-1"></i>Edit
                         </button>
-                        <button class="text-red-500 hover:underline">
+                        <button class="text-red-500 hover:text-red-700 ml-auto" title="Delete asset">
                             <i class="fas fa-trash"></i>
                         </button>
-                    </td>`;
-                const [cveBtn, editBtn, delBtn] = tr.querySelectorAll("button");
+                    </div>`;
+                const [cveBtn, editBtn, delBtn] = card.querySelectorAll("button");
                 cveBtn.onclick = () => loadVulnerabilities(a.id, a.name);
                 editBtn.onclick = () => openEditAsset(a.id);
                 delBtn.onclick = () => deleteAsset(a.id);
-                body.appendChild(tr);
+                grid.appendChild(card);
             }
+        }
+
+        function openAddModal() {
+            hideError("assetError");
+            document.getElementById("assetName").value = "";
+            document.getElementById("assetVersion").value = "";
+            document.getElementById("assetCpe").value = "";
+            document.getElementById("assetDescription").value = "";
+            document.getElementById("addModal").classList.remove("hidden");
+        }
+
+        function closeAddModal() {
+            document.getElementById("addModal").classList.add("hidden");
         }
 
         function openEditAsset(id) {
@@ -414,6 +456,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                 return;
             }
             event.target.reset();
+            closeAddModal();
             loadAssets();
         }
 
