@@ -48,3 +48,13 @@ class CVE(Base):
         return (
             f"<CVE(id='{self.id}', severity='{self.severity}', score='{self.score}')>"
         )
+
+
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+
+    jti = Column(String(64), primary_key=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+    def __repr__(self):
+        return f"<RevokedToken(jti='{self.jti}')>"

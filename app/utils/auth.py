@@ -3,6 +3,7 @@ import hashlib
 import secrets
 import hmac
 import os
+import uuid
 from typing import Optional
 
 from fastapi import HTTPException
@@ -57,6 +58,7 @@ def create_access_token(
         {
             "exp": int(expire.timestamp()),
             "iat": int(datetime.datetime.now(datetime.timezone.utc).timestamp()),
+            "jti": uuid.uuid4().hex,
         }
     )
     return jwt.encode({"alg": ALGORITHM}, to_encode, _JWT_KEY)
@@ -71,6 +73,7 @@ def create_refresh_token(data: dict) -> str:
         {
             "exp": int(expire.timestamp()),
             "iat": int(datetime.datetime.now(datetime.timezone.utc).timestamp()),
+            "jti": uuid.uuid4().hex,
             "type": "refresh",
         }
     )

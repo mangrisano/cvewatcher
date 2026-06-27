@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 from app.models import UserRegistrationRequest, UserLoginRequest, RefreshTokenRequest
@@ -10,6 +13,8 @@ from app.utils.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
 from app.utils.rate_limit import login_rate_limiter
+from app.dependencies import get_current_user
+from app.services.token_blocklist import revoke_token, is_token_revoked
 from app.database import get_db, User
 
 router = APIRouter()
@@ -92,6 +97,11 @@ async def refresh_access_token(
         if not user_email:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 
+        if is_token_revoked(db, payload.get("jti")):
+            raise HTTPException(
+                status_code=401, detail="Refresh token has been revoked"
+            )
+
         db_user = db.query(User).filter(User.email == user_email).first()
         if not db_user:
             raise HTTPException(status_code=401, detail="User not found")
@@ -111,5 +121,31 @@ async def refresh_access_token(
 
 
 @router.post("/auth/logout", tags=["auth"])
-async def logout_user():
-    return {"message": "Logout successful. Please discard your tokens."}
+async def logout_user(
+    body: Optional[RefreshTokenRequest] = None,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    access_exp = current_user.get("exp")
+    access_expires = (
+        datetime.fromtimestamp(access_exp, tz=timezone.utc)
+        if access_exp
+        else datetime.now(timezone.utc)
+    )
+    revoke_token(db, current_user.get("jti"), access_expires)
+
+    if body and body.refresh_token:
+        try:
+            refresh_payload = verify_refresh_token(body.refresh_token)
+            refresh_exp = refresh_payload.get("exp")
+            refresh_expires = (
+                datetime.fromtimestamp(refresh_exp, tz=timezone.utc)
+                if refresh_exp
+                else datetime.now(timezone.utc)
+            )
+            revoke_token(db, refresh_payload.get("jti"), refresh_expires)
+        except HTTPException:
+            # An invalid or already-expired refresh token does not block logout.
+            pass
+
+    return {"message": "Logout successful. Tokens revoked."}
