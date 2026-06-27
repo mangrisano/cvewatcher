@@ -1,6 +1,6 @@
 [project]
 name = "cvewatcher"
-version = "0.6.0"
+version = "0.6.1"
 description = "A FastAPI-based application for monitoring and tracking CVE (Common Vulnerabilities and Exposures) vulnerabilities for your software assets."
 readme = "README.md"
 license = "MIT"
