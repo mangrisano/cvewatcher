@@ -10,6 +10,9 @@ wheels/
 .venv
 
 # Credential files
+.env
+.env.*
+!.env.example
 
 # Database files
 *.sqlite3
