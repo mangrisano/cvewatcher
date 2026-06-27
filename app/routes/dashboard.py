@@ -260,6 +260,10 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
             } catch (_) { /* ignore */ }
             localStorage.removeItem(TOKEN_KEY);
             localStorage.removeItem(EMAIL_KEY);
+            currentAsset = null;
+            allAssets = [];
+            document.getElementById("vulnCard").classList.add("hidden");
+            document.getElementById("editModal").classList.add("hidden");
             document.getElementById("appView").classList.add("hidden");
             document.getElementById("userBox").classList.add("hidden");
             document.getElementById("loginView").classList.remove("hidden");
@@ -268,6 +272,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         function enterApp() {
             document.getElementById("loginView").classList.add("hidden");
             document.getElementById("appView").classList.remove("hidden");
+            document.getElementById("vulnCard").classList.add("hidden");
+            currentAsset = null;
             const userBox = document.getElementById("userBox");
             userBox.classList.remove("hidden");
             userBox.classList.add("flex");
