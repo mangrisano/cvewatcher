@@ -17,21 +17,40 @@ async def landing_page():
         <meta name="description" content="Monitor your software vulnerabilities before attackers do. Automated CVE monitoring for your entire software stack.">
         <script src="https://cdn.tailwindcss.com"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <style>
+            .hero-section {
+                background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%);
+                background-color: #4f46e5;
+            }
+            .hero-pattern {
+                background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.08'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            }
+            .card-hover {
+                transition: transform 0.3s ease, box-shadow 0.3s ease;
+            }
+            .card-hover:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            }
+        </style>
     </head>
     <body class="bg-gray-50">
         <!-- Navigation -->
-        <nav class="bg-white shadow-lg">
+        <nav class="bg-white shadow-lg sticky top-0 z-50">
             <div class="container mx-auto px-6 py-3">
                 <div class="flex justify-between items-center">
                     <div class="flex items-center">
                         <i class="fas fa-shield-alt text-blue-600 text-2xl mr-3"></i>
                         <span class="text-xl font-bold text-gray-800">CVE Watcher</span>
                     </div>
-                    <div class="space-x-4">
-                        <a href="/dashboard" class="text-gray-600 hover:text-blue-600">Dashboard</a>
-                        <a href="/docs" class="text-gray-600 hover:text-blue-600">API Docs</a>
-                        <a href="#pricing" class="text-gray-600 hover:text-blue-600">Pricing</a>
-                        <button onclick="window.location.href='/dashboard'" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                    <div class="hidden md:flex items-center space-x-6">
+                        <a href="#features" class="text-gray-600 hover:text-blue-600 transition">Features</a>
+                        <a href="#demo" class="text-gray-600 hover:text-blue-600 transition">Demo</a>
+                        <a href="#opensource" class="text-gray-600 hover:text-blue-600 transition">Open Source</a>
+                        <a href="/dashboard" class="text-gray-600 hover:text-blue-600 transition">Dashboard</a>
+                        <a href="/docs" class="text-gray-600 hover:text-blue-600 transition">API Docs</a>
+                        <a href="https://github.com/mangrisano/cvewatcher" class="text-gray-600 hover:text-blue-600 transition" title="GitHub"><i class="fab fa-github text-xl"></i></a>
+                        <button onclick="window.location.href='/dashboard'" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
                             Sign in
                         </button>
                     </div>
@@ -40,27 +59,27 @@ async def landing_page():
         </nav>
 
         <!-- Hero Section -->
-        <section class="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-20">
+        <section class="hero-section hero-pattern text-white py-24">
             <div class="container mx-auto px-6 text-center">
                 <h1 class="text-5xl font-bold mb-6">
                     Monitor Your Software Vulnerabilities<br>
                     <span class="text-yellow-300">Before Attackers Do</span>
                 </h1>
-                <p class="text-xl mb-8 max-w-3xl mx-auto">
-                    Automated CVE monitoring for your entire software stack. 
+                <p class="text-xl mb-8 max-w-3xl mx-auto opacity-90">
+                    Automated CVE monitoring for your entire software stack.
                     Get alerted instantly when new vulnerabilities affect your assets.
                 </p>
-                <div class="space-x-4">
-                    <button onclick="window.open('/docs', '_blank')" class="bg-yellow-400 text-gray-900 px-8 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition">
-                        <i class="fas fa-rocket mr-2"></i>Start Free Trial
-                    </button>
-                    <button onclick="document.getElementById('demo').scrollIntoView({behavior: 'smooth'})" class="border-2 border-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-gray-900 transition">
-                        <i class="fas fa-play mr-2"></i>View Demo
-                    </button>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="https://github.com/mangrisano/cvewatcher" class="bg-yellow-400 text-blue-900 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-yellow-300 transition">
+                        <i class="fab fa-github mr-2"></i>View on GitHub
+                    </a>
+                    <a href="#demo" class="border-2 border-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-white hover:text-blue-900 transition">
+                        <i class="fas fa-play mr-2"></i>Watch Demo
+                    </a>
                 </div>
                 <div class="mt-12">
-                    <p class="text-sm opacity-75 mb-4">Trusted by developers worldwide</p>
-                    <div class="flex justify-center items-center space-x-8 opacity-60">
+                    <p class="text-sm opacity-75 mb-4">Free and open source &mdash; self-host with Docker in minutes</p>
+                    <div class="flex justify-center items-center space-x-8 opacity-70">
                         <div class="text-2xl"><i class="fab fa-github"></i> GitHub</div>
                         <div class="text-2xl"><i class="fab fa-docker"></i> Docker</div>
                         <div class="text-2xl"><i class="fas fa-cloud"></i> Cloud Ready</div>
@@ -122,38 +141,53 @@ async def landing_page():
         </section>
 
         <!-- Features Section -->
-        <section class="py-20 bg-gray-50">
+        <section id="features" class="py-20 bg-gray-50">
             <div class="container mx-auto px-6">
-                <h2 class="text-4xl font-bold text-center mb-16 text-gray-800">Why Choose CVE Watcher?</h2>
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl font-bold text-gray-900 mb-4">Why Choose CVE Watcher?</h2>
+                    <p class="text-xl text-gray-600 max-w-3xl mx-auto">Stay ahead of security threats with comprehensive vulnerability monitoring.</p>
+                </div>
                 <div class="grid md:grid-cols-3 gap-8">
-                    <div class="bg-white p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition">
-                        <div class="text-4xl mb-4 text-blue-600"><i class="fas fa-search"></i></div>
-                        <h3 class="text-xl font-semibold mb-4">Real-time Monitoring</h3>
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-search text-blue-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">Real-time Monitoring</h3>
                         <p class="text-gray-600">Instant alerts when new CVEs affect your software assets. Never miss a critical vulnerability again.</p>
                     </div>
-                    <div class="bg-white p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition">
-                        <div class="text-4xl mb-4 text-green-600"><i class="fas fa-chart-line"></i></div>
-                        <h3 class="text-xl font-semibold mb-4">Risk Assessment</h3>
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-chart-line text-green-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">Risk Assessment</h3>
                         <p class="text-gray-600">Severity-based prioritization helps you focus on the most critical vulnerabilities first.</p>
                     </div>
-                    <div class="bg-white p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition">
-                        <div class="text-4xl mb-4 text-purple-600"><i class="fas fa-cogs"></i></div>
-                        <h3 class="text-xl font-semibold mb-4">Easy Integration</h3>
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-cogs text-purple-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">Easy Integration</h3>
                         <p class="text-gray-600">REST API with comprehensive documentation. Integrate with your existing security tools.</p>
                     </div>
-                    <div class="bg-white p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition">
-                        <div class="text-4xl mb-4 text-red-600"><i class="fas fa-shield-alt"></i></div>
-                        <h3 class="text-xl font-semibold mb-4">Enterprise Security</h3>
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-shield-alt text-red-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">Enterprise Security</h3>
                         <p class="text-gray-600">JWT authentication, HTTPS enforcement, and security headers built-in.</p>
                     </div>
-                    <div class="bg-white p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition">
-                        <div class="text-4xl mb-4 text-yellow-600"><i class="fas fa-file-alt"></i></div>
-                        <h3 class="text-xl font-semibold mb-4">Compliance Reports</h3>
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-yellow-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-file-alt text-yellow-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">Compliance Reports</h3>
                         <p class="text-gray-600">Generate audit-ready reports for compliance frameworks and security assessments.</p>
                     </div>
-                    <div class="bg-white p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition">
-                        <div class="text-4xl mb-4 text-indigo-600"><i class="fab fa-docker"></i></div>
-                        <h3 class="text-xl font-semibold mb-4">Cloud Ready</h3>
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fab fa-docker text-indigo-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-900">Cloud Ready</h3>
                         <p class="text-gray-600">Dockerized deployment with PostgreSQL. Scale from startup to enterprise.</p>
                     </div>
                 </div>
@@ -165,7 +199,15 @@ async def landing_page():
             <div class="container mx-auto px-6">
                 <h2 class="text-4xl font-bold text-center mb-16 text-gray-800">See CVE Watcher in Action</h2>
                 <div class="max-w-4xl mx-auto">
-                    <div class="bg-gray-900 rounded-lg p-6 text-green-400 font-mono text-sm">
+                    <div class="bg-gray-900 rounded-xl p-6 text-green-400 font-mono text-sm shadow-xl">
+                        <div class="flex items-center mb-4">
+                            <div class="flex space-x-2 mr-4">
+                                <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+                                <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                            </div>
+                            <span class="text-gray-400">CVE Watcher Demo Terminal</span>
+                        </div>
                         <div class="mb-4">
                             <span class="text-yellow-400">$</span> curl -X POST "http://localhost:8000/auth/login" \\<br>
                             &nbsp;&nbsp;-H "Content-Type: application/json" \\<br>
@@ -204,123 +246,67 @@ async def landing_page():
             </div>
         </section>
 
-        <!-- Pricing Section -->
-        <section id="pricing" class="py-20 bg-gray-50">
+        <!-- Open Source Section -->
+        <section id="opensource" class="py-20 bg-gray-50">
             <div class="container mx-auto px-6">
-                <h2 class="text-4xl font-bold text-center mb-16 text-gray-800">Simple, Transparent Pricing</h2>
+                <div class="text-center mb-12">
+                    <span class="inline-block bg-green-100 text-green-700 text-sm font-semibold px-4 py-1 rounded-full mb-4">
+                        100% Free &amp; Open Source
+                    </span>
+                    <h2 class="text-4xl font-bold text-gray-900 mb-4">No plans. No paywalls. Just self-host it.</h2>
+                    <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                        CVE Watcher is released under the MIT license. Run it on your own
+                        infrastructure with Docker &mdash; all features included, no limits.
+                    </p>
+                </div>
                 <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-                    <!-- Free Tier -->
-                    <div class="bg-white p-8 rounded-lg shadow-lg">
-                        <h3 class="text-2xl font-bold mb-4">Starter</h3>
-                        <div class="text-4xl font-bold mb-4">Free</div>
-                        <p class="text-gray-600 mb-6">Perfect for small projects</p>
-                        <ul class="space-y-3 mb-8">
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>5 assets monitored</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>Daily CVE updates</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>Email notifications</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>REST API access</span>
-                            </li>
-                        </ul>
-                        <button onclick="window.open('/docs', '_blank')" class="w-full border-2 border-blue-600 text-blue-600 py-3 rounded-lg font-semibold hover:bg-blue-600 hover:text-white transition">
-                            Get Started
-                        </button>
-                    </div>
-
-                    <!-- Professional Tier -->
-                    <div class="bg-blue-600 text-white p-8 rounded-lg shadow-lg transform scale-105">
-                        <div class="bg-yellow-400 text-gray-900 text-sm px-3 py-1 rounded-full inline-block mb-4">
-                            Most Popular
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fab fa-github text-blue-600 text-2xl"></i>
                         </div>
-                        <h3 class="text-2xl font-bold mb-4">Professional</h3>
-                        <div class="text-4xl font-bold mb-4">$29<span class="text-lg">/mo</span></div>
-                        <p class="mb-6">For growing teams</p>
-                        <ul class="space-y-3 mb-8">
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-yellow-400 mr-3"></i>
-                                <span>100 assets monitored</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-yellow-400 mr-3"></i>
-                                <span>Real-time CVE updates</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-yellow-400 mr-3"></i>
-                                <span>Slack/Teams integration</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-yellow-400 mr-3"></i>
-                                <span>Advanced reporting</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-yellow-400 mr-3"></i>
-                                <span>Priority support</span>
-                            </li>
-                        </ul>
-                        <button class="w-full bg-yellow-400 text-gray-900 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition">
-                            Start Free Trial
-                        </button>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900">MIT Licensed</h3>
+                        <p class="text-gray-600">Use it, modify it, deploy it commercially. The full source is on GitHub.</p>
                     </div>
-
-                    <!-- Enterprise Tier -->
-                    <div class="bg-white p-8 rounded-lg shadow-lg">
-                        <h3 class="text-2xl font-bold mb-4">Enterprise</h3>
-                        <div class="text-4xl font-bold mb-4">Custom</div>
-                        <p class="text-gray-600 mb-6">For large organizations</p>
-                        <ul class="space-y-3 mb-8">
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>Unlimited assets</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>Custom integrations</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>On-premise deployment</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>24/7 dedicated support</span>
-                            </li>
-                            <li class="flex items-center">
-                                <i class="fas fa-check text-green-500 mr-3"></i>
-                                <span>SLA guarantee</span>
-                            </li>
-                        </ul>
-                        <button class="w-full border-2 border-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:border-blue-600 hover:text-blue-600 transition">
-                            Contact Sales
-                        </button>
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fab fa-docker text-green-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900">Self-Hosted</h3>
+                        <p class="text-gray-600">Spin it up with Docker Compose in minutes. Your data stays on your servers.</p>
                     </div>
+                    <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
+                        <div class="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-infinity text-purple-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900">No Limits</h3>
+                        <p class="text-gray-600">Unlimited assets and monitoring. No tiers, no per-seat pricing, no SLA upsell.</p>
+                    </div>
+                </div>
+                <div class="text-center mt-12 flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="https://github.com/mangrisano/cvewatcher" class="bg-gray-900 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition">
+                        <i class="fab fa-github mr-2"></i>View on GitHub
+                    </a>
+                    <a href="/docs" class="border-2 border-gray-900 text-gray-900 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-900 hover:text-white transition">
+                        <i class="fas fa-book mr-2"></i>Read the API Docs
+                    </a>
                 </div>
             </div>
         </section>
 
         <!-- CTA Section -->
-        <section class="py-20 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+        <section class="py-20 hero-section text-white">
             <div class="container mx-auto px-6 text-center">
                 <h2 class="text-4xl font-bold mb-6">Ready to Secure Your Software Stack?</h2>
                 <p class="text-xl mb-8 max-w-2xl mx-auto">
-                    Join thousands of developers who trust CVE Watcher to keep their applications secure.
+                    Clone the repo, run it with Docker, and start monitoring your assets today.
                 </p>
-                <div class="space-x-4">
-                    <button onclick="window.open('/docs', '_blank')" class="bg-yellow-400 text-gray-900 px-8 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition">
-                        <i class="fas fa-rocket mr-2"></i>Start Free Today
-                    </button>
-                    <button class="border-2 border-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-gray-900 transition">
-                        <i class="fas fa-phone mr-2"></i>Schedule Demo
-                    </button>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="https://github.com/mangrisano/cvewatcher" class="bg-yellow-400 text-gray-900 px-8 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition">
+                        <i class="fab fa-github mr-2"></i>Get the Source
+                    </a>
+                    <a href="/docs" class="border-2 border-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-gray-900 transition">
+                        <i class="fas fa-book mr-2"></i>Read the Docs
+                    </a>
                 </div>
             </div>
         </section>
@@ -335,37 +321,35 @@ async def landing_page():
                             <span class="text-xl font-bold">CVE Watcher</span>
                         </div>
                         <p class="text-gray-400">
-                            Automated vulnerability monitoring for modern software teams.
+                            Open-source, self-hosted vulnerability monitoring for your software stack.
                         </p>
                     </div>
                     <div>
                         <h4 class="font-semibold mb-4">Product</h4>
                         <ul class="space-y-2 text-gray-400">
                             <li><a href="/docs" class="hover:text-white">API Documentation</a></li>
-                            <li><a href="#" class="hover:text-white">Features</a></li>
-                            <li><a href="#pricing" class="hover:text-white">Pricing</a></li>
+                            <li><a href="#features" class="hover:text-white">Features</a></li>
+                            <li><a href="#opensource" class="hover:text-white">Open Source</a></li>
                         </ul>
                     </div>
                     <div>
-                        <h4 class="font-semibold mb-4">Support</h4>
+                        <h4 class="font-semibold mb-4">Resources</h4>
                         <ul class="space-y-2 text-gray-400">
-                            <li><a href="#" class="hover:text-white">Help Center</a></li>
-                            <li><a href="#" class="hover:text-white">Contact Us</a></li>
-                            <li><a href="#" class="hover:text-white">Status Page</a></li>
+                            <li><a href="https://github.com/mangrisano/cvewatcher" class="hover:text-white">GitHub Repository</a></li>
+                            <li><a href="https://github.com/mangrisano/cvewatcher/issues" class="hover:text-white">Report an Issue</a></li>
+                            <li><a href="/dashboard" class="hover:text-white">Dashboard</a></li>
                         </ul>
                     </div>
                     <div>
                         <h4 class="font-semibold mb-4">Legal</h4>
                         <ul class="space-y-2 text-gray-400">
-                            <li><a href="#" class="hover:text-white">Privacy Policy</a></li>
-                            <li><a href="#" class="hover:text-white">Terms of Service</a></li>
-                            <li><a href="#" class="hover:text-white">Security</a></li>
+                            <li><a href="https://github.com/mangrisano/cvewatcher/blob/main/LICENSE" class="hover:text-white">MIT License</a></li>
                         </ul>
                     </div>
                 </div>
                 <div class="border-t border-gray-800 mt-8 pt-8 text-center">
                     <p class="text-gray-400">
-                        © 2025 CVE Watcher. All rights reserved. | 
+                        © 2026 CVE Watcher. MIT Licensed. | 
                         <a href="https://github.com/mangrisano/cvewatcher" class="hover:text-white">
                             <i class="fab fa-github mr-1"></i>Open Source
                         </a>
