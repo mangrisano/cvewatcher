@@ -238,7 +238,7 @@ def test_resolve_cpes_builds_version_injected_cpes():
         [
             "cpe:2.3:a:nginx:nginx:0.1.27:*:*:*:*:*:*:*",
             "cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*",
-            "cpe:2.3:o:some:os:1:*:*:*:*:*:*:*",  # not an application -> skipped
+            "cpe:2.3:o:some:os:1:*:*:*:*:*:*:*",  # product mismatch -> skipped
             "cpe:2.3:a:jc21:nginx_proxy_manager:1:*:*:*:*:*:*:*",  # other product
             "cpe:2.3:a:f5:nginx:1.26.0:*:*:*:*:*:*:*",  # dup vendor/product
         ]
@@ -256,6 +256,32 @@ def test_resolve_cpes_uses_wildcard_when_no_version():
     svc.nist_client = _FakeCpeClient(["cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*"])
     cpes = asyncio.run(svc._resolve_cpes(_asset(name="nginx", version=None)))
     assert cpes == ["cpe:2.3:a:f5:nginx:*:*:*:*:*:*:*:*"]
+
+
+def test_resolve_cpes_matches_vendor_plus_product():
+    # A display name that differs from the bare product still resolves when it
+    # equals "vendor + product" (e.g. Apache HTTP Server -> apache:http_server).
+    svc = _service()
+    svc.nist_client = _FakeCpeClient(
+        [
+            "cpe:2.3:a:apache:http_server:2.4.0:*:*:*:*:*:*:*",
+            "cpe:2.3:a:other:http_server:1.0:*:*:*:*:*:*:*",  # vendor mismatch -> skip
+        ]
+    )
+    cpes = asyncio.run(
+        svc._resolve_cpes(_asset(name="Apache HTTP Server", version="2.4.58"))
+    )
+    assert cpes == ["cpe:2.3:a:apache:http_server:2.4.58:*:*:*:*:*:*:*"]
+
+
+def test_resolve_cpes_includes_operating_systems():
+    # Operating systems (part "o") are resolved too, preserving the part.
+    svc = _service()
+    svc.nist_client = _FakeCpeClient(
+        ["cpe:2.3:o:microsoft:windows_10:21h2:*:*:*:*:*:*:*"]
+    )
+    cpes = asyncio.run(svc._resolve_cpes(_asset(name="windows 10", version="22h2")))
+    assert cpes == ["cpe:2.3:o:microsoft:windows_10:22h2:*:*:*:*:*:*:*"]
 
 
 def test_resolve_cpes_returns_empty_when_lookup_fails():
