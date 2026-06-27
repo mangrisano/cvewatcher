@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
 
@@ -23,6 +25,8 @@ class CVEData:
 
 class NistNvdClient:
     BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    MAX_RETRIES = 3
+    BACKOFF_BASE_SECONDS = 6
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
@@ -31,18 +35,49 @@ class NistNvdClient:
             self.session_headers["apiKey"] = api_key
 
     def _make_request(self, params: dict[str, Any]) -> dict[str, Any]:
-        try:
-            response = httpx.get(
-                self.BASE_URL, headers=self.session_headers, params=params, timeout=30
-            )
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPError as e:
-            logger.error(f"NIST API connection error: {e}")
-            raise Exception(f"Connection error: {e}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Error in parsing JSON: {e}")
-            raise Exception(f"Invalid API response: {e}")
+        last_error: Optional[Exception] = None
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                response = httpx.get(
+                    self.BASE_URL,
+                    headers=self.session_headers,
+                    params=params,
+                    timeout=30,
+                )
+                if response.status_code in (403, 429):
+                    retry_after = response.headers.get("Retry-After")
+                    wait = (
+                        float(retry_after)
+                        if retry_after
+                        else self.BACKOFF_BASE_SECONDS * (attempt + 1)
+                    )
+                    logger.warning(
+                        f"NIST API rate limited (HTTP {response.status_code}), "
+                        f"retrying in {wait}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                    )
+                    last_error = Exception(f"Rate limited: HTTP {response.status_code}")
+                    time.sleep(wait)
+                    continue
+                response.raise_for_status()
+                return response.json()
+            except httpx.TimeoutException as e:
+                last_error = e
+                wait = self.BACKOFF_BASE_SECONDS * (attempt + 1)
+                logger.warning(
+                    f"NIST API timeout (attempt {attempt + 1}/{self.MAX_RETRIES}), "
+                    f"retrying in {wait}s: {e}"
+                )
+                time.sleep(wait)
+                continue
+            except httpx.HTTPError as e:
+                logger.error(f"NIST API connection error: {e}")
+                raise Exception(f"Connection error: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Error in parsing JSON: {e}")
+                raise Exception(f"Invalid API response: {e}")
+        raise Exception(
+            f"NIST API request failed after {self.MAX_RETRIES} attempts: {last_error}"
+        )
 
     def search_cves(
         self,
@@ -208,4 +243,4 @@ class NistNvdClient:
             return None
 
 
-nist_client = NistNvdClient()
+nist_client = NistNvdClient(api_key=os.getenv("NVD_API_KEY"))
