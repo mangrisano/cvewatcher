@@ -4,6 +4,7 @@
 
 [![CI](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml)
 [![Container](https://img.shields.io/badge/ghcr.io-cvewatcher-2496ED?logo=docker&logoColor=white)](https://github.com/mangrisano/cvewatcher/pkgs/container/cvewatcher)
+[![Docker Pulls](https://img.shields.io/docker/pulls/mangrisano/cvewatcher?logo=docker&logoColor=white&color=2496ED)](https://hub.docker.com/r/mangrisano/cvewatcher)
 [![Python](https://img.shields.io/badge/python-3-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
