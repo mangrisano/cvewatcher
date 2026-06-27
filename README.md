@@ -23,6 +23,58 @@ CVE Watcher helps organizations and developers monitor their software assets for
 - 🔄 **Real-time Updates**: Automatic vulnerability detection and updates
 - ⏰ **Background Monitoring**: Optional scheduler that periodically scans every asset
 - 🔔 **Notifications**: Alert on newly discovered vulnerabilities (console and webhook)
+- 🖥️ **Web Dashboard**: Single-page UI to manage assets and review vulnerabilities
+
+## Web Dashboard
+
+A self-contained web dashboard is served at [`/dashboard`](http://localhost:8000/dashboard).
+It requires no build step (vanilla JS + Tailwind via CDN) and lets you:
+
+- Sign in with your CVE Watcher credentials (the JWT is kept in `localStorage`).
+- Add assets with name, version, CPE and description.
+- Browse your asset inventory, **filter it by name and version**, and **edit**
+  or delete each entry inline.
+- Inspect the vulnerabilities of an asset, filtered by a **time period**
+  selector (All time, last 30/90/365 days) and by **severity**
+  (Critical/High/Medium/Low). Each finding shows the CVE id (linked to MITRE),
+  a colour-coded severity badge, CVSS score and summary.
+
+If the NIST NVD service cannot be reached, the dashboard shows an explicit
+warning banner instead of an empty list — an empty result is only displayed
+when NVD genuinely reports no matching CVEs.
+
+## How Vulnerability Matching Works
+
+CVE Watcher resolves the vulnerabilities of an asset in one of two ways,
+chosen automatically per asset:
+
+### 1. CPE lookup (precise, preferred)
+
+When an asset declares a **CPE 2.3** identifier (e.g.
+`cpe:2.3:a:f5:nginx:1.24.0`), the query is delegated to NVD's `cpeName`
+filter. NVD evaluates the version ranges declared in every CVE configuration
+server-side, so the result contains exactly the CVEs that affect that product
+and version. Partial CPEs are padded to the full 13-component form before the
+lookup. This path avoids both the keyword 100-result cap and the false
+positives/negatives of free-text search.
+
+### 2. Keyword search with local filtering (fallback)
+
+When no CPE is known, CVE Watcher falls back to an NVD keyword search and then
+filters each candidate locally to cut the noise of free-text matching:
+
+- **Product identity** — a candidate is kept only if one of its affected-product
+  CPEs matches the asset name (separator-insensitive exact match), so `nginx`
+  no longer matches unrelated products such as `nginx_proxy_manager`.
+- **Version range** — if the asset has a version, the candidate must declare a
+  version range (or exact CPE version) that actually includes it; CVEs fixed in
+  earlier releases are dropped.
+- **Text fallback** — when a CVE carries no CPE data at all, the asset name (and
+  version, if present) is matched against the CVE summary.
+
+> Tip: provide a CPE for every asset you can. The CPE path is materially more
+> accurate than keyword search and is the only one that reliably avoids false
+> negatives.
 
 ## Background Monitoring & Notifications
 
@@ -75,6 +127,10 @@ newly detected CVEs trigger notifications.
 
 - `GET /user` - Get the current user's profile
 - `GET /health` - Service health check
+
+### Web UI
+
+- `GET /dashboard` - Single-page web dashboard (assets & vulnerabilities)
 
 ## Technology Stack
 

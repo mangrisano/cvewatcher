@@ -1,6 +1,6 @@
 [project]
 name = "cvewatcher"
-version = "0.3.0"
+version = "0.4.0"
 description = "A FastAPI-based application for monitoring and tracking CVE (Common Vulnerabilities and Exposures) vulnerabilities for your software assets."
 readme = "README.md"
 license = "MIT"
@@ -11,6 +11,7 @@ dependencies = [
     "apscheduler>=3.10,<4.0",
     "fastapi[standard]>=0.116.1",
     "httpx>=0.27.0",
+    "packaging>=23.0",
     "psycopg2-binary>=2.9.9",
     "pydantic[email]>=2.11.7",
     "joserfc>=1.0.0",
