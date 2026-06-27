@@ -25,12 +25,14 @@ CVE Watcher helps organizations and developers monitor their software assets for
 ## API Endpoints
 
 ### Authentication
+
 - `POST /auth/register` - Register new user
 - `POST /auth/login` - User login
 - `POST /auth/refresh` - Refresh access token
 - `POST /auth/logout` - Logout user
 
 ### Asset Management
+
 - `POST /assets/` - Create new asset
 - `GET /assets/` - List user's assets
 - `GET /assets/{asset_id}` - Get specific asset details
@@ -38,14 +40,23 @@ CVE Watcher helps organizations and developers monitor their software assets for
 - `DELETE /assets/{asset_id}` - Remove asset
 
 ### CVE Monitoring
+
 - `GET /assets/{asset_id}/vulnerabilities` - Get vulnerabilities for specific asset
 - `GET /assets/{asset_id}/monitor` - Monitor single asset for CVEs
 - `POST /assets/monitoring/scan-all` - Scan all user assets
 - `GET /assets/monitoring/report` - Generate monitoring report
 
 ### CVE Data
-- `GET /cves/` - List CVEs with filtering options
-- `GET /cves/{cve_id}` - Get specific CVE details
+
+- `GET /cves/fetch-recent` - Fetch and store recent CVEs from NIST NVD
+- `GET /cves/recent` - List recently stored CVEs
+- `GET /cves/search` - Search CVEs by product (and optional version)
+- `GET /cves/vulnerabilities` - Check vulnerabilities across all your assets
+
+### User & Health
+
+- `GET /user` - Get the current user's profile
+- `GET /health` - Service health check
 
 ## Technology Stack
 
@@ -61,17 +72,20 @@ CVE Watcher helps organizations and developers monitor their software assets for
 ### Using Docker (Recommended)
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/mangrisano/cvewatcher.git
 cd cvewatcher
 ```
 
 2. Start the application:
+
 ```bash
 docker-compose up --build
 ```
 
 3. Access the API:
+
 - API: http://localhost:8000
 - Interactive API docs: http://localhost:8000/docs
 - Alternative docs: http://localhost:8000/redoc
@@ -85,6 +99,7 @@ docker-compose up --build
 5. Open a Pull Request
 
 ## License
+
 This project is free software licensed under the [GNU General Public License v3.0](LICENSE).
 
 ---
