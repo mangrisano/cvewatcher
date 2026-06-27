@@ -15,7 +15,21 @@ dependencies = [
     "uvicorn[standard]>=0.35.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
 [tool.uv]
 dev-dependencies = [
     "types-sqlalchemy>=1.4.53.38",
 ]
+
+[tool.ruff]
+line-length = 88
+src = ["app", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
