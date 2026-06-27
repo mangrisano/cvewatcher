@@ -1,3 +1,6 @@
+import logging
+import os
+
 from fastapi import FastAPI
 from fastapi.concurrency import asynccontextmanager
 from app.routes.landing import router as landing_router
@@ -8,9 +11,16 @@ from app.routes.assets import router as assets_router
 from app.routes.cves import router as cves_router
 from app.database import create_tables
 
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Starting CVE Watcher")
     create_tables()
     yield
 
@@ -18,7 +28,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CVE Watcher",
     description="A FastAPI application for monitoring CVE vulnerabilities",
-    version="0.1.0",
+    version="0.1.1",
     lifespan=lifespan,
 )
 
