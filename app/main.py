@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CVE Watcher",
     description="A FastAPI application for monitoring CVE vulnerabilities",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
