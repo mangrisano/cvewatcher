@@ -9,7 +9,14 @@ os.environ.setdefault("DATABASE_URL", f"sqlite:///{_db_path}")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.database import create_tables  # noqa: E402
 from app.main import app  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _setup_database():
+    create_tables()
+    yield
 
 
 @pytest.fixture(scope="session")
