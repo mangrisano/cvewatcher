@@ -176,6 +176,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                         <span class="text-gray-400 font-normal">(optional, improves matching)</span></label>
                     <input id="assetCpe" placeholder="cpe:2.3:a:f5:nginx:1.24.0"
                         class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-400 mt-1">
+                        Leave empty to auto-detect from the name, or find one on the
+                        <a href="https://nvd.nist.gov/products/cpe/search" target="_blank" rel="noopener"
+                            class="text-blue-600 hover:underline">NVD CPE dictionary</a>.
+                    </p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Description</label>
@@ -218,6 +223,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                     <label class="block text-sm font-medium mb-1">CPE</label>
                     <input id="editCpe"
                         class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-400 mt-1">
+                        Leave empty to auto-detect from the name, or find one on the
+                        <a href="https://nvd.nist.gov/products/cpe/search" target="_blank" rel="noopener"
+                            class="text-blue-600 hover:underline">NVD CPE dictionary</a>.
+                    </p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Description</label>

@@ -122,9 +122,19 @@ class CVEMonitoringService:
 
         cpe_name = self._full_cpe(asset.cpe)
         if cpe_name:
-            vulnerabilities, nvd_failed = await self._search_by_cpe(
-                asset, cpe_name, pub_start_date, pub_end_date
-            )
+            cpe_names = [cpe_name]
+        else:
+            cpe_names = await self._resolve_cpes(asset)
+
+        if cpe_names:
+            vulnerabilities = []
+            nvd_failed = False
+            for cpe in cpe_names:
+                found, failed = await self._search_by_cpe(
+                    asset, cpe, pub_start_date, pub_end_date
+                )
+                vulnerabilities.extend(found)
+                nvd_failed = nvd_failed or failed
         else:
             vulnerabilities, nvd_failed = await self._search_by_keyword(
                 asset, pub_start_date, pub_end_date
@@ -281,6 +291,53 @@ class CVEMonitoringService:
         elif len(parts) > 13:
             parts = parts[:13]
         return ":".join(parts)
+
+    async def _resolve_cpes(self, asset: AssetResponse) -> list[str]:
+        """Best-effort: turn an asset name into precise CPE names via NVD.
+
+        When the user did not provide a CPE, look the product name up in the
+        NVD CPE dictionary and build a fully specified CPE for each matching
+        vendor/product pair, injecting the asset version so NVD can evaluate
+        version ranges server-side. Returns an empty list (caller falls back to
+        keyword search) when the name cannot be resolved or NVD is unreachable.
+        """
+        if not asset.name:
+            return []
+        try:
+            cpe_names = await run_in_threadpool(
+                self.nist_client.find_cpe_names, asset.name
+            )
+        except Exception as e:
+            logger.warning(f"CPE resolution failed for '{asset.name}': {e}")
+            return []
+
+        name_variants = {self._normalize(v) for v in self._name_variants(asset.name)}
+        version = (asset.version or "*").strip() or "*"
+        seen: set[tuple[str, str]] = set()
+        resolved: list[str] = []
+        for cpe_name in cpe_names:
+            parts = cpe_name.split(":")
+            if len(parts) < 13:
+                continue
+            part, vendor, product = parts[2], parts[3], parts[4]
+            # Only applications, and only an exact (separator-insensitive)
+            # product match, so "nginx" does not pull in "nginx_proxy_manager".
+            if part != "a" or self._normalize(product) not in name_variants:
+                continue
+            key = (vendor, product)
+            if key in seen:
+                continue
+            seen.add(key)
+            resolved.append(
+                ":".join(["cpe", "2.3", "a", vendor, product, version] + ["*"] * 7)
+            )
+            if len(resolved) >= 5:
+                break
+        return resolved
+
+    @staticmethod
+    def _normalize(value: str) -> str:
+        return value.replace(" ", "").replace("-", "").replace("_", "")
 
     def _get_severity_priority(self, severity: str) -> int:
         severity_map = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}

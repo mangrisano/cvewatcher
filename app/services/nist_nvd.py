@@ -29,6 +29,7 @@ class CVEData:
 
 class NistNvdClient:
     BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    CPE_BASE_URL = "https://services.nvd.nist.gov/rest/json/cpes/2.0"
     MAX_RETRIES = 3
     BACKOFF_BASE_SECONDS = 6
 
@@ -37,13 +38,16 @@ class NistNvdClient:
         self.session_headers = {"User-Agent": "CVEWatcher/1.0 (Python)"}
         if api_key:
             self.session_headers["apiKey"] = api_key
+        self._cpe_cache: dict[str, list[str]] = {}
 
-    def _make_request(self, params: dict[str, Any]) -> dict[str, Any]:
+    def _make_request(
+        self, params: dict[str, Any], url: Optional[str] = None
+    ) -> dict[str, Any]:
         last_error: Optional[Exception] = None
         for attempt in range(self.MAX_RETRIES):
             try:
                 response = httpx.get(
-                    self.BASE_URL,
+                    url or self.BASE_URL,
                     headers=self.session_headers,
                     params=params,
                     timeout=30,
@@ -140,6 +144,45 @@ class NistNvdClient:
             keyword = f"{product_name} {version}"
 
         return self.search_cves(keyword=keyword, results_per_page=100)
+
+    def find_cpe_names(self, keyword: str, limit: int = 500) -> list[str]:
+        """Resolve a product name to canonical CPE names via the NVD CPE API.
+
+        Returns the ``cpeName`` strings matching ``keyword`` so an asset that
+        only has a product name can still be searched precisely (by
+        ``cpeName``) instead of via the keyword search capped at 100 hits.
+        Deprecated dictionary entries are replaced by their ``deprecatedBy``
+        successors so historical vendors (e.g. ``igor_sysoev`` -> ``nginx``)
+        resolve to the current canonical names. Cached per keyword.
+        """
+        if not keyword:
+            return []
+        cache_key = keyword.strip().lower()
+        if cache_key in self._cpe_cache:
+            return self._cpe_cache[cache_key]
+
+        params = {"keywordSearch": keyword, "resultsPerPage": min(limit, 10000)}
+        response = self._make_request(params, url=self.CPE_BASE_URL)
+
+        names: list[str] = []
+        seen: set[str] = set()
+        for product in response.get("products", []):
+            cpe = product.get("cpe", {})
+            if cpe.get("deprecated"):
+                candidates = [
+                    dep.get("cpeName")
+                    for dep in cpe.get("deprecatedBy", [])
+                    if dep.get("cpeName")
+                ]
+            else:
+                candidates = [cpe.get("cpeName")] if cpe.get("cpeName") else []
+            for name in candidates:
+                if name not in seen:
+                    seen.add(name)
+                    names.append(name)
+
+        self._cpe_cache[cache_key] = names
+        return names
 
     def _parse_cve_response(self, response: dict[str, Any]) -> list[CVEData]:
         cves = []
