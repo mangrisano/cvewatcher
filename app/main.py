@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.concurrency import asynccontextmanager
 from app.routes.landing import router as landing_router
+from app.routes.dashboard import router as dashboard_router
 from app.routes.auth import router as auth_router
 from app.routes.misc import router as misc_router
 from app.routes.user import router as user_router
@@ -31,11 +32,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CVE Watcher",
     description="A FastAPI application for monitoring CVE vulnerabilities",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
 app.include_router(landing_router)
+app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(misc_router)
 app.include_router(user_router)

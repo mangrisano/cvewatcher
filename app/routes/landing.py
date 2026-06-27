@@ -28,10 +28,11 @@ async def landing_page():
                         <span class="text-xl font-bold text-gray-800">CVE Watcher</span>
                     </div>
                     <div class="space-x-4">
+                        <a href="/dashboard" class="text-gray-600 hover:text-blue-600">Dashboard</a>
                         <a href="/docs" class="text-gray-600 hover:text-blue-600">API Docs</a>
                         <a href="#pricing" class="text-gray-600 hover:text-blue-600">Pricing</a>
-                        <button onclick="window.open('/docs', '_blank')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                            Try API
+                        <button onclick="window.location.href='/dashboard'" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                            Sign in
                         </button>
                     </div>
                 </div>
