@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml)
 [![Container](https://img.shields.io/badge/ghcr.io-cvewatcher-2496ED?logo=docker&logoColor=white)](https://github.com/mangrisano/cvewatcher/pkgs/container/cvewatcher)
-[![Docker Pulls](https://img.shields.io/docker/pulls/mangrisano/cvewatcher?logo=docker&logoColor=white&color=2496ED)](https://hub.docker.com/r/mangrisano/cvewatcher)
+[![Docker Pulls](https://img.shields.io/docker/pulls/micheleangrisano/cvewatcher?logo=docker&logoColor=white&color=2496ED)](https://hub.docker.com/r/micheleangrisano/cvewatcher)
 [![Python](https://img.shields.io/badge/python-3-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -189,13 +189,14 @@ docker compose -f docker/docker-compose.yml logs -f app     # follow the applica
 docker compose -f docker/docker-compose.yml down            # stop and remove the stack
 ```
 
-### Prebuilt image (GHCR)
+### Prebuilt image
 
-Every tagged release publishes `ghcr.io/mangrisano/cvewatcher`. Point your own
-Compose file or `docker run` at it instead of building locally:
+Every tagged release publishes the image to **GHCR** and **Docker Hub**. Point
+your own Compose file or `docker run` at it instead of building locally:
 
 ```bash
-docker pull ghcr.io/mangrisano/cvewatcher:latest
+docker pull ghcr.io/mangrisano/cvewatcher:latest          # GitHub Container Registry
+docker pull micheleangrisano/cvewatcher:latest           # Docker Hub
 ```
 
 Provide the database URL and secrets through environment variables (see
