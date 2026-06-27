@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -8,6 +9,8 @@ from app.database.connection import get_db
 from app.database.models import Asset
 from app.dependencies import get_current_user
 from app.services.cve_monitoring import CVEMonitoringService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assets", tags=["Assets"])
 
@@ -60,7 +63,7 @@ async def create_asset(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Asset creation error: {str(e)}")
+        logger.error(f"Asset creation error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error creating asset: {str(e)}")
 
 
