@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <rect width="1280" height="640" fill="#0f172a"/>
+  <g transform="translate(120.000,183.158) scale(1.368421)">
+<title>cvewatcher</title>
+    <rect x="3" y="3" width="754" height="194" rx="30" fill="#0f172a" stroke="#1e293b" stroke-width="3"/>
+    <!-- shield guarding a magnifier (scan + protect) -->
+    <g transform="translate(108,100)">
+        <path d="M0,-48 L42,-32 V4 C42,30 24,46 0,54 C-24,46 -42,30 -42,4 V-32 Z" fill="none" stroke="#f59e0b" stroke-width="7" stroke-linejoin="round"/>
+        <circle cx="-4" cy="-6" r="16" fill="none" stroke="#f59e0b" stroke-width="6"/>
+        <line x1="8" y1="6" x2="22" y2="20" stroke="#f59e0b" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <text x="206" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="62" font-weight="700">
+        <tspan fill="#f59e0b">cve</tspan>
+        <tspan fill="#e2e8f0">watcher</tspan>
+    </text>
+    <text x="208" y="152" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" letter-spacing="2" fill="#94a3b8">scan · match · monitor</text>
+  </g>
+</svg>
