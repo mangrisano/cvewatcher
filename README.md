@@ -268,6 +268,15 @@ The test suite mocks the NIST NVD client, so it never touches the network.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+## Support
+
+If CVE Watcher is useful to you, the best ways to support it are:
+
+- Star the repo to help others discover it
+- [Open an issue](https://github.com/mangrisano/cvewatcher/issues) for bugs or ideas
+- Send a pull request
+- Share it with others who track software vulnerabilities
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
