@@ -3,6 +3,7 @@
 <img src="https://raw.githubusercontent.com/mangrisano/cvewatcher/main/docs/logo.svg" alt="CVE Watcher" width="440">
 
 [![CI](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml/badge.svg)](https://github.com/mangrisano/cvewatcher/actions/workflows/ci.yml)
+[![Performance](https://github.com/mangrisano/cvewatcher/actions/workflows/performance.yml/badge.svg)](https://github.com/mangrisano/cvewatcher/actions/workflows/performance.yml)
 [![Container](https://img.shields.io/badge/ghcr.io-cvewatcher-2496ED?logo=docker&logoColor=white)](https://github.com/mangrisano/cvewatcher/pkgs/container/cvewatcher)
 [![Docker Pulls](https://img.shields.io/docker/pulls/micheleangrisano/cvewatcher?logo=docker&logoColor=white&color=2496ED)](https://hub.docker.com/r/micheleangrisano/cvewatcher)
 [![Python](https://img.shields.io/badge/python-3-3776AB?logo=python&logoColor=white)](pyproject.toml)
