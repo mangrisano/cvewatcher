@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785533824464,
+  "lastUpdate": 1785535667625,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -90,6 +90,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000002720462407976836",
             "extra": "mean: 45.653447337683275 usec\nrounds: 12865"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "345b46bf34ee0c5f5d059ae3fa42ec7a7e6a3c98",
+          "message": "docs: redesign logo with a distinct cyan bug identity",
+          "timestamp": "2026-08-01T00:07:16+02:00",
+          "tree_id": "ff3f09aa57ce4ed176386a4b6bd5a2e4e3724c7b",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/345b46bf34ee0c5f5d059ae3fa42ec7a7e6a3c98"
+        },
+        "date": 1785535667352,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 80802.19273559508,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000012240584852558532",
+            "extra": "mean: 12.375901768807802 usec\nrounds: 22162"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 49190.859956469176,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000002681411788968925",
+            "extra": "mean: 20.328979832532657 usec\nrounds: 16363"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 17977.08442020433,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000035081473550434925",
+            "extra": "mean: 55.62637281027097 usec\nrounds: 10732"
           }
         ]
       }
