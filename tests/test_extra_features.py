@@ -7,6 +7,7 @@ import httpx
 from app.database.connection import SessionLocal
 from app.database.models import Asset, AssetCVE, CVE
 from app.services import osv
+from app.services.cve_monitoring import CVEMonitoringService
 from app.services.digest import _format_digest
 from app.services.metrics import render_metrics
 from app.services.osv import OsvClient
@@ -31,6 +32,44 @@ def test_osv_to_finding_falls_back_to_osv_id():
     finding = OsvClient._to_finding(vuln)
     assert finding["cve_id"] == "GHSA-yyyy"
     assert "osv.dev" in finding["cve_url"]
+
+
+def test_osv_to_finding_derives_score_and_band_from_cvss_vector():
+    vuln = {
+        "id": "GHSA-zzzz",
+        "aliases": [],
+        "summary": "flaw",
+        "severity": [
+            {"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"}
+        ],
+    }
+    finding = OsvClient._to_finding(vuln)
+    assert finding["score"] == 5.3
+    assert finding["severity"] == "MEDIUM"  # derived from score, no GHSA band
+
+
+def test_osv_to_finding_keeps_ghsa_band_but_scores_from_vector():
+    vuln = {
+        "id": "GHSA-aaaa",
+        "aliases": ["CVE-2024-9999"],
+        "database_specific": {"severity": "HIGH"},
+        "severity": [
+            {"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"}
+        ],
+    }
+    finding = OsvClient._to_finding(vuln)
+    assert finding["severity"] == "HIGH"
+    assert finding["score"] == 7.5
+
+
+def test_finding_richness_lets_scored_duplicate_win_merge():
+    poor = {"cve_id": "CVE-1", "severity": None, "score": None}
+    rich = {"cve_id": "CVE-1", "severity": "HIGH", "score": 7.5}
+    ordered = sorted([rich, poor], key=CVEMonitoringService._finding_richness)
+    # Richest sorts last, so the dict-based dedup keeps it.
+    assert ordered[-1] is rich
+    merged = {v["cve_id"]: v for v in ordered}
+    assert merged["CVE-1"]["score"] == 7.5
 
 
 def test_osv_search_parses_and_degrades(monkeypatch):

@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **OSV.dev findings now carry severity and score**: the CVSS vector returned by
+  OSV.dev is parsed (via the `cvss` library) into a numeric base score and a
+  severity band, so OSV findings are no longer scoreless/`UNKNOWN` when a vector
+  is available. When the same CVE appears more than once across sources, the
+  merge keeps the record that carries severity/score.
+- **Dashboard aligned with 2.1.0 features**: the asset forms now include an
+  optional **ecosystem** selector (enables OSV.dev), asset cards show an
+  ecosystem badge, the vulnerabilities table gained an inline **triage status**
+  selector (persisted via `PATCH`), and a new **Security posture** panel shows
+  the findings summary (counts by severity/status, KEV) with CSV/JSON export and
+  an "include suppressed" toggle.
+
 ## [2.1.0] - 2026-08-05
 
 ### Added

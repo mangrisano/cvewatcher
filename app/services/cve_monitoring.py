@@ -226,7 +226,7 @@ class CVEMonitoringService:
         vulnerabilities_list = list(
             {
                 vuln.get("cve_id"): vuln
-                for vuln in vulnerabilities
+                for vuln in sorted(vulnerabilities, key=self._finding_richness)
                 if vuln.get("cve_id")
             }.values()
         )
@@ -492,6 +492,11 @@ class CVEMonitoringService:
     @staticmethod
     def _normalize(value: str) -> str:
         return value.replace(" ", "").replace("-", "").replace("_", "")
+
+    @staticmethod
+    def _finding_richness(vuln: dict[str, Any]) -> tuple[bool, bool]:
+        """Rank a finding so a duplicate with severity/score wins the merge."""
+        return (vuln.get("severity") is not None, vuln.get("score") is not None)
 
     @staticmethod
     def _identity_norms(vendor: str, product: str) -> set[str]:
