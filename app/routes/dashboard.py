@@ -140,6 +140,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                                 <th class="py-2 pr-4">CVE ID</th>
                                 <th class="py-2 pr-4">Severity</th>
                                 <th class="py-2 pr-4">Score</th>
+                                <th class="py-2 pr-4">KEV</th>
+                                <th class="py-2 pr-4">EPSS</th>
                                 <th class="py-2 pr-4">Summary</th>
                             </tr>
                         </thead>
@@ -534,6 +536,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                     <td class="py-2 pr-4 font-mono">${idCell}</td>
                     <td class="py-2 pr-4">${severityBadge(sev)}</td>
                     <td class="py-2 pr-4">${v.score != null ? escapeHtml(v.score) : "-"}</td>
+                    <td class="py-2 pr-4">${kevBadge(v.kev)}</td>
+                    <td class="py-2 pr-4">${epssCell(v.epss)}</td>
                     <td class="py-2 pr-4 text-gray-600">${escapeHtml(v.summary || "")}</td>`;
                 body.appendChild(tr);
             }
@@ -552,6 +556,18 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
             };
             const cls = colors[sev] || "bg-gray-100 text-gray-600";
             return `<span class="px-2 py-0.5 rounded text-xs font-semibold ${cls}">${escapeHtml(sev)}</span>`;
+        }
+
+        function kevBadge(kev) {
+            if (!kev) return '<span class="text-gray-300">-</span>';
+            return '<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white" title="Actively exploited (CISA KEV)">KEV</span>';
+        }
+
+        function epssCell(epss) {
+            if (epss == null) return '<span class="text-gray-300">-</span>';
+            const pct = (epss * 100).toFixed(1) + "%";
+            const strong = epss >= 0.5 ? "font-semibold text-red-600" : "text-gray-700";
+            return `<span class="${strong}" title="Exploit probability (FIRST.org EPSS)">${pct}</span>`;
         }
 
         function escapeHtml(s) {

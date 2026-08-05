@@ -41,6 +41,9 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities" -H "Authorization: Bearer $TOKEN" 
 - **Automatic CPE resolution** — derive a CPE from a product name via the NVD CPE dictionary.
 - **Keyword fallback** — free-text NVD search with local product/version filtering to cut the noise.
 - **Triage filters** — filter findings by severity and time window (last 30/90/365 days).
+- **Exploitation intelligence** — every finding is flagged with **CISA KEV**
+  (actively exploited in the wild) and scored with **FIRST.org EPSS** (exploit
+  probability), and results are ranked KEV-first.
 - **Background monitoring** — opt-in scheduler that rescans assets and alerts on new CVEs.
 - **Web dashboard** — single-page UI (vanilla JS + Tailwind, no build step).
 - **Secure JSON API** — JWT auth, per-user isolation, OpenAPI docs at `/docs` and `/redoc`.
@@ -114,15 +117,19 @@ The application can periodically scan every registered asset against the NIST NV
 and alert on newly discovered vulnerabilities. It is **opt-in** and configured via
 environment variables (see `.env.example`):
 
-| Variable                   | Default   | Description                                 |
-| -------------------------- | --------- | ------------------------------------------- |
-| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler             |
-| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                       |
-| `NOTIFY_CONSOLE`           | `true`    | Log new findings via the application logger |
-| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST new findings as JSON to this URL       |
+| Variable                   | Default   | Description                                  |
+| -------------------------- | --------- | -------------------------------------------- |
+| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler              |
+| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                        |
+| `ENRICH_ENABLED`           | `true`    | Add CISA KEV flag + FIRST.org EPSS score     |
+| `NOTIFY_CONSOLE`           | `true`    | Log new findings via the application logger  |
+| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST new findings as JSON to this URL        |
+| `NOTIFY_SLACK_WEBHOOK_URL` | _(unset)_ | Post findings to a Slack incoming webhook    |
+| `NOTIFY_EMAIL_HOST` …      | _(unset)_ | Send findings over SMTP (see `.env.example`) |
 
 When enabled, a scan runs at startup and then on the configured interval; only
-newly detected CVEs trigger notifications.
+newly detected CVEs trigger notifications. Each notification includes the KEV
+flag and EPSS score so the most urgent findings stand out.
 
 ## API Endpoints
 

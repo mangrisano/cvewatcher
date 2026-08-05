@@ -6,6 +6,8 @@ import pytest
 _db_fd, _db_path = tempfile.mkstemp(suffix=".db")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_db_path}")
+# Keep the suite offline: enrichment (CISA KEV / FIRST.org EPSS) is opt-in here.
+os.environ.setdefault("ENRICH_ENABLED", "false")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

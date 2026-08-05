@@ -35,6 +35,8 @@ def _extract_new_findings(monitoring_results: dict[str, Any]) -> list[dict[str, 
                     "score": vuln.get("score"),
                     "cve_url": vuln.get("cve_url"),
                     "publish_date": vuln.get("publish_date"),
+                    "kev": vuln.get("kev", False),
+                    "epss": vuln.get("epss"),
                 }
             )
     return findings
