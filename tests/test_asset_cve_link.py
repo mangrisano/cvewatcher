@@ -4,6 +4,7 @@ import asyncio
 
 from app.database.connection import SessionLocal
 from app.database.models import Asset, AssetCVE, CVE
+from app.models import AssetResponse
 from app.services import cve_monitoring
 from app.services.cve_monitoring import CVEMonitoringService
 
@@ -128,4 +129,42 @@ def test_get_user_vulnerabilities_aggregates_across_assets(monkeypatch):
     finally:
         db.query(Asset).filter(Asset.user_email == _EMAIL).delete()
         db.commit()
+        db.close()
+
+
+def test_set_and_attach_finding_status():
+    db = SessionLocal()
+    try:
+        _cleanup(db)
+        asset = Asset(name="nginx", version="1.24.0", user_email=_EMAIL)
+        db.add(asset)
+        db.commit()
+        db.refresh(asset)
+
+        svc = CVEMonitoringService(db)
+
+        # Setting a status on a not-yet-persisted CVE creates a stub CVE + link.
+        link = svc.set_finding_status(asset, _CVE, "false_positive", "not exploitable")
+        assert link.status == "false_positive"
+        assert link.notes == "not exploitable"
+        assert db.query(CVE).filter(CVE.id == _CVE).first() is not None
+
+        # The status is attached to findings (default 'open' when no link).
+        findings = [{"cve_id": _CVE}, {"cve_id": "CVE-2099-9999"}]
+        svc._attach_triage_status(AssetResponse.model_validate(asset), findings)
+        assert findings[0]["status"] == "false_positive"
+        assert findings[1]["status"] == "open"
+
+        # Updating the status is idempotent on the same (asset, cve).
+        svc.set_finding_status(asset, _CVE, "fixed", None)
+        link2 = (
+            db.query(AssetCVE)
+            .filter(AssetCVE.asset_id == asset.id, AssetCVE.cve_id == _CVE)
+            .first()
+        )
+        assert link2.status == "fixed"
+        assert link2.notes is None
+        assert db.query(AssetCVE).filter(AssetCVE.cve_id == _CVE).count() == 1
+    finally:
+        _cleanup(db)
         db.close()

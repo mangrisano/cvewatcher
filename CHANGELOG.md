@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Finding triage**: mark a per-asset CVE finding as `open`, `acknowledged`,
+  `fixed`, `false_positive` or `accepted_risk` (with optional notes) via
+  `PATCH /assets/{asset_id}/vulnerabilities/{cve_id}`. Every finding now carries
+  its `status`, persisted in the `asset_cves` association.
+
 ## [2.0.0] - 2026-08-05
 
 ### Changed

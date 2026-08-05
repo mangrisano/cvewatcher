@@ -8,6 +8,8 @@ from app.models import (
     AssetCreate,
     AssetResponse,
     AssetVulnerabilitiesResponse,
+    FindingStatusResponse,
+    FindingStatusUpdate,
     VulnerabilityResponse,
 )
 from app.database.connection import get_db
@@ -158,6 +160,28 @@ async def get_asset_vulnerabilities(
     except Exception:
         logger.exception("Error retrieving vulnerabilities for asset %s", asset_id)
         raise HTTPException(status_code=500, detail="Error retrieving vulnerabilities")
+
+
+@router.patch(
+    "/{asset_id}/vulnerabilities/{cve_id}", response_model=FindingStatusResponse
+)
+async def set_vulnerability_status(
+    asset_id: UUID,
+    cve_id: str,
+    update: FindingStatusUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    asset = (
+        db.query(Asset)
+        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
+        .first()
+    )
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    service = CVEMonitoringService(db)
+    return service.set_finding_status(asset, cve_id, update.status.value, update.notes)
 
 
 @router.patch("/{asset_id}", response_model=AssetResponse)

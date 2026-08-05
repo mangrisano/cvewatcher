@@ -1,5 +1,6 @@
 import datetime
 import re
+from enum import StrEnum
 from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
@@ -85,6 +86,7 @@ class VulnerabilityResponse(BaseModel):
     relevance_reason: Optional[str] = None
     kev: bool = False
     epss: Optional[float] = None
+    status: str = "open"
 
 
 class AssetVulnerabilitiesResponse(BaseModel):
@@ -92,3 +94,26 @@ class AssetVulnerabilitiesResponse(BaseModel):
     vulnerabilities: list[VulnerabilityResponse]
     total_vulnerabilities: int
     days_searched: int
+
+
+class FindingStatus(StrEnum):
+    OPEN = "open"
+    ACKNOWLEDGED = "acknowledged"
+    FIXED = "fixed"
+    FALSE_POSITIVE = "false_positive"
+    ACCEPTED_RISK = "accepted_risk"
+
+
+class FindingStatusUpdate(BaseModel):
+    status: FindingStatus
+    notes: Optional[str] = None
+
+
+class FindingStatusResponse(BaseModel):
+    asset_id: UUID
+    cve_id: str
+    status: FindingStatus
+    notes: Optional[str] = None
+    updated_at: Optional[datetime.datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)

@@ -80,6 +80,12 @@ class AssetCVE(Base):
         primary_key=True,
     )
     first_seen = Column(DateTime(timezone=True), server_default=func.now())
+    # Triage state: open | acknowledged | fixed | false_positive | accepted_risk.
+    status = Column(String(20), nullable=False, server_default="open")
+    notes = Column(Text, nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     def __repr__(self):
         return f"<AssetCVE(asset_id='{self.asset_id}', cve_id='{self.cve_id}')>"

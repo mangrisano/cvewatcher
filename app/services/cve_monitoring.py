@@ -259,7 +259,47 @@ class CVEMonitoringService:
             )
         )
 
+        self._attach_triage_status(asset, vulnerabilities_list)
         return vulnerabilities_list
+
+    def _attach_triage_status(
+        self, asset: AssetResponse, findings: list[dict[str, Any]]
+    ) -> None:
+        """Tag each finding with its triage status from ``asset_cves`` (or 'open')."""
+        status_map: dict[str, str] = {}
+        cve_ids = [f["cve_id"] for f in findings if f.get("cve_id")]
+        if self.db is not None and cve_ids:
+            rows = (
+                self.db.query(AssetCVE.cve_id, AssetCVE.status)
+                .filter(AssetCVE.asset_id == asset.id, AssetCVE.cve_id.in_(cve_ids))
+                .all()
+            )
+            status_map = {cve_id: status for cve_id, status in rows}
+        for finding in findings:
+            cve_id = finding.get("cve_id")
+            finding["status"] = status_map.get(cve_id, "open") if cve_id else "open"
+
+    def set_finding_status(
+        self, asset: Asset, cve_id: str, status: str, notes: str | None
+    ) -> AssetCVE:
+        """Create or update the triage status of an (asset, CVE) finding."""
+        link = (
+            self.db.query(AssetCVE)
+            .filter(AssetCVE.asset_id == asset.id, AssetCVE.cve_id == cve_id)
+            .first()
+        )
+        if link is None:
+            # The finding may not have been persisted yet; ensure the shared CVE
+            # row exists (FK) then create the link.
+            if not self.db.query(CVE).filter(CVE.id == cve_id).first():
+                self.db.add(CVE(id=cve_id))
+            link = AssetCVE(asset_id=asset.id, cve_id=cve_id)
+            self.db.add(link)
+        link.status = status  # type: ignore[assignment]
+        link.notes = notes  # type: ignore[assignment]
+        self.db.commit()
+        self.db.refresh(link)
+        return link
 
     async def _search_by_cpe(
         self,
