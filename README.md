@@ -12,7 +12,7 @@
 
 **Asset inventory · NVD + OSV.dev matching · CPE auto-resolution · KEV/EPSS · Finding triage · Background monitoring · Web dashboard · Dockerized**
 
-[Quick start](#quick-start) · [Features](#features) · [How matching works](#how-vulnerability-matching-works) · [Dashboard](#web-dashboard) · [API](#api-endpoints) · [Deployment](#deployment) · [Issues](https://github.com/mangrisano/cvewatcher/issues)
+[Quick start](#quick-start) · [Features](#features) · [How matching works](#how-vulnerability-matching-works) · [Dashboard](#web-dashboard) · [Auth](#authentication--access-control) · [API](#api-endpoints) · [Deployment](#deployment) · [Issues](https://github.com/mangrisano/cvewatcher/issues)
 
 </div>
 
@@ -98,6 +98,32 @@ If the NIST NVD service cannot be reached, the dashboard surfaces the error
 rather than an empty list — an empty result only means NVD reported no matching
 CVEs.
 
+The login card can toggle to a registration form, but **public sign-up is
+closed by default**: only the very first account (bootstrap) can always
+register — after that, new sign-ups require `REGISTRATION_ENABLED=true` (see
+[Authentication & Access Control](#authentication--access-control)). Sessions
+refresh themselves silently in the background using the refresh token, so you
+stay signed in without re-entering credentials until the refresh token itself
+expires (`JWT_REFRESH_TOKEN_EXPIRE_DAYS`).
+
+## Authentication & Access Control
+
+| Variable                    | Default | Description                                                        |
+| ---------------------------- | ------- | -------------------------------------------------------------------- |
+| `REGISTRATION_ENABLED`       | `false` | Allow new sign-ups after the first (bootstrap) account is created    |
+| `REGISTER_MAX_ATTEMPTS`      | `5`     | Max `/auth/register` attempts per IP within the window               |
+| `REGISTER_WINDOW_SECONDS`    | `3600`  | Rate-limit window (seconds) for registration attempts                |
+| `LOGIN_MAX_ATTEMPTS`         | `5`     | Max failed `/auth/login` attempts per email+IP within the window     |
+| `LOGIN_WINDOW_SECONDS`       | `300`   | Rate-limit window (seconds) for failed login attempts                |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime; the dashboard refreshes it silently on expiry |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS`  | `7`  | Refresh token lifetime; expiry forces a real re-login                |
+
+The very first account created on a fresh install always succeeds — this
+bootstrap exception lets you stand up an admin user without pre-configuring
+anything. Once at least one user exists, further registration is gated by
+`REGISTRATION_ENABLED`. Check `GET /auth/registration-status` to see whether
+sign-up is currently open.
+
 ## How Vulnerability Matching Works
 
 CVE Watcher matches an asset to CVEs in three ways, chosen automatically:
@@ -154,10 +180,11 @@ flag and EPSS score so the most urgent findings stand out. Independently,
 
 ### Authentication
 
-- `POST /auth/register` - Register new user
-- `POST /auth/login` - User login
+- `GET /auth/registration-status` - Check whether public sign-up is currently open
+- `POST /auth/register` - Register new user (subject to registration gating and rate limiting)
+- `POST /auth/login` - User login (rate-limited per email+IP)
 - `POST /auth/refresh` - Refresh access token
-- `POST /auth/logout` - Logout user
+- `POST /auth/logout` - Logout user (revokes access and refresh tokens)
 
 ### Asset Management
 
