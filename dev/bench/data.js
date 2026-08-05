@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785939093917,
+  "lastUpdate": 1785940410025,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -585,6 +585,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000004421936670823901",
             "extra": "mean: 47.8391950889549 usec\nrounds: 10344"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "36750864cbb2a8166c29ffb1cee0cd910273fc6f",
+          "message": "fix(db): run Alembic migrations automatically on startup against Postgres\n\ncreate_tables() only ever ran Base.metadata.create_all(), which creates\nmissing tables but never alters existing ones, and the Dockerfile's\n`alembic upgrade head` was commented out. An existing production deployment\nupgrading past a schema-changing release (e.g. the ecosystem column) would\nstart fine but 500 on first use of the new column until someone manually ran\nthe migration. app.database.init_schema() now runs `alembic upgrade head`\nfor Postgres on every startup; SQLite (dev/test) keeps create_all(), since\nthe migrations use Postgres-specific types.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-05T16:32:52+02:00",
+          "tree_id": "4ccacd1a1e2db486178f818525cb4ea1b850a510",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/36750864cbb2a8166c29ffb1cee0cd910273fc6f"
+        },
+        "date": 1785940409667,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 88808.7217481529,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000012322561463471594",
+            "extra": "mean: 11.260155312626136 usec\nrounds: 19773"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 47865.12994463389,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000028385908002849924",
+            "extra": "mean: 20.89203562503039 usec\nrounds: 14428"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 18941.99273985103,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000028804573775591096",
+            "extra": "mean: 52.79275595413751 usec\nrounds: 11715"
           }
         ]
       }
