@@ -10,7 +10,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Asset inventory · NVD-powered CVE matching · CPE auto-resolution · Severity & time filters · Background monitoring · Web dashboard · Dockerized**
+**Asset inventory · NVD + OSV.dev matching · CPE auto-resolution · KEV/EPSS · Finding triage · Background monitoring · Web dashboard · Dockerized**
 
 [Quick start](#quick-start) · [Features](#features) · [How matching works](#how-vulnerability-matching-works) · [Dashboard](#web-dashboard) · [API](#api-endpoints) · [Deployment](#deployment) · [Issues](https://github.com/mangrisano/cvewatcher/issues)
 
@@ -24,8 +24,9 @@
 
 CVE Watcher is a self-hostable FastAPI service that turns the list of software
 you run into an always-current view of the vulnerabilities affecting it. You
-register assets (a name and a version is enough), and it queries the NIST NVD on
-demand or on a schedule, then deduplicates and ranks findings by severity.
+register assets (a name and a version is enough), and it queries the NIST NVD
+(and OSV.dev for language ecosystems) on demand or on a schedule, then
+deduplicates and ranks findings by severity.
 
 ```bash
 # add an asset — just a name and a version — and list its CVEs
@@ -36,16 +37,20 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities" -H "Authorization: Bearer $TOKEN" 
 
 ## Features
 
-- **Asset inventory** — track software with name, version, optional CPE and description, scoped per user.
+- **Asset inventory** — track software with name, version, optional CPE, **ecosystem** and description, scoped per user.
 - **Precise CVE matching** — NVD `cpeName` lookups evaluate version ranges server-side (no keyword 100-result cap).
 - **Automatic CPE resolution** — derive a CPE from a product name via the NVD CPE dictionary.
 - **Keyword fallback** — free-text NVD search with local product/version filtering to cut the noise.
-- **Triage filters** — filter findings by severity and time window (last 30/90/365 days).
+- **OSV.dev as a second source** — for assets that declare an ecosystem (PyPI, npm, Go, Maven, …), OSV.dev is queried alongside NVD and merged; CVSS vectors are parsed into a base score and severity band.
 - **Exploitation intelligence** — every finding is flagged with **CISA KEV**
   (actively exploited in the wild) and scored with **FIRST.org EPSS** (exploit
   probability), and results are ranked KEV-first.
-- **Background monitoring** — opt-in scheduler that rescans assets and alerts on new CVEs.
-- **Web dashboard** — single-page UI (vanilla JS + Tailwind, no build step).
+- **Finding triage** — mark each finding `open` / `acknowledged` / `fixed` / `false_positive` / `accepted_risk`; suppressed states are hidden by default.
+- **Global findings view** — a cross-asset summary and table (`/findings`) with severity/status counts and **CSV/JSON export**.
+- **Search, filters & sorting** — filter by severity, status and time window; search by CVE or asset; sort every column.
+- **Background monitoring** — opt-in scheduler that rescans assets and alerts on new CVEs, plus an optional **per-user email digest**.
+- **Prometheus metrics** — aggregate assets and findings exposed at `/metrics`.
+- **Web dashboard** — redesigned single-page UI (vanilla JS + hand-written CSS, **no build step, no CDN**) with Overview / Assets / Vulnerabilities sections and light/dark themes.
 - **Secure JSON API** — JWT auth, per-user isolation, OpenAPI docs at `/docs` and `/redoc`.
 - **Self-hosted** — PostgreSQL + Alembic migrations, shipped as a Docker image on GHCR.
 
@@ -71,21 +76,27 @@ Then open:
 
 ## Web Dashboard
 
-A self-contained web dashboard is served at [`/dashboard`](http://localhost:8000/dashboard).
-It requires no build step (vanilla JS + Tailwind via CDN) and lets you:
+A self-contained single-page dashboard is served at
+[`/dashboard`](http://localhost:8000/dashboard). It needs **no build step and no
+CDN** (vanilla JavaScript + hand-written CSS), keeps the JWT in `localStorage`,
+and has **light and dark** themes (toggle in the user menu). It is organised into
+three sections:
 
-- Sign in with your CVE Watcher credentials (the JWT is kept in `localStorage`).
-- Add assets with name, version, CPE and description.
-- Browse your asset inventory, **filter it by name and version**, and **edit**
-  or delete each entry inline.
-- Inspect the vulnerabilities of an asset, filtered by a **time period**
-  selector (All time, last 30/90/365 days) and by **severity**
-  (Critical/High/Medium/Low). Each finding shows the CVE id (linked to MITRE),
-  a colour-coded severity badge, CVSS score and summary.
+- **Overview** — your security posture at a glance: total findings, KEV
+  (actively exploited) count, Critical + High count and asset count, plus
+  breakdowns by severity and by triage status.
+- **Assets** — full inventory management: add / edit / delete assets (with an
+  optional **ecosystem** to enable OSV.dev) and filter by name.
+- **Vulnerabilities** — a cross-asset table of every finding, each with a linked
+  CVE id, colour-coded **severity** badge, CVSS **score**, **KEV** badge, **EPSS**
+  probability and an inline **triage status** selector. You can search by CVE or
+  asset, filter by severity/status, toggle suppressed findings, sort any column,
+  **export** to CSV/JSON, and **Rescan** to force a live re-check (bypassing
+  caches).
 
-If the NIST NVD service cannot be reached, the dashboard shows an explicit
-warning banner instead of an empty list — an empty result is only displayed
-when NVD genuinely reports no matching CVEs.
+If the NIST NVD service cannot be reached, the dashboard surfaces the error
+rather than an empty list — an empty result only means NVD reported no matching
+CVEs.
 
 ## How Vulnerability Matching Works
 
@@ -105,6 +116,11 @@ Server` resolves to `apache:http_server` while `nginx` never pulls in
    keyword search filtered locally by product identity and version range,
    falling back to the CVE summary when a CVE carries no CPE data.
 
+> **OSV.dev is queried as a secondary source** for assets that declare an
+> `ecosystem` (PyPI, npm, Go, Maven, …) — the domain NVD/CPE matches poorly. Its
+> results are merged with NVD's and deduplicated by CVE, and CVSS vectors are
+> parsed into a base score and severity band.
+
 > **You usually only need a name and a version** — a CPE is an optional
 > precision lever. Provide one when the name you track differs from the
 > canonical token (e.g. `IIS` is
@@ -117,19 +133,22 @@ The application can periodically scan every registered asset against the NIST NV
 and alert on newly discovered vulnerabilities. It is **opt-in** and configured via
 environment variables (see `.env.example`):
 
-| Variable                   | Default   | Description                                  |
-| -------------------------- | --------- | -------------------------------------------- |
-| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler              |
-| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                        |
-| `ENRICH_ENABLED`           | `true`    | Add CISA KEV flag + FIRST.org EPSS score     |
-| `NOTIFY_CONSOLE`           | `true`    | Log new findings via the application logger  |
-| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST new findings as JSON to this URL        |
-| `NOTIFY_SLACK_WEBHOOK_URL` | _(unset)_ | Post findings to a Slack incoming webhook    |
-| `NOTIFY_EMAIL_HOST` …      | _(unset)_ | Send findings over SMTP (see `.env.example`) |
+| Variable                   | Default   | Description                                   |
+| -------------------------- | --------- | --------------------------------------------- |
+| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler               |
+| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                         |
+| `ENRICH_ENABLED`           | `true`    | Add CISA KEV flag + FIRST.org EPSS score      |
+| `DIGEST_ENABLED`           | `false`   | Email each user a periodic digest of findings |
+| `DIGEST_INTERVAL_MINUTES`  | `1440`    | Minutes between digest emails                 |
+| `NOTIFY_CONSOLE`           | `true`    | Log new findings via the application logger   |
+| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST new findings as JSON to this URL         |
+| `NOTIFY_SLACK_WEBHOOK_URL` | _(unset)_ | Post findings to a Slack incoming webhook     |
+| `NOTIFY_EMAIL_HOST` …      | _(unset)_ | Send findings over SMTP (see `.env.example`)  |
 
 When enabled, a scan runs at startup and then on the configured interval; only
 newly detected CVEs trigger notifications. Each notification includes the KEV
-flag and EPSS score so the most urgent findings stand out.
+flag and EPSS score so the most urgent findings stand out. Independently,
+`DIGEST_ENABLED` emails each user a periodic digest of their active findings.
 
 ## API Endpoints
 
@@ -151,9 +170,15 @@ flag and EPSS score so the most urgent findings stand out.
 ### CVE Monitoring
 
 - `GET /assets/{asset_id}/vulnerabilities` - Get vulnerabilities for specific asset
+- `PATCH /assets/{asset_id}/vulnerabilities/{cve_id}` - Set a finding's triage status
 - `GET /assets/{asset_id}/monitor` - Monitor single asset for CVEs
 - `POST /assets/monitoring/scan-all` - Scan all user assets
 - `GET /assets/monitoring/report` - Generate monitoring report
+
+### Findings
+
+- `GET /findings` - Cross-asset findings summary (`?refresh=true` bypasses caches)
+- `GET /findings/export` - Export findings as CSV or JSON (`?format=csv|json`)
 
 ### CVE Data
 
@@ -166,6 +191,7 @@ flag and EPSS score so the most urgent findings stand out.
 
 - `GET /user` - Get the current user's profile
 - `GET /health` - Service health check
+- `GET /metrics` - Prometheus metrics (aggregate assets & findings)
 
 ### Web UI
 
@@ -179,7 +205,8 @@ flag and EPSS score so the most urgent findings stand out.
 - **Migration**: Alembic
 - **Scheduling**: APScheduler (optional background monitoring)
 - **Container**: Docker & Docker Compose
-- **External API**: NIST NVD API integration
+- **External data**: NIST NVD & OSV.dev, enriched with CISA KEV and FIRST.org EPSS (CVSS parsed with `cvss`)
+- **Frontend**: single-page dashboard in vanilla JS + hand-written CSS (no build step, no CDN)
 
 ## Deployment
 
