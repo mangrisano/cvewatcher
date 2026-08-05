@@ -50,3 +50,8 @@ login_rate_limiter = InMemoryRateLimiter(
     max_attempts=int(os.getenv("LOGIN_MAX_ATTEMPTS", "5")),
     window_seconds=int(os.getenv("LOGIN_WINDOW_SECONDS", "300")),
 )
+
+registration_rate_limiter = InMemoryRateLimiter(
+    max_attempts=int(os.getenv("REGISTER_MAX_ATTEMPTS", "5")),
+    window_seconds=int(os.getenv("REGISTER_WINDOW_SECONDS", "3600")),
+)

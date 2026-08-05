@@ -1,10 +1,12 @@
 (function () {
     const TOKEN_KEY = "cvewatcher_token";
+    const REFRESH_KEY = "cvewatcher_refresh_token";
     const EMAIL_KEY = "cvewatcher_email";
     const THEME_KEY = "cvewatcher_theme";
 
     const $ = (id) => document.getElementById(id);
     const token = () => localStorage.getItem(TOKEN_KEY);
+    const refreshToken = () => localStorage.getItem(REFRESH_KEY);
     const authHeaders = () => ({ Authorization: "Bearer " + token() });
 
     const SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"];
@@ -62,25 +64,111 @@
     }
 
     // --- Auth --------------------------------------------------------------
-    async function login(event) {
+    let authMode = "login";
+    let refreshPromise = null;
+
+    // Exchanges the refresh token for a new access token. Concurrent 401s
+    // share a single in-flight request instead of racing separate refreshes.
+    function refreshAccessToken() {
+        const rt = refreshToken();
+        if (!rt) return Promise.resolve(false);
+        if (!refreshPromise) {
+            refreshPromise = fetch("/auth/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh_token: rt }),
+            })
+                .then(async (res) => {
+                    if (!res.ok) return false;
+                    const data = await res.json();
+                    localStorage.setItem(TOKEN_KEY, data.access_token);
+                    return true;
+                })
+                .catch(() => false)
+                .finally(() => {
+                    refreshPromise = null;
+                });
+        }
+        return refreshPromise;
+    }
+
+    // fetch() wrapper that attaches the access token and, on a 401, tries a
+    // silent refresh + one retry before giving up and logging the user out.
+    async function apiFetch(url, options = {}) {
+        const withAuth = () => ({
+            ...options,
+            headers: { ...(options.headers || {}), ...authHeaders() },
+        });
+        let res = await fetch(url, withAuth());
+        if (res.status === 401) {
+            const refreshed = await refreshAccessToken();
+            res = refreshed ? await fetch(url, withAuth()) : res;
+            if (res.status === 401) logout();
+        }
+        return res;
+    }
+
+    function setAuthMode(mode) {
+        authMode = mode;
+        const register = mode === "register";
+        $("usernameField").classList.toggle("hidden", !register);
+        $("regUsername").required = register;
+        $("authSubtitle").textContent = register
+            ? "Create your CVE Watcher account"
+            : "Sign in to your security dashboard";
+        $("authSubmit").textContent = register ? "Create account" : "Sign in";
+        $("authToggleText").textContent = register
+            ? "Already have an account?"
+            : "Don't have an account?";
+        $("authToggleLink").textContent = register ? "Sign in" : "Create one";
+        $("loginError").classList.add("hidden");
+        $("regUsername").value = "";
+        $("loginEmail").value = "";
+        $("loginPassword").value = "";
+    }
+
+    function toggleAuthMode(event) {
+        event.preventDefault();
+        setAuthMode(authMode === "login" ? "register" : "login");
+        return false;
+    }
+
+    async function doLogin(email, password) {
+        const res = await fetch("/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.detail || "Login failed");
+        }
+        const data = await res.json();
+        localStorage.setItem(TOKEN_KEY, data.access_token);
+        localStorage.setItem(REFRESH_KEY, data.refresh_token);
+        localStorage.setItem(EMAIL_KEY, data.user ? data.user.email : email);
+        enterApp();
+    }
+
+    async function submitAuth(event) {
         event.preventDefault();
         $("loginError").classList.add("hidden");
         const email = $("loginEmail").value;
         const password = $("loginPassword").value;
         try {
-            const res = await fetch("/auth/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password }),
-            });
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || "Login failed");
+            if (authMode === "register") {
+                const username = $("regUsername").value;
+                const res = await fetch("/auth/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, email, password }),
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.detail || "Registration failed");
+                }
             }
-            const data = await res.json();
-            localStorage.setItem(TOKEN_KEY, data.access_token);
-            localStorage.setItem(EMAIL_KEY, data.user ? data.user.email : email);
-            enterApp();
+            await doLogin(email, password);
         } catch (err) {
             $("loginError").textContent = err.message;
             $("loginError").classList.remove("hidden");
@@ -90,12 +178,18 @@
 
     async function logout() {
         try {
-            await fetch("/auth/logout", { method: "POST", headers: authHeaders() });
+            await fetch("/auth/logout", {
+                method: "POST",
+                headers: { ...authHeaders(), "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh_token: refreshToken() || "" }),
+            });
         } catch (_) {
             /* ignore */
         }
         localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(REFRESH_KEY);
         localStorage.removeItem(EMAIL_KEY);
+        setAuthMode("login");
         $("appView").classList.add("hidden");
         $("loginView").classList.remove("hidden");
     }
@@ -145,16 +239,11 @@
         let assetsCount = 0;
         try {
             const [sRes, aRes] = await Promise.all([
-                fetch(
-                    "/findings?include_suppressed=false" + (force ? "&refresh=true" : ""),
-                    { headers: authHeaders() }
+                apiFetch(
+                    "/findings?include_suppressed=false" + (force ? "&refresh=true" : "")
                 ),
-                fetch("/assets/", { headers: authHeaders() }),
+                apiFetch("/assets/"),
             ]);
-            if (sRes.status === 401 || aRes.status === 401) {
-                logout();
-                return;
-            }
             if (sRes.ok) summary = await sRes.json();
             if (aRes.ok) assetsCount = (await aRes.json()).length;
         } catch (_) {
@@ -205,11 +294,7 @@
         $("assetsLoading").classList.remove("hidden");
         $("assetsTableWrap").classList.add("hidden");
         $("assetsEmpty").classList.add("hidden");
-        const res = await fetch("/assets/", { headers: authHeaders() });
-        if (res.status === 401) {
-            logout();
-            return;
-        }
+        const res = await apiFetch("/assets/");
         assets = res.ok ? await res.json() : [];
         $("assetsLoading").classList.add("hidden");
         renderAssets();
@@ -288,15 +373,11 @@
             ecosystem: $("assetEcosystem").value || null,
             description: $("assetDescription").value || null,
         };
-        const res = await fetch(id ? "/assets/" + id : "/assets/", {
+        const res = await apiFetch(id ? "/assets/" + id : "/assets/", {
             method: id ? "PATCH" : "POST",
-            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
         });
-        if (res.status === 401) {
-            logout();
-            return false;
-        }
         if (!res.ok) {
             const d = await res.json().catch(() => ({}));
             $("assetModalError").textContent = d.detail || "Could not save asset";
@@ -310,14 +391,7 @@
 
     async function deleteAsset(id) {
         if (!confirm("Delete this asset?")) return;
-        const res = await fetch("/assets/" + id, {
-            method: "DELETE",
-            headers: authHeaders(),
-        });
-        if (res.status === 401) {
-            logout();
-            return;
-        }
+        await apiFetch("/assets/" + id, { method: "DELETE" });
         loadAssets();
     }
 
@@ -335,13 +409,9 @@
             "/findings?include_suppressed=" + inc + (force ? "&refresh=true" : "");
         let res;
         try {
-            res = await fetch(url, { headers: authHeaders() });
+            res = await apiFetch(url);
         } finally {
             if (btn) btn.classList.remove("is-busy");
-        }
-        if (res.status === 401) {
-            logout();
-            return;
         }
         const data = res.ok ? await res.json() : { findings: [] };
         findings = data.findings || [];
@@ -477,19 +547,15 @@
         if (!assetId) return;
         const status = sel.value;
         sel.disabled = true;
-        const res = await fetch(
+        const res = await apiFetch(
             "/assets/" + assetId + "/vulnerabilities/" + encodeURIComponent(cveId),
             {
                 method: "PATCH",
-                headers: { ...authHeaders(), "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ status }),
             }
         );
         sel.disabled = false;
-        if (res.status === 401) {
-            logout();
-            return;
-        }
         if (!res.ok) return;
         const f = findings.find(
             (x) => String(x.asset_id) === String(assetId) && x.cve_id === cveId
@@ -506,14 +572,9 @@
 
     async function exportFindings(format) {
         const inc = $("findSuppressed").checked;
-        const res = await fetch(
-            "/findings/export?format=" + format + "&include_suppressed=" + inc,
-            { headers: authHeaders() }
+        const res = await apiFetch(
+            "/findings/export?format=" + format + "&include_suppressed=" + inc
         );
-        if (res.status === 401) {
-            logout();
-            return;
-        }
         if (!res.ok) {
             alert("Export failed.");
             return;
@@ -529,8 +590,22 @@
         URL.revokeObjectURL(url);
     }
 
+    // --- Registration availability -----------------------------------------
+    async function checkRegistration() {
+        try {
+            const res = await fetch("/auth/registration-status");
+            if (res.ok && !(await res.json()).open) {
+                const toggle = document.querySelector(".auth-toggle");
+                if (toggle) toggle.classList.add("hidden");
+            }
+        } catch (_) {
+            /* leave the toggle visible on error */
+        }
+    }
+
     // --- Init --------------------------------------------------------------
     applyTheme(localStorage.getItem(THEME_KEY) || "dark");
+    checkRegistration();
     document.querySelectorAll(".nav__item").forEach((item) => {
         item.addEventListener("click", () => showSection(item.dataset.section));
     });
@@ -553,7 +628,8 @@
     if (token()) enterApp();
 
     window.app = {
-        login,
+        submitAuth,
+        toggleAuthMode,
         logout,
         toggleUserMenu,
         showSection,

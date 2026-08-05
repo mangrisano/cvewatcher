@@ -38,6 +38,29 @@ def test_register_rejects_short_password(client):
     assert response.status_code == 422
 
 
+def test_registration_gating(client, monkeypatch):
+    # Ensure at least one user exists so the bootstrap allowance is consumed.
+    client.post(
+        "/auth/register",
+        json={
+            "username": "gate_seed",
+            "email": "gate_seed@example.com",
+            "password": "Password123",
+        },
+    )
+    monkeypatch.setenv("REGISTRATION_ENABLED", "false")
+    assert client.get("/auth/registration-status").json() == {"open": False}
+    response = client.post(
+        "/auth/register",
+        json={
+            "username": "denied",
+            "email": "denied@example.com",
+            "password": "Password123",
+        },
+    )
+    assert response.status_code == 403
+
+
 def test_login_with_wrong_password(client):
     client.post(
         "/auth/register",

@@ -5,23 +5,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=12">
+    <link rel="stylesheet" href="/static/css/app.css?v=13">
 </head>
 
 <body>
     <!-- Login -->
     <div id="loginView" class="login">
-        <form class="login-card" onsubmit="return app.login(event)">
+        <form class="login-card" onsubmit="return app.submitAuth(event)">
             <img class="login-logo" src="/static/logo.svg" alt="CVE Watcher" width="300">
-            <p class="muted" style="text-align:center;margin:0">Sign in to your security dashboard</p>
+            <p id="authSubtitle" class="muted" style="text-align:center;margin:0">Sign in to your security dashboard</p>
             <div id="loginError" class="alert alert--error hidden"></div>
+            <label id="usernameField" class="hidden">Username
+                <input id="regUsername" type="text" autocomplete="username">
+            </label>
             <label>Email
-                <input id="loginEmail" type="email" autocomplete="username" required>
+                <input id="loginEmail" type="email" autocomplete="email" required>
             </label>
             <label>Password
                 <input id="loginPassword" type="password" autocomplete="current-password" required>
             </label>
-            <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+            <button id="authSubmit" class="btn btn--primary btn--block" type="submit">Sign in</button>
+            <p class="auth-toggle muted">
+                <span id="authToggleText">Don't have an account?</span>
+                <a href="#" id="authToggleLink" onclick="return app.toggleAuthMode(event)">Create one</a>
+            </p>
         </form>
     </div>
 
@@ -311,7 +318,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=12"></script>
+    <script src="/static/js/app.js?v=16"></script>
 </body>
 
 </html>

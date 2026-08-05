@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional
+import os
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
@@ -12,7 +13,7 @@ from app.utils.auth import (
     verify_refresh_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
-from app.utils.rate_limit import login_rate_limiter
+from app.utils.rate_limit import login_rate_limiter, registration_rate_limiter
 from app.dependencies import get_current_user
 from app.services.token_blocklist import revoke_token, is_token_revoked
 from app.database import get_db, User
@@ -20,8 +21,40 @@ from app.database import get_db, User
 router = APIRouter()
 
 
+def _is_truthy(value: str) -> bool:
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _registration_open(db: Session) -> bool:
+    # The first account can always be created (bootstrap); afterwards
+    # registration must be explicitly enabled via REGISTRATION_ENABLED.
+    if db.query(User).count() == 0:
+        return True
+    return _is_truthy(os.getenv("REGISTRATION_ENABLED", "false"))
+
+
+@router.get("/auth/registration-status", tags=["auth"])
+async def registration_status(db: Session = Depends(get_db)):
+    return {"open": _registration_open(db)}
+
+
 @router.post("/auth/register", tags=["auth"])
-async def register_user(user: UserRegistrationRequest, db: Session = Depends(get_db)):
+async def register_user(
+    user: UserRegistrationRequest, request: Request, db: Session = Depends(get_db)
+):
+    if not _registration_open(db):
+        raise HTTPException(status_code=403, detail="Registration is disabled")
+
+    client_ip = request.client.host if request.client else "unknown"
+    retry_after = registration_rate_limiter.retry_after(client_ip)
+    if retry_after > 0:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many registration attempts. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    registration_rate_limiter.record_failure(client_ip)
+
     existing_user = (
         db.query(User)
         .filter((User.email == user.email) | (User.username == user.username))

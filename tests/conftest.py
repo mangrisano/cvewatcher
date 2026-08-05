@@ -8,6 +8,9 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_db_path}")
 # Keep the suite offline: enrichment (CISA KEV / FIRST.org EPSS) is opt-in here.
 os.environ.setdefault("ENRICH_ENABLED", "false")
+# Tests share one database and register many users, so keep registration open.
+os.environ.setdefault("REGISTRATION_ENABLED", "true")
+os.environ.setdefault("REGISTER_MAX_ATTEMPTS", "1000")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
