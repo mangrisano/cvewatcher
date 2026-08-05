@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Alembic migrations now run automatically on startup against Postgres**
+  (`app/database/init_schema`), instead of relying on a commented-out
+  `RUN alembic upgrade head` in the Dockerfile that never executed. Upgrading
+  an existing deployment to a version that changes the schema no longer
+  requires manually running migrations — they apply on the next restart.
+  SQLite (used for local/dev/test runs) is unaffected: Alembic's migrations
+  use Postgres-specific types, so it keeps using `create_all()`.
+
 ## [2.3.0] - 2026-08-05
 
 ### Added

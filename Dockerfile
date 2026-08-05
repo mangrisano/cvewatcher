@@ -22,7 +22,6 @@ EXPOSE 8000
 
 ENV PYTHONUNBUFFERED=1
 
-# Run Alembic migrations (optional, comment if not needed)
-# RUN alembic upgrade head
+# Alembic migrations run automatically on startup (see app/database/init_schema).
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
