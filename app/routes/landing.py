@@ -19,8 +19,8 @@ async def landing_page():
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
         <style>
             .hero-section {
-                background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%);
-                background-color: #4f46e5;
+                background: linear-gradient(135deg, #0b0f19 0%, #0f172a 55%, #0891b2 100%);
+                background-color: #0b0f19;
             }
             .hero-pattern {
                 background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.08'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
@@ -39,18 +39,30 @@ async def landing_page():
         <nav class="bg-white shadow-lg sticky top-0 z-50">
             <div class="container mx-auto px-6 py-3">
                 <div class="flex justify-between items-center">
-                    <div class="flex items-center">
-                        <i class="fas fa-shield-alt text-blue-600 text-2xl mr-3"></i>
-                        <span class="text-xl font-bold text-gray-800">CVE Watcher</span>
+                    <div class="flex items-center gap-2">
+                        <svg viewBox="-56 -64 112 112" width="30" height="30" fill="none" stroke="#0891b2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M-9,-44 -17,-57" />
+                            <path d="M9,-44 17,-57" />
+                            <circle cx="0" cy="-38" r="10" />
+                            <rect x="-24" y="-26" width="48" height="66" rx="24" />
+                            <path d="M0,-18 V32" />
+                            <path d="M-24,-10 -46,-20" />
+                            <path d="M-25,7 -48,7" />
+                            <path d="M-24,24 -46,34" />
+                            <path d="M24,-10 46,-20" />
+                            <path d="M25,7 48,7" />
+                            <path d="M24,24 46,34" />
+                        </svg>
+                        <span class="text-xl font-bold font-mono"><span class="text-cyan-600">cve</span><span class="text-gray-900">watcher</span></span>
                     </div>
                     <div class="hidden md:flex items-center space-x-6">
-                        <a href="#features" class="text-gray-600 hover:text-blue-600 transition">Features</a>
-                        <a href="#demo" class="text-gray-600 hover:text-blue-600 transition">Demo</a>
-                        <a href="#opensource" class="text-gray-600 hover:text-blue-600 transition">Open Source</a>
-                        <a href="/dashboard" class="text-gray-600 hover:text-blue-600 transition">Dashboard</a>
-                        <a href="/docs" class="text-gray-600 hover:text-blue-600 transition">API Docs</a>
-                        <a href="https://github.com/mangrisano/cvewatcher" class="text-gray-600 hover:text-blue-600 transition" title="GitHub"><i class="fab fa-github text-xl"></i></a>
-                        <button onclick="window.location.href='/dashboard'" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                        <a href="#features" class="text-gray-600 hover:text-cyan-600 transition">Features</a>
+                        <a href="#demo" class="text-gray-600 hover:text-cyan-600 transition">Demo</a>
+                        <a href="#opensource" class="text-gray-600 hover:text-cyan-600 transition">Open Source</a>
+                        <a href="/dashboard" class="text-gray-600 hover:text-cyan-600 transition">Dashboard</a>
+                        <a href="/docs" class="text-gray-600 hover:text-cyan-600 transition">API Docs</a>
+                        <a href="https://github.com/mangrisano/cvewatcher" class="text-gray-600 hover:text-cyan-600 transition" title="GitHub"><i class="fab fa-github text-xl"></i></a>
+                        <button onclick="window.location.href='/dashboard'" class="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700 transition">
                             Sign in
                         </button>
                     </div>
@@ -63,17 +75,17 @@ async def landing_page():
             <div class="container mx-auto px-6 text-center">
                 <h1 class="text-5xl font-bold mb-6">
                     Monitor Your Software Vulnerabilities<br>
-                    <span class="text-yellow-300">Before Attackers Do</span>
+                    <span class="text-cyan-300">Before Attackers Do</span>
                 </h1>
                 <p class="text-xl mb-8 max-w-3xl mx-auto opacity-90">
                     Automated CVE monitoring for your entire software stack.
                     Get alerted instantly when new vulnerabilities affect your assets.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <a href="https://github.com/mangrisano/cvewatcher" class="bg-yellow-400 text-blue-900 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-yellow-300 transition">
+                    <a href="https://github.com/mangrisano/cvewatcher" class="bg-cyan-400 text-slate-900 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-cyan-300 transition">
                         <i class="fab fa-github mr-2"></i>View on GitHub
                     </a>
-                    <a href="#demo" class="border-2 border-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-white hover:text-blue-900 transition">
+                    <a href="#demo" class="border-2 border-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-white hover:text-slate-900 transition">
                         <i class="fas fa-play mr-2"></i>Watch Demo
                     </a>
                 </div>
@@ -149,8 +161,8 @@ async def landing_page():
                 </div>
                 <div class="grid md:grid-cols-3 gap-8">
                     <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
-                        <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <i class="fas fa-search text-blue-600 text-2xl"></i>
+                        <div class="bg-cyan-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fas fa-search text-cyan-600 text-2xl"></i>
                         </div>
                         <h3 class="text-xl font-semibold mb-4 text-gray-900">Real-time Monitoring</h3>
                         <p class="text-gray-600">Instant alerts when new CVEs affect your software assets. Never miss a critical vulnerability again.</p>
@@ -213,7 +225,7 @@ async def landing_page():
                             &nbsp;&nbsp;-H "Content-Type: application/json" \\<br>
                             &nbsp;&nbsp;-d '{"email": "demo@example.com", "password": "demo123"}'
                         </div>
-                        <div class="mb-4 text-blue-400">
+                        <div class="mb-4 text-cyan-400">
                             {<br>
                             &nbsp;&nbsp;"message": "Login successful",<br>
                             &nbsp;&nbsp;"access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",<br>
@@ -224,7 +236,7 @@ async def landing_page():
                             <span class="text-yellow-400">$</span> curl -X GET "http://localhost:8000/assets/vulnerabilities" \\<br>
                             &nbsp;&nbsp;-H "Authorization: Bearer YOUR_TOKEN"
                         </div>
-                        <div class="text-blue-400">
+                        <div class="text-cyan-400">
                             {<br>
                             &nbsp;&nbsp;"vulnerabilities": [<br>
                             &nbsp;&nbsp;&nbsp;&nbsp;{<br>
@@ -238,7 +250,7 @@ async def landing_page():
                         </div>
                     </div>
                     <div class="text-center mt-8">
-                        <button onclick="window.open('/docs', '_blank')" class="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+                        <button onclick="window.open('/docs', '_blank')" class="bg-cyan-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-cyan-700 transition">
                             <i class="fas fa-code mr-2"></i>Try Interactive API Docs
                         </button>
                     </div>
@@ -261,8 +273,8 @@ async def landing_page():
                 </div>
                 <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
                     <div class="text-center p-8 bg-white rounded-xl shadow-sm card-hover">
-                        <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <i class="fab fa-github text-blue-600 text-2xl"></i>
+                        <div class="bg-cyan-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i class="fab fa-github text-cyan-600 text-2xl"></i>
                         </div>
                         <h3 class="text-xl font-semibold mb-3 text-gray-900">MIT Licensed</h3>
                         <p class="text-gray-600">Use it, modify it, deploy it commercially. The full source is on GitHub.</p>
@@ -301,7 +313,7 @@ async def landing_page():
                     Clone the repo, run it with Docker, and start monitoring your assets today.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <a href="https://github.com/mangrisano/cvewatcher" class="bg-yellow-400 text-gray-900 px-8 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition">
+                    <a href="https://github.com/mangrisano/cvewatcher" class="bg-cyan-400 text-gray-900 px-8 py-3 rounded-lg font-semibold hover:bg-cyan-300 transition">
                         <i class="fab fa-github mr-2"></i>Get the Source
                     </a>
                     <a href="/docs" class="border-2 border-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-gray-900 transition">
@@ -316,9 +328,21 @@ async def landing_page():
             <div class="container mx-auto px-6">
                 <div class="grid md:grid-cols-4 gap-8">
                     <div>
-                        <div class="flex items-center mb-4">
-                            <i class="fas fa-shield-alt text-blue-400 text-2xl mr-3"></i>
-                            <span class="text-xl font-bold">CVE Watcher</span>
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg viewBox="-56 -64 112 112" width="30" height="30" fill="none" stroke="#22d3ee" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M-9,-44 -17,-57" />
+                                <path d="M9,-44 17,-57" />
+                                <circle cx="0" cy="-38" r="10" />
+                                <rect x="-24" y="-26" width="48" height="66" rx="24" />
+                                <path d="M0,-18 V32" />
+                                <path d="M-24,-10 -46,-20" />
+                                <path d="M-25,7 -48,7" />
+                                <path d="M-24,24 -46,34" />
+                                <path d="M24,-10 46,-20" />
+                                <path d="M25,7 48,7" />
+                                <path d="M24,24 46,34" />
+                            </svg>
+                            <span class="text-xl font-bold font-mono"><span class="text-cyan-400">cve</span><span class="text-white">watcher</span></span>
                         </div>
                         <p class="text-gray-400">
                             Open-source, self-hosted vulnerability monitoring for your software stack.
