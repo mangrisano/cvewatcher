@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785938900872,
+  "lastUpdate": 1785939093917,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -540,6 +540,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.0000039831260159587355",
             "extra": "mean: 55.005913525295746 usec\nrounds: 11460"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "6762cddb9e64dcdafb64c6dad72f738c3e2272da",
+          "message": "docs(readme): document registration gating, rate limiting, and session refresh\n\nThe 2.3.0 auth changes (closed-by-default sign-up, per-IP rate limits on\nlogin/register, silent session refresh) weren't reflected in the README.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-05T16:10:58+02:00",
+          "tree_id": "73c39d77fb80ca96017712fdce1319f898fe85c4",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/6762cddb9e64dcdafb64c6dad72f738c3e2272da"
+        },
+        "date": 1785939093437,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 93656.81008343968,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000010307628126545692",
+            "extra": "mean: 10.677280158368529 usec\nrounds: 19696"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 54178.91336533112,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000029484524895553188",
+            "extra": "mean: 18.457365382301965 usec\nrounds: 16662"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 20903.361733836526,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000004421936670823901",
+            "extra": "mean: 47.8391950889549 usec\nrounds: 10344"
           }
         ]
       }
