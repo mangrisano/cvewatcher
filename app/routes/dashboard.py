@@ -75,6 +75,33 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                 </button>
             </div>
 
+            <!-- Security posture -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h2 class="text-lg font-bold"><i class="fas fa-chart-pie text-blue-600 mr-2"></i>Security posture</h2>
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        <label class="flex items-center gap-1 text-gray-500">
+                            <input type="checkbox" id="includeSuppressed"> include suppressed
+                        </label>
+                        <button onclick="loadFindingsOverview()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded">
+                            <i class="fas fa-rotate mr-1"></i>Load overview
+                        </button>
+                        <button onclick="downloadExport('csv')" class="border px-3 py-1.5 rounded hover:bg-gray-50">
+                            <i class="fas fa-file-csv mr-1"></i>CSV
+                        </button>
+                        <button onclick="downloadExport('json')" class="border px-3 py-1.5 rounded hover:bg-gray-50">
+                            <i class="fas fa-file-code mr-1"></i>JSON
+                        </button>
+                    </div>
+                </div>
+                <div id="findingsHint" class="text-gray-400 text-sm">
+                    Aggregates findings across all your assets (queries live sources; may take a few seconds).
+                </div>
+                <div id="findingsLoading" class="hidden text-gray-400 text-sm">Loading overview&hellip;</div>
+                <div id="findingsSummary" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+            </div>
+
             <!-- Filters -->
             <div class="flex flex-wrap items-center gap-2 text-sm">
                 <div class="relative">
@@ -142,6 +169,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                                 <th class="py-2 pr-4">Score</th>
                                 <th class="py-2 pr-4">KEV</th>
                                 <th class="py-2 pr-4">EPSS</th>
+                                <th class="py-2 pr-4">Status</th>
                                 <th class="py-2 pr-4">Summary</th>
                             </tr>
                         </thead>
@@ -172,6 +200,25 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                     <label class="block text-sm font-medium mb-1">Version</label>
                     <input id="assetVersion" placeholder="e.g. 1.24.0"
                         class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Ecosystem
+                        <span class="text-gray-400 font-normal">(optional, enables OSV.dev)</span></label>
+                    <select id="assetEcosystem"
+                        class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">&mdash; none &mdash;</option>
+                        <option value="npm">npm</option>
+                        <option value="PyPI">PyPI</option>
+                        <option value="Go">Go</option>
+                        <option value="Maven">Maven</option>
+                        <option value="RubyGems">RubyGems</option>
+                        <option value="crates.io">crates.io</option>
+                        <option value="NuGet">NuGet</option>
+                        <option value="Packagist">Packagist</option>
+                        <option value="Pub">Pub</option>
+                        <option value="Hex">Hex</option>
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">For language packages, OSV.dev is queried alongside NVD.</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">CPE
@@ -220,6 +267,24 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                     <label class="block text-sm font-medium mb-1">Version</label>
                     <input id="editVersion"
                         class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Ecosystem
+                        <span class="text-gray-400 font-normal">(optional, enables OSV.dev)</span></label>
+                    <select id="editEcosystem"
+                        class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">&mdash; none &mdash;</option>
+                        <option value="npm">npm</option>
+                        <option value="PyPI">PyPI</option>
+                        <option value="Go">Go</option>
+                        <option value="Maven">Maven</option>
+                        <option value="RubyGems">RubyGems</option>
+                        <option value="crates.io">crates.io</option>
+                        <option value="NuGet">NuGet</option>
+                        <option value="Packagist">Packagist</option>
+                        <option value="Pub">Pub</option>
+                        <option value="Hex">Hex</option>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">CPE</label>
@@ -366,6 +431,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                         <div class="min-w-0">
                             <h3 class="text-lg font-semibold text-gray-800 truncate">${escapeHtml(a.name)}</h3>
                             ${a.version ? `<p class="text-sm text-gray-500">v${escapeHtml(a.version)}</p>` : ""}
+                            ${a.ecosystem ? `<span class="inline-flex items-center mt-1 px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700" title="OSV.dev ecosystem"><i class="fas fa-cubes mr-1"></i>${escapeHtml(a.ecosystem)}</span>` : ""}
                         </div>
                         ${matchBadge}
                     </div>
@@ -394,6 +460,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
             document.getElementById("assetName").value = "";
             document.getElementById("assetVersion").value = "";
             document.getElementById("assetCpe").value = "";
+            document.getElementById("assetEcosystem").value = "";
             document.getElementById("assetDescription").value = "";
             document.getElementById("addModal").classList.remove("hidden");
         }
@@ -410,6 +477,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
             document.getElementById("editName").value = a.name || "";
             document.getElementById("editVersion").value = a.version || "";
             document.getElementById("editCpe").value = a.cpe || "";
+            document.getElementById("editEcosystem").value = a.ecosystem || "";
             document.getElementById("editDescription").value = a.description || "";
             document.getElementById("editModal").classList.remove("hidden");
         }
@@ -426,6 +494,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                 name: document.getElementById("editName").value,
                 version: document.getElementById("editVersion").value || null,
                 cpe: document.getElementById("editCpe").value || null,
+                ecosystem: document.getElementById("editEcosystem").value || null,
                 description: document.getElementById("editDescription").value || null
             };
             const res = await fetch("/assets/" + id, {
@@ -454,6 +523,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                 name: document.getElementById("assetName").value,
                 version: document.getElementById("assetVersion").value || null,
                 cpe: document.getElementById("assetCpe").value || null,
+                ecosystem: document.getElementById("assetEcosystem").value || null,
                 description: document.getElementById("assetDescription").value || null
             };
             const res = await fetch("/assets/", {
@@ -538,7 +608,10 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
                     <td class="py-2 pr-4">${v.score != null ? escapeHtml(v.score) : "-"}</td>
                     <td class="py-2 pr-4">${kevBadge(v.kev)}</td>
                     <td class="py-2 pr-4">${epssCell(v.epss)}</td>
+                    <td class="py-2 pr-4">${statusSelectHtml(v)}</td>
                     <td class="py-2 pr-4 text-gray-600">${escapeHtml(v.summary || "")}</td>`;
+                const statusSel = tr.querySelector("select.status-select");
+                if (statusSel) statusSel.onchange = () => changeFindingStatus(cveId, statusSel);
                 body.appendChild(tr);
             }
         }
@@ -568,6 +641,119 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
             const pct = (epss * 100).toFixed(1) + "%";
             const strong = epss >= 0.5 ? "font-semibold text-red-600" : "text-gray-700";
             return `<span class="${strong}" title="Exploit probability (FIRST.org EPSS)">${pct}</span>`;
+        }
+
+        const STATUS_OPTIONS = [
+            ["open", "Open"],
+            ["acknowledged", "Acknowledged"],
+            ["fixed", "Fixed"],
+            ["false_positive", "False positive"],
+            ["accepted_risk", "Accepted risk"]
+        ];
+
+        function statusClass(s) {
+            if (s === "open") return "bg-white text-gray-700";
+            if (s === "acknowledged") return "bg-blue-50 text-blue-700";
+            return "bg-gray-100 text-gray-400"; // suppressed: fixed / false_positive / accepted_risk
+        }
+
+        function statusSelectHtml(v) {
+            const cur = v.status || "open";
+            const options = STATUS_OPTIONS.map(([val, label]) =>
+                `<option value="${val}" ${val === cur ? "selected" : ""}>${label}</option>`).join("");
+            return `<select class="status-select border rounded px-1.5 py-1 text-xs ${statusClass(cur)}">${options}</select>`;
+        }
+
+        async function changeFindingStatus(cveId, selectEl) {
+            if (!currentAsset) return;
+            const status = selectEl.value;
+            selectEl.disabled = true;
+            const res = await fetch(
+                "/assets/" + currentAsset.id + "/vulnerabilities/" + encodeURIComponent(cveId),
+                {
+                    method: "PATCH",
+                    headers: { ...authHeaders(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ status })
+                }
+            );
+            selectEl.disabled = false;
+            if (res.status === 401) { logout(); return; }
+            if (!res.ok) {
+                selectEl.classList.add("ring-2", "ring-red-400");
+                return;
+            }
+            selectEl.classList.remove("ring-2", "ring-red-400");
+            selectEl.className = "status-select border rounded px-1.5 py-1 text-xs " + statusClass(status);
+        }
+
+        function severityChipClass(sev) {
+            const colors = {
+                CRITICAL: "bg-red-100 text-red-700",
+                HIGH: "bg-orange-100 text-orange-700",
+                MEDIUM: "bg-yellow-100 text-yellow-700",
+                LOW: "bg-green-100 text-green-700"
+            };
+            return colors[sev] || "bg-gray-100 text-gray-600";
+        }
+
+        async function loadFindingsOverview() {
+            const hint = document.getElementById("findingsHint");
+            const loading = document.getElementById("findingsLoading");
+            const summary = document.getElementById("findingsSummary");
+            hint.classList.add("hidden");
+            summary.classList.add("hidden");
+            loading.classList.remove("hidden");
+            const inc = document.getElementById("includeSuppressed").checked;
+            let res;
+            try {
+                res = await fetch("/findings?include_suppressed=" + inc, { headers: authHeaders() });
+            } catch (_) {
+                loading.classList.add("hidden");
+                hint.textContent = "Could not load findings overview.";
+                hint.classList.remove("hidden");
+                return;
+            }
+            loading.classList.add("hidden");
+            if (res.status === 401) { logout(); return; }
+            if (!res.ok) {
+                hint.textContent = res.status === 503
+                    ? "Could not reach the NVD service \u2014 please retry shortly."
+                    : "Could not load findings overview.";
+                hint.classList.remove("hidden");
+                return;
+            }
+            renderFindingsSummary(await res.json());
+        }
+
+        function renderFindingsSummary(data) {
+            const summary = document.getElementById("findingsSummary");
+            const sevChips = Object.entries(data.by_severity || {}).map(([s, n]) =>
+                `<span class="px-2 py-0.5 rounded text-xs font-semibold ${severityChipClass(s)}">${escapeHtml(s)}: ${n}</span>`).join(" ");
+            const statusChips = Object.entries(data.by_status || {}).map(([s, n]) =>
+                `<span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">${escapeHtml(s)}: ${n}</span>`).join(" ");
+            summary.innerHTML = `
+                <div class="bg-gray-50 rounded p-4"><div class="text-2xl font-bold">${data.total}</div><div class="text-xs text-gray-500 uppercase">Findings</div></div>
+                <div class="bg-gray-50 rounded p-4"><div class="text-2xl font-bold text-red-600">${data.kev}</div><div class="text-xs text-gray-500 uppercase">KEV (exploited)</div></div>
+                <div class="bg-gray-50 rounded p-4 col-span-2"><div class="text-xs text-gray-500 uppercase mb-1">By severity</div><div class="flex flex-wrap gap-1">${sevChips || '<span class="text-gray-300 text-xs">none</span>'}</div></div>
+                <div class="bg-gray-50 rounded p-4 col-span-2 md:col-span-4"><div class="text-xs text-gray-500 uppercase mb-1">By status</div><div class="flex flex-wrap gap-1">${statusChips || '<span class="text-gray-300 text-xs">none</span>'}</div></div>`;
+            summary.classList.remove("hidden");
+        }
+
+        async function downloadExport(format) {
+            const inc = document.getElementById("includeSuppressed").checked;
+            const res = await fetch("/findings/export?format=" + format + "&include_suppressed=" + inc,
+                { headers: authHeaders() });
+            if (res.status === 401) { logout(); return; }
+            if (!res.ok) { alert("Export failed."); return; }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "findings." + format;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
         }
 
         function escapeHtml(s) {
