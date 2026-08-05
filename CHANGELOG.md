@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Auto-running Alembic migrations was silently killing app logging**:
+  `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
+  file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`
+  — disabling every logger not declared in `alembic.ini` (i.e. everything but
+  `root`/`sqlalchemy`/`alembic`), including `app.main` and, critically,
+  `uvicorn.access`. Since 2.3.1 runs migrations in-process on startup, this
+  meant HTTP access logs (and any `app.*` log call) silently stopped appearing
+  after the first request, with no error. `init_schema()` now builds the
+  Alembic `Config` without a config file (setting `script_location` directly)
+  so `fileConfig()` never runs.
+
 ## [2.3.1] - 2026-08-05
 
 ### Fixed

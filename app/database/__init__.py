@@ -26,8 +26,14 @@ def init_schema():
     from alembic.config import Config
     from alembic import command
 
+    # Built without a config *file* on purpose: alembic/env.py calls
+    # fileConfig(config.config_file_name) when one is set, and fileConfig()
+    # defaults to disable_existing_loggers=True — which would silently
+    # disable every other logger in this process (including uvicorn's own),
+    # since alembic.ini only declares root/sqlalchemy/alembic loggers.
     repo_root = Path(__file__).resolve().parent.parent.parent
-    alembic_cfg = Config(str(repo_root / "alembic.ini"))
+    alembic_cfg = Config()
+    alembic_cfg.set_main_option("script_location", str(repo_root / "alembic"))
     command.upgrade(alembic_cfg, "head")
 
 
