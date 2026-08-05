@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVE Watcher</title>
+    <link rel="stylesheet" href="/static/css/app.css?v=6">
+</head>
+
+<body>
+    <!-- Login -->
+    <div id="loginView" class="login">
+        <form class="login-card" onsubmit="return app.login(event)">
+            <img class="login-logo" src="/static/logo.svg" alt="CVE Watcher" width="300">
+            <p class="muted" style="text-align:center;margin:0">Sign in to your security dashboard</p>
+            <div id="loginError" class="alert alert--error hidden"></div>
+            <label>Email
+                <input id="loginEmail" type="email" autocomplete="username" required>
+            </label>
+            <label>Password
+                <input id="loginPassword" type="password" autocomplete="current-password" required>
+            </label>
+            <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+        </form>
+    </div>
+
+    <!-- App shell -->
+    <div id="appView" class="app hidden">
+        <aside class="sidebar">
+            <span class="logo">
+                <svg class="logo__mark" viewBox="-56 -64 112 112" width="26" height="26" fill="none" stroke="#22d3ee"
+                    stroke-width="6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M-9,-44 -17,-57" />
+                    <path d="M9,-44 17,-57" />
+                    <circle cx="0" cy="-38" r="10" />
+                    <rect x="-24" y="-26" width="48" height="66" rx="24" />
+                    <path d="M0,-18 V32" />
+                    <path d="M-24,-10 -46,-20" />
+                    <path d="M-25,7 -48,7" />
+                    <path d="M-24,24 -46,34" />
+                    <path d="M24,-10 46,-20" />
+                    <path d="M25,7 48,7" />
+                    <path d="M24,24 46,34" />
+                </svg>
+                <span class="logo__text"><span class="logo__cve">cve</span>watcher</span>
+            </span>
+
+            <nav class="nav">
+                <a class="nav__item is-active" data-section="overview">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                    <span>Overview</span>
+                </a>
+                <a class="nav__item" data-section="assets">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path
+                            d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                        <path d="M3.27 6.96 12 12.01l8.73-5.05" />
+                        <path d="M12 22.08V12" />
+                    </svg>
+                    <span>Assets</span>
+                </a>
+                <a class="nav__item" data-section="findings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <path d="M12 8v4" />
+                        <path d="M12 16h.01" />
+                    </svg>
+                    <span>Findings</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <h1 id="sectionTitle">Overview</h1>
+                <div class="usermenu">
+                    <button class="usermenu__trigger" id="userMenuBtn" onclick="app.toggleUserMenu(event)">
+                        <span class="avatar" id="userAvatar">?</span>
+                        <span class="usermenu__name" id="userEmail"></span>
+                        <svg class="usermenu__chevron" viewBox="0 0 24 24" width="16" height="16" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m6 9 6 6 6-6" />
+                        </svg>
+                    </button>
+                    <div class="usermenu__dropdown hidden" id="userMenu">
+                        <div class="usermenu__header">
+                            <div class="usermenu__caption">Signed in as</div>
+                            <div id="userEmailFull" class="usermenu__value"></div>
+                        </div>
+                        <div class="menu-sep"></div>
+                        <div class="menu-row">
+                            <span>Theme</span>
+                            <div class="segment" id="themeSegment">
+                                <button type="button" data-theme-set="light">Light</button>
+                                <button type="button" data-theme-set="dark">Dark</button>
+                            </div>
+                        </div>
+                        <div class="menu-sep"></div>
+                        <button type="button" class="menu-item" onclick="app.logout()">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                <path d="m16 17 5-5-5-5" />
+                                <path d="M21 12H9" />
+                            </svg>
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- Overview -->
+                <section id="section-overview" class="section">
+                    <div id="overviewLoading" class="muted">Loading security posture&hellip;</div>
+                    <div id="overviewGrid" class="hidden">
+                        <div class="stats">
+                            <div class="stat">
+                                <div class="stat__label">Findings</div>
+                                <div id="statFindings" class="stat__value">0</div>
+                            </div>
+                            <div class="stat stat--danger">
+                                <div class="stat__label">KEV &middot; exploited</div>
+                                <div id="statKev" class="stat__value">0</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat__label">Critical + High</div>
+                                <div id="statCritHigh" class="stat__value">0</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat__label">Assets</div>
+                                <div id="statAssets" class="stat__value">0</div>
+                            </div>
+                        </div>
+                        <div class="cards-2">
+                            <div class="card">
+                                <div class="card__title">By severity</div>
+                                <div id="sevBars"></div>
+                            </div>
+                            <div class="card">
+                                <div class="card__title">By triage status</div>
+                                <div id="statusChips" class="chips"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Assets -->
+                <section id="section-assets" class="section hidden">
+                    <div class="section-head">
+                        <div class="section-head__filters">
+                            <input id="assetFilter" class="input-sm" placeholder="Filter assets…"
+                                oninput="app.renderAssets()">
+                        </div>
+                        <button class="btn btn--primary" onclick="app.openAssetModal()">+ Add asset</button>
+                    </div>
+                    <div id="assetsLoading" class="muted">Loading assets&hellip;</div>
+                    <div id="assetsEmpty" class="placeholder hidden">No assets yet. Add your first asset to start
+                        monitoring.</div>
+                    <div id="assetsTableWrap" class="table-wrap hidden">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Version</th>
+                                    <th>Ecosystem</th>
+                                    <th>Matching</th>
+                                    <th>Description</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="assetsBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Findings -->
+                <section id="section-findings" class="section hidden">
+                    <div class="section-head">
+                        <div class="section-head__filters">
+                            <select id="findSeverity" class="input-sm" onchange="app.renderFindings()">
+                                <option value="">All severities</option>
+                                <option>CRITICAL</option>
+                                <option>HIGH</option>
+                                <option>MEDIUM</option>
+                                <option>LOW</option>
+                                <option>UNKNOWN</option>
+                            </select>
+                            <select id="findStatus" class="input-sm" onchange="app.renderFindings()">
+                                <option value="">All statuses</option>
+                                <option value="open">Open</option>
+                                <option value="acknowledged">Acknowledged</option>
+                                <option value="fixed">Fixed</option>
+                                <option value="false_positive">False positive</option>
+                                <option value="accepted_risk">Accepted risk</option>
+                            </select>
+                            <label class="check"><input type="checkbox" id="findSuppressed"
+                                    onchange="app.loadFindings()"> include suppressed</label>
+                        </div>
+                        <div class="section-head__actions">
+                            <button class="btn btn--sm" onclick="app.exportFindings('csv')">CSV</button>
+                            <button class="btn btn--sm" onclick="app.exportFindings('json')">JSON</button>
+                        </div>
+                    </div>
+                    <div id="findingsLoading" class="muted">Loading findings&hellip; (queries live sources, may take a
+                        few seconds)</div>
+                    <div id="findingsEmpty" class="placeholder hidden">No findings match the current filters.</div>
+                    <div id="findingsTableWrap" class="table-wrap hidden">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>CVE</th>
+                                    <th>Asset</th>
+                                    <th>Severity</th>
+                                    <th>Score</th>
+                                    <th>KEV</th>
+                                    <th>EPSS</th>
+                                    <th>Status</th>
+                                    <th>Summary</th>
+                                </tr>
+                            </thead>
+                            <tbody id="findingsBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <div id="assetModal" class="modal-overlay hidden">
+            <div class="modal">
+                <div class="modal__head">
+                    <span class="modal__title" id="assetModalTitle">Add asset</span>
+                    <button class="modal__close" onclick="app.closeAssetModal()" aria-label="Close">&times;</button>
+                </div>
+                <div id="assetModalError" class="alert alert--error hidden"></div>
+                <form class="form" onsubmit="return app.submitAsset(event)">
+                    <input type="hidden" id="assetId">
+                    <label>Name <input id="assetName" placeholder="e.g. nginx" required></label>
+                    <label>Version <input id="assetVersion" placeholder="e.g. 1.24.0"></label>
+                    <label>Ecosystem
+                        <select id="assetEcosystem">
+                            <option value="">&mdash; none &mdash;</option>
+                            <option>npm</option>
+                            <option>PyPI</option>
+                            <option>Go</option>
+                            <option>Maven</option>
+                            <option>RubyGems</option>
+                            <option>crates.io</option>
+                            <option>NuGet</option>
+                            <option>Packagist</option>
+                            <option>Pub</option>
+                            <option>Hex</option>
+                        </select>
+                        <span class="hint">Enables OSV.dev for language packages.</span>
+                    </label>
+                    <label>CPE <input id="assetCpe" placeholder="cpe:2.3:a:f5:nginx:1.24.0"><span class="hint">Optional;
+                            improves matching.</span></label>
+                    <label>Description <input id="assetDescription" placeholder="(optional)"></label>
+                    <div class="form__actions">
+                        <button type="button" class="btn" onclick="app.closeAssetModal()">Cancel</button>
+                        <button type="submit" class="btn btn--primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=5"></script>
+</body>
+
+</html>

@@ -1,8 +1,10 @@
 import logging
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.concurrency import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
 from app.routes.landing import router as landing_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.auth import router as auth_router
@@ -45,3 +47,6 @@ app.include_router(user_router)
 app.include_router(assets_router)
 app.include_router(cves_router)
 app.include_router(findings_router)
+
+_STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" role="img" aria-label="cvewatcher">
+  <title>cvewatcher</title>
+  <rect x="3" y="3" width="754" height="194" rx="30" fill="#0f172a" stroke="#1e293b" stroke-width="3"/>
+  <!-- software bug (vulnerability) -->
+  <g transform="translate(112,100)" fill="none" stroke="#22d3ee" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- antennae -->
+    <path d="M-9,-44 -17,-57"/>
+    <path d="M9,-44 17,-57"/>
+    <!-- head -->
+    <circle cx="0" cy="-38" r="10"/>
+    <!-- body -->
+    <rect x="-24" y="-26" width="48" height="66" rx="24"/>
+    <!-- center seam -->
+    <path d="M0,-18 V32"/>
+    <!-- legs left -->
+    <path d="M-24,-10 -46,-20"/>
+    <path d="M-25,7 -48,7"/>
+    <path d="M-24,24 -46,34"/>
+    <!-- legs right -->
+    <path d="M24,-10 46,-20"/>
+    <path d="M25,7 48,7"/>
+    <path d="M24,24 46,34"/>
+  </g>
+  <text x="212" y="106" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="62" font-weight="700">
+    <tspan fill="#22d3ee">cve</tspan><tspan fill="#e2e8f0">watcher</tspan>
+  </text>
+  <text x="214" y="152" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="22" letter-spacing="2" fill="#94a3b8">scan · match · monitor</text>
+</svg>

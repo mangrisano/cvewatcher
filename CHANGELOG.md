@@ -14,12 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   severity band, so OSV findings are no longer scoreless/`UNKNOWN` when a vector
   is available. When the same CVE appears more than once across sources, the
   merge keeps the record that carries severity/score.
-- **Dashboard aligned with 2.1.0 features**: the asset forms now include an
-  optional **ecosystem** selector (enables OSV.dev), asset cards show an
-  ecosystem badge, the vulnerabilities table gained an inline **triage status**
-  selector (persisted via `PATCH`), and a new **Security posture** panel shows
-  the findings summary (counts by severity/status, KEV) with CSV/JSON export and
-  an "include suppressed" toggle.
+- **Redesigned dashboard**: a new single-page UI (sidebar with Overview /
+  Assets / Findings sections, dark & light themes, user menu) served at
+  `/dashboard` from static assets under `app/static`. It surfaces the security
+  posture (findings by severity/status, KEV), full asset management with an
+  **ecosystem** field (enables OSV.dev), and a global findings table with inline
+  **triage status** (persisted via `PATCH`), severity/KEV/EPSS badges, filtering
+  and CSV/JSON export.
 
 ## [2.1.0] - 2026-08-05
 
