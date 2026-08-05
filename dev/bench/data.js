@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785942188054,
+  "lastUpdate": 1785945526955,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -720,6 +720,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000003252986923778193",
             "extra": "mean: 45.15393351453555 usec\nrounds: 11777"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "6a26748979a5c8fd5420c1a267abbbdb5eb0c61c",
+          "message": "build: pin dependencies to compatible-release (~=) version ranges\n\nrequirements.txt and pyproject.toml used open-ended lower bounds\n(e.g. uvicorn[standard]>=0.35.0), so a fresh install/build could silently\npull a much newer major/minor version. That's exactly what happened while\ndebugging the previous fix: the Docker build resolved uvicorn 0.52.1 (17\nminor versions ahead of the locally installed 0.35.0), which behaved\ndifferently enough to cost real time to track down. Pinning to ~= locks\neach dependency to its current major.minor (or major, for two-segment\nversions like packaging/cvss) and only allows patch-level updates, trading\na bit of manual-bump maintenance for reproducible builds.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-05T17:58:03+02:00",
+          "tree_id": "a131def44e515b5f007876cdda63690933915534",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/6a26748979a5c8fd5420c1a267abbbdb5eb0c61c"
+        },
+        "date": 1785945525848,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 112395.17255101097,
+            "unit": "iter/sec",
+            "range": "stddev: 7.663258679204344e-7",
+            "extra": "mean: 8.897179276504481 usec\nrounds: 23249"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 62418.34222629107,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00002090449880460333",
+            "extra": "mean: 16.02093173789535 usec\nrounds: 19513"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 23738.429311659926,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000020710389885272557",
+            "extra": "mean: 42.12578628817773 usec\nrounds: 14688"
           }
         ]
       }
