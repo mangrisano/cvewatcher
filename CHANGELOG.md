@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-08-05
+
+### Added
+
+- **Registration gating & rate limiting**: sign-up is closed by default once the
+  first account exists (`REGISTRATION_ENABLED` opts back in), and
+  `POST /auth/register` is now rate-limited per IP (`REGISTER_MAX_ATTEMPTS`,
+  `REGISTER_WINDOW_SECONDS`). `GET /auth/registration-status` lets the UI hide
+  the sign-up option when it's closed. The dashboard login card can toggle
+  between sign-in and registration.
+- **Silent session refresh**: the dashboard now exchanges the stored refresh
+  token via `POST /auth/refresh` on a 401 instead of forcing a re-login, with
+  concurrent requests sharing a single in-flight refresh. Logout revokes both
+  the access and refresh tokens.
+- **Rebranded public landing page**: the marketing page at `/` now uses the
+  project's actual logo mark/wordmark (matching the dashboard sidebar) instead
+  of a generic icon, and its color palette (hero gradient, buttons, links) is
+  aligned with the app's navy/cyan brand instead of a generic blue/purple
+  theme.
+
 ## [2.2.0] - 2026-08-05
 
 ### Added
