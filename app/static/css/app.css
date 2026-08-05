@@ -83,6 +83,59 @@ body {
 .btn--ghost { background: transparent; border-color: transparent; }
 .btn--ghost:hover { background: var(--surface-2); }
 .btn--sm { padding: 4px 10px; font-size: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn.is-busy { opacity: 0.6; pointer-events: none; }
+.btn.is-busy svg { animation: spin 0.8s linear infinite; }
+
+/* Custom tooltips (data-tip), shown below the element */
+[data-tip] { position: relative; }
+[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: #0f1729;
+    color: #e6e9f0;
+    border: 1px solid #263047;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.35;
+    letter-spacing: normal;
+    text-transform: none;
+    text-align: left;
+    white-space: normal;
+    width: max-content;
+    max-width: 240px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 120ms ease, transform 120ms ease;
+    pointer-events: none;
+    z-index: 60;
+}
+[data-tip]::before {
+    content: "";
+    position: absolute;
+    top: calc(100% + 3px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-bottom-color: #0f1729;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 120ms ease;
+    pointer-events: none;
+    z-index: 61;
+}
+[data-tip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+[data-tip]:hover::before { opacity: 1; visibility: visible; }
 
 /* Login */
 .login { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
@@ -314,12 +367,15 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-we
 .table a { color: var(--accent); text-decoration: none; }
 .table a:hover { text-decoration: underline; }
 .cell-summary { color: var(--text-muted); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table thead th[data-sort] { cursor: pointer; user-select: none; white-space: nowrap; }
+.table thead th[data-sort]:hover { color: var(--text); }
+.th-arrow { color: var(--accent); font-weight: 700; }
 
 /* Pills / badges */
 .pill { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
 .pill--eco { background: var(--accent-weak); color: var(--accent); }
 .pill--cpe { background: var(--surface-2); color: var(--text-muted); }
-.kev-badge { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: var(--sev-critical-bg); color: var(--sev-critical); }
+.kev-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; line-height: 1; background: var(--sev-critical-bg); color: var(--sev-critical); }
 .epss-strong { color: var(--sev-critical); font-weight: 600; }
 .dash { color: var(--text-muted); opacity: 0.5; }
 

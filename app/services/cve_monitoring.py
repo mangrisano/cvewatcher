@@ -140,7 +140,11 @@ class CVEMonitoringService:
             }
 
     async def get_user_vulnerabilities(
-        self, user_email: str, days: int = 0, severity_filter: str | None = None
+        self,
+        user_email: str,
+        days: int = 0,
+        severity_filter: str | None = None,
+        use_cache: bool = True,
     ) -> list[dict[str, Any]]:
         """All vulnerabilities across a user's assets, via the precise engine.
 
@@ -152,7 +156,10 @@ class CVEMonitoringService:
         async def for_asset(asset: Asset) -> list[dict[str, Any]]:
             asset_response = AssetResponse.model_validate(asset)
             vulns = await self._get_asset_vulnerabilities(
-                asset_response, days=days, severity_filter=severity_filter
+                asset_response,
+                days=days,
+                severity_filter=severity_filter,
+                use_cache=use_cache,
             )
             return [
                 {

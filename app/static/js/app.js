@@ -30,6 +30,12 @@
         accepted_risk: "Accepted risk",
     };
     const SUPPRESSED = new Set(["fixed", "false_positive", "accepted_risk"]);
+    const SEV_RANK = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1, UNKNOWN: 0 };
+    const SECTION_TITLES = {
+        overview: "Overview",
+        assets: "Assets",
+        findings: "Vulnerabilities",
+    };
     const EDIT_SVG =
         '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
     const TRASH_SVG =
@@ -123,21 +129,26 @@
             .querySelectorAll(".section")
             .forEach((s) => s.classList.add("hidden"));
         $("section-" + name).classList.remove("hidden");
-        $("sectionTitle").textContent = name.charAt(0).toUpperCase() + name.slice(1);
+        $("sectionTitle").textContent = SECTION_TITLES[name] || name;
         if (name === "overview") loadOverview();
         else if (name === "assets") loadAssets();
         else if (name === "findings") loadFindings();
     }
 
     // --- Overview ----------------------------------------------------------
-    async function loadOverview() {
+    async function loadOverview(force = false) {
+        const btn = $("overviewRefresh");
+        if (btn) btn.classList.add("is-busy");
         $("overviewLoading").classList.remove("hidden");
         $("overviewGrid").classList.add("hidden");
         let summary = { total: 0, kev: 0, by_severity: {}, by_status: {} };
         let assetsCount = 0;
         try {
             const [sRes, aRes] = await Promise.all([
-                fetch("/findings?include_suppressed=false", { headers: authHeaders() }),
+                fetch(
+                    "/findings?include_suppressed=false" + (force ? "&refresh=true" : ""),
+                    { headers: authHeaders() }
+                ),
                 fetch("/assets/", { headers: authHeaders() }),
             ]);
             if (sRes.status === 401 || aRes.status === 401) {
@@ -148,10 +159,16 @@
             if (aRes.ok) assetsCount = (await aRes.json()).length;
         } catch (_) {
             /* best effort */
+        } finally {
+            if (btn) btn.classList.remove("is-busy");
         }
         renderOverview(summary, assetsCount);
         $("overviewLoading").classList.add("hidden");
         $("overviewGrid").classList.remove("hidden");
+    }
+
+    function refreshOverview() {
+        loadOverview(true);
     }
 
     function renderOverview(summary, assetsCount) {
@@ -173,12 +190,12 @@
                         <span class="bar-row__count">${bySev[k]}</span>
                     </div>`;
                 })
-                .join("") || '<span class="muted">No findings</span>';
+                .join("") || '<span class="muted">No vulnerabilities</span>';
 
         $("statusChips").innerHTML =
             Object.entries(byStatus)
                 .map(([k, v]) => `<span class="chip">${k}: ${v}</span>`)
-                .join("") || '<span class="muted">No findings</span>';
+                .join("") || '<span class="muted">No vulnerabilities</span>';
     }
 
     // --- Assets ------------------------------------------------------------
@@ -307,14 +324,21 @@
     // --- Findings ----------------------------------------------------------
     let findings = [];
 
-    async function loadFindings() {
+    async function loadFindings(force = false) {
+        const btn = $("findRefresh");
+        if (btn) btn.classList.add("is-busy");
         $("findingsLoading").classList.remove("hidden");
         $("findingsTableWrap").classList.add("hidden");
         $("findingsEmpty").classList.add("hidden");
         const inc = $("findSuppressed").checked;
-        const res = await fetch("/findings?include_suppressed=" + inc, {
-            headers: authHeaders(),
-        });
+        const url =
+            "/findings?include_suppressed=" + inc + (force ? "&refresh=true" : "");
+        let res;
+        try {
+            res = await fetch(url, { headers: authHeaders() });
+        } finally {
+            if (btn) btn.classList.remove("is-busy");
+        }
         if (res.status === 401) {
             logout();
             return;
@@ -325,17 +349,86 @@
         renderFindings();
     }
 
+    function refreshFindings() {
+        loadFindings(true);
+    }
+
+    const findSort = { key: null, dir: "desc" };
+
+    function findSortValue(f, key) {
+        switch (key) {
+            case "severity":
+                return SEV_RANK[(f.severity || "UNKNOWN").toUpperCase()] ?? -1;
+            case "score":
+                return f.score ?? -1;
+            case "epss":
+                return f.epss ?? -1;
+            case "kev":
+                return f.kev ? 1 : 0;
+            case "cve_id":
+                return (f.cve_id || "").toLowerCase();
+            case "asset_name":
+                return (f.asset_name || "").toLowerCase();
+            case "status":
+                return f.status || "open";
+            default:
+                return 0;
+        }
+    }
+
+    function sortFindingsBy(key) {
+        if (findSort.key === key) {
+            findSort.dir = findSort.dir === "asc" ? "desc" : "asc";
+        } else {
+            findSort.key = key;
+            findSort.dir = ["cve_id", "asset_name", "status"].includes(key)
+                ? "asc"
+                : "desc";
+        }
+        renderFindings();
+    }
+
+    function updateSortIndicators() {
+        document.querySelectorAll("#section-findings th[data-sort]").forEach((th) => {
+            const arrow = th.querySelector(".th-arrow");
+            if (!arrow) return;
+            arrow.textContent =
+                th.dataset.sort === findSort.key
+                    ? findSort.dir === "asc"
+                        ? " \u2191"
+                        : " \u2193"
+                    : "";
+        });
+    }
+
     function renderFindings() {
         const sev = $("findSeverity").value;
         const st = $("findStatus").value;
+        const q = ($("findSearch").value || "").trim().toLowerCase();
         const incSup = $("findSuppressed").checked;
-        const list = findings.filter((f) => {
+        let list = findings.filter((f) => {
             const status = f.status || "open";
             if (!incSup && SUPPRESSED.has(status)) return false;
             if (sev && (f.severity || "UNKNOWN").toUpperCase() !== sev) return false;
             if (st && status !== st) return false;
+            if (
+                q &&
+                !((f.cve_id || "") + " " + (f.asset_name || "")).toLowerCase().includes(q)
+            )
+                return false;
             return true;
         });
+        if (findSort.key) {
+            const dir = findSort.dir === "asc" ? 1 : -1;
+            list = list.slice().sort((a, b) => {
+                const va = findSortValue(a, findSort.key);
+                const vb = findSortValue(b, findSort.key);
+                if (va < vb) return -dir;
+                if (va > vb) return dir;
+                return 0;
+            });
+        }
+        updateSortIndicators();
         const body = $("findingsBody");
         if (!list.length) {
             $("findingsEmpty").classList.remove("hidden");
@@ -407,7 +500,8 @@
 
     function epssText(epss) {
         const pct = (epss * 100).toFixed(1) + "%";
-        return epss >= 0.5 ? `<span class="epss-strong">${pct}</span>` : pct;
+        const cls = epss >= 0.5 ? "epss-strong" : "";
+        return `<span class="${cls}">${pct}</span>`;
     }
 
     async function exportFindings(format) {
@@ -443,6 +537,9 @@
     document.querySelectorAll("#themeSegment [data-theme-set]").forEach((b) => {
         b.addEventListener("click", () => setTheme(b.dataset.themeSet));
     });
+    document.querySelectorAll("#section-findings th[data-sort]").forEach((th) => {
+        th.addEventListener("click", () => sortFindingsBy(th.dataset.sort));
+    });
     document.addEventListener("click", (e) => {
         const menu = $("userMenu");
         if (
@@ -466,6 +563,8 @@
         submitAsset,
         renderFindings,
         loadFindings,
+        refreshFindings,
+        refreshOverview,
         exportFindings,
     };
 })();

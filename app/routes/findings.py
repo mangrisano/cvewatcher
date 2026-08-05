@@ -40,10 +40,16 @@ _EXPORT_COLUMNS = [
 
 
 async def _collect_findings(
-    db: Session, user_email: str, days: int, include_suppressed: bool
+    db: Session,
+    user_email: str,
+    days: int,
+    include_suppressed: bool,
+    use_cache: bool = True,
 ) -> list[dict]:
     service = CVEMonitoringService(db)
-    findings = await service.get_user_vulnerabilities(user_email, days=days)
+    findings = await service.get_user_vulnerabilities(
+        user_email, days=days, use_cache=use_cache
+    )
     if not include_suppressed:
         findings = [f for f in findings if f.get("status") not in SUPPRESSED_STATUSES]
     return findings
@@ -53,6 +59,9 @@ async def _collect_findings(
 async def findings_summary(
     days: int = Query(default=0, ge=0, description="0 = all time"),
     include_suppressed: bool = Query(default=False),
+    refresh: bool = Query(
+        default=False, description="Bypass caches for a live re-check"
+    ),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -61,7 +70,9 @@ async def findings_summary(
         raise HTTPException(status_code=401, detail="Invalid user token")
 
     try:
-        findings = await _collect_findings(db, user_email, days, include_suppressed)
+        findings = await _collect_findings(
+            db, user_email, days, include_suppressed, use_cache=not refresh
+        )
     except NvdUnavailableError as e:
         raise HTTPException(
             status_code=503,

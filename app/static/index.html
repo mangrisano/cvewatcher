@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=6">
+    <link rel="stylesheet" href="/static/css/app.css?v=12">
 </head>
 
 <body>
@@ -74,7 +74,7 @@
                         <path d="M12 8v4" />
                         <path d="M12 16h.01" />
                     </svg>
-                    <span>Findings</span>
+                    <span>Vulnerabilities</span>
                 </a>
             </nav>
         </aside>
@@ -121,18 +121,33 @@
             <div class="content">
                 <!-- Overview -->
                 <section id="section-overview" class="section">
+                    <div class="section-head">
+                        <div class="section-head__filters"></div>
+                        <div class="section-head__actions">
+                            <button id="overviewRefresh" class="btn btn--sm" onclick="app.refreshOverview()"
+                                data-tip="Re-check all sources now (bypasses cache)">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                                    <path d="M21 3v6h-6" />
+                                </svg>
+                                Rescan
+                            </button>
+                        </div>
+                    </div>
                     <div id="overviewLoading" class="muted">Loading security posture&hellip;</div>
                     <div id="overviewGrid" class="hidden">
                         <div class="stats">
                             <div class="stat">
-                                <div class="stat__label">Findings</div>
+                                <div class="stat__label">Vulnerabilities</div>
                                 <div id="statFindings" class="stat__value">0</div>
                             </div>
-                            <div class="stat stat--danger">
+                            <div class="stat stat--danger"
+                                data-tip="Findings in the CISA Known Exploited Vulnerabilities catalog">
                                 <div class="stat__label">KEV &middot; exploited</div>
                                 <div id="statKev" class="stat__value">0</div>
                             </div>
-                            <div class="stat">
+                            <div class="stat" data-tip="Open findings rated Critical or High">
                                 <div class="stat__label">Critical + High</div>
                                 <div id="statCritHigh" class="stat__value">0</div>
                             </div>
@@ -172,8 +187,9 @@
                                 <tr>
                                     <th>Name</th>
                                     <th>Version</th>
-                                    <th>Ecosystem</th>
-                                    <th>Matching</th>
+                                    <th data-tip="Package ecosystem (enables OSV.dev matching)">Ecosystem</th>
+                                    <th data-tip="How CVEs are matched: by CPE identifier or product-name keyword">
+                                        Matching</th>
                                     <th>Description</th>
                                     <th></th>
                                 </tr>
@@ -187,6 +203,8 @@
                 <section id="section-findings" class="section hidden">
                     <div class="section-head">
                         <div class="section-head__filters">
+                            <input id="findSearch" class="input-sm" placeholder="Search CVE or asset…"
+                                oninput="app.renderFindings()">
                             <select id="findSeverity" class="input-sm" onchange="app.renderFindings()">
                                 <option value="">All severities</option>
                                 <option>CRITICAL</option>
@@ -203,28 +221,47 @@
                                 <option value="false_positive">False positive</option>
                                 <option value="accepted_risk">Accepted risk</option>
                             </select>
-                            <label class="check"><input type="checkbox" id="findSuppressed"
-                                    onchange="app.loadFindings()"> include suppressed</label>
+                            <label class="check"
+                                data-tip="Show findings marked fixed, false positive or accepted risk"><input
+                                    type="checkbox" id="findSuppressed" onchange="app.loadFindings()"> include
+                                suppressed</label>
                         </div>
                         <div class="section-head__actions">
+                            <button id="findRefresh" class="btn btn--sm" onclick="app.refreshFindings()"
+                                data-tip="Re-check all sources now (bypasses cache)">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                                    <path d="M21 3v6h-6" />
+                                </svg>
+                                Rescan
+                            </button>
                             <button class="btn btn--sm" onclick="app.exportFindings('csv')">CSV</button>
                             <button class="btn btn--sm" onclick="app.exportFindings('json')">JSON</button>
                         </div>
                     </div>
-                    <div id="findingsLoading" class="muted">Loading findings&hellip; (queries live sources, may take a
+                    <div id="findingsLoading" class="muted">Loading vulnerabilities&hellip; (queries live sources, may
+                        take a
                         few seconds)</div>
-                    <div id="findingsEmpty" class="placeholder hidden">No findings match the current filters.</div>
+                    <div id="findingsEmpty" class="placeholder hidden">No vulnerabilities match the current filters.
+                    </div>
                     <div id="findingsTableWrap" class="table-wrap hidden">
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>CVE</th>
-                                    <th>Asset</th>
-                                    <th>Severity</th>
-                                    <th>Score</th>
-                                    <th>KEV</th>
-                                    <th>EPSS</th>
-                                    <th>Status</th>
+                                    <th data-sort="cve_id">CVE<span class="th-arrow"></span></th>
+                                    <th data-sort="asset_name">Asset<span class="th-arrow"></span></th>
+                                    <th data-sort="severity">Severity<span class="th-arrow"></span></th>
+                                    <th data-sort="score" data-tip="CVSS base score (0-10)">Score<span
+                                            class="th-arrow"></span></th>
+                                    <th data-sort="kev"
+                                        data-tip="In CISA Known Exploited Vulnerabilities - actively exploited">KEV<span
+                                            class="th-arrow"></span></th>
+                                    <th data-sort="epss"
+                                        data-tip="Exploit Prediction Scoring System - probability of exploitation (FIRST.org)">
+                                        EPSS<span class="th-arrow"></span></th>
+                                    <th data-sort="status" data-tip="Triage status for this finding">Status<span
+                                            class="th-arrow"></span></th>
                                     <th>Summary</th>
                                 </tr>
                             </thead>
@@ -274,7 +311,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=5"></script>
+    <script src="/static/js/app.js?v=12"></script>
 </body>
 
 </html>
