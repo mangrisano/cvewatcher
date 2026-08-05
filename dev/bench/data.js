@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785927616796,
+  "lastUpdate": 1785929820807,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -360,6 +360,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000003266164251021459",
             "extra": "mean: 54.766129410657655 usec\nrounds: 11166"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "d625e859b6ab5cf87798d901e68c871d85461559",
+          "message": "feat(osv): derive severity and score from CVSS vectors\n\nOSV.dev findings previously had no score and often UNKNOWN severity. Parse the CVSS vector from the OSV severity[] array (via the cvss library) into a base score and severity band. When the same CVE appears across sources, the merge now keeps the record carrying severity/score.",
+          "timestamp": "2026-08-05T13:36:11+02:00",
+          "tree_id": "5fb632319fcad77ad753525d51890a26e4890ac7",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/d625e859b6ab5cf87798d901e68c871d85461559"
+        },
+        "date": 1785929820055,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 114766.34204701554,
+            "unit": "iter/sec",
+            "range": "stddev: 8.594285327810509e-7",
+            "extra": "mean: 8.713356042927087 usec\nrounds: 22663"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 63705.69969422248,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000024180153258901408",
+            "extra": "mean: 15.697182588054847 usec\nrounds: 18539"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 23551.440756996442,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000004621544906543592",
+            "extra": "mean: 42.46024735038468 usec\nrounds: 13398"
           }
         ]
       }
