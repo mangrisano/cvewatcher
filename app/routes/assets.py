@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from enum import StrEnum
-from app.models import AssetCreate, AssetResponse
+from app.models import (
+    AssetCreate,
+    AssetResponse,
+    AssetVulnerabilitiesResponse,
+    VulnerabilityResponse,
+)
 from app.database.connection import get_db
 from app.database.models import Asset
 from app.dependencies import get_current_user
@@ -104,10 +109,14 @@ async def get_asset(
     return AssetResponse.model_validate(asset)
 
 
-@router.get("/{asset_id}/vulnerabilities")
+@router.get("/{asset_id}/vulnerabilities", response_model=AssetVulnerabilitiesResponse)
 async def get_asset_vulnerabilities(
     asset_id: UUID,
-    days: int = 30,
+    days: int = Query(
+        default=0,
+        ge=0,
+        description="Only CVEs published in the last N days; 0 = all time",
+    ),
     severity: SeverityLevel | None = None,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -134,12 +143,12 @@ async def get_asset_vulnerabilities(
             severity_filter=severity.value if severity else None,
         )
 
-        return {
-            "asset": asset_response,
-            "vulnerabilities": vulnerabilities,
-            "total_vulnerabilities": len(vulnerabilities),
-            "days_searched": days,
-        }
+        return AssetVulnerabilitiesResponse(
+            asset=asset_response,
+            vulnerabilities=[VulnerabilityResponse(**vuln) for vuln in vulnerabilities],
+            total_vulnerabilities=len(vulnerabilities),
+            days_searched=days,
+        )
 
     except NvdUnavailableError as e:
         raise HTTPException(

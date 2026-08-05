@@ -65,3 +65,30 @@ class AssetResponse(BaseModel):
     created_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VulnerabilityResponse(BaseModel):
+    """A single CVE finding. The asset_* fields are populated when a finding is
+    returned outside a per-asset envelope (e.g. by ``GET /cves/vulnerabilities``).
+    """
+
+    cve_id: str
+    asset_id: Optional[UUID] = None
+    asset_name: Optional[str] = None
+    asset_version: Optional[str] = None
+    severity: Optional[str] = None
+    score: Optional[float] = None
+    summary: Optional[str] = None
+    publish_date: Optional[str] = None
+    modified_date: Optional[str] = None
+    cve_url: Optional[str] = None
+    relevance_reason: Optional[str] = None
+    kev: bool = False
+    epss: Optional[float] = None
+
+
+class AssetVulnerabilitiesResponse(BaseModel):
+    asset: AssetResponse
+    vulnerabilities: list[VulnerabilityResponse]
+    total_vulnerabilities: int
+    days_searched: int

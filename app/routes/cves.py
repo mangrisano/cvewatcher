@@ -3,10 +3,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
-from uuid import UUID
 
 from app.database.connection import get_db
 from app.dependencies import get_current_user
+from app.models import VulnerabilityResponse
 from app.services.cve_service import cve_service
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.nist_nvd import NvdUnavailableError
@@ -42,19 +42,6 @@ class CVEResponse(BaseModel):
     affected_products: Optional[list[dict]]
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class VulnerabilityResponse(BaseModel):
-    asset_id: UUID
-    asset_name: str
-    asset_version: Optional[str]
-    cve_id: str
-    severity: Optional[str]
-    score: Optional[float]
-    summary: Optional[str]
-    publish_date: Optional[str]
-    kev: bool = False
-    epss: Optional[float] = None
 
 
 @router.get("/fetch-recent")
@@ -117,21 +104,7 @@ async def check_my_vulnerabilities(
         service = CVEMonitoringService(db)
         vulnerabilities = await service.get_user_vulnerabilities(user_email)
 
-        return [
-            VulnerabilityResponse(
-                asset_id=vuln["asset_id"],
-                asset_name=vuln.get("asset_name", ""),
-                asset_version=vuln.get("asset_version"),
-                cve_id=vuln.get("cve_id", ""),
-                severity=vuln.get("severity"),
-                score=vuln.get("score"),
-                summary=vuln.get("summary"),
-                publish_date=vuln.get("publish_date"),
-                kev=vuln.get("kev", False),
-                epss=vuln.get("epss"),
-            )
-            for vuln in vulnerabilities
-        ]
+        return [VulnerabilityResponse(**vuln) for vuln in vulnerabilities]
     except NvdUnavailableError as e:
         raise HTTPException(
             status_code=503,

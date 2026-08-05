@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING:** `GET /assets/{id}/vulnerabilities` now defaults `days` to `0`
+  (all time) instead of `30`, matching `GET /cves/vulnerabilities` and the
+  documented behaviour; the old default silently hid CVEs older than 30 days.
+- Unified the vulnerability finding schema: `GET /cves/vulnerabilities` and
+  `GET /assets/{id}/vulnerabilities` now return the same typed
+  `VulnerabilityResponse` (adds `cve_url`, `modified_date`, `relevance_reason`),
+  and the asset endpoint declares a response model so it appears in the OpenAPI
+  schema.
+- CVE links now point to `https://www.cve.org/CVERecord?id=...` instead of the
+  legacy MITRE cgi-bin URL.
+
+### Added
+
+- `days` is now validated (`>= 0`) on `GET /assets/{id}/vulnerabilities`.
+
 ## [1.0.0] - 2026-08-05
 
 ### Changed

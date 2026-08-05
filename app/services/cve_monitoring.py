@@ -366,7 +366,7 @@ class CVEMonitoringService:
             if cve.modified_date
             else None,
             "relevance_reason": reason,
-            "cve_url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve.cve_id}",
+            "cve_url": f"https://www.cve.org/CVERecord?id={cve.cve_id}",
         }
 
     @staticmethod
@@ -710,7 +710,7 @@ class CVEMonitoringService:
                                 else None,
                                 "asset_name": asset.name,
                                 "matched_query": query,
-                                "cve_url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve_data.cve_id}",
+                                "cve_url": f"https://www.cve.org/CVERecord?id={cve_data.cve_id}",
                             }
 
                             # Avoid duplicates
