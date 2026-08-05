@@ -32,6 +32,9 @@ class NistNvdClient:
     CPE_BASE_URL = "https://services.nvd.nist.gov/rest/json/cpes/2.0"
     MAX_RETRIES = 3
     BACKOFF_BASE_SECONDS = 6
+    # Short-lived cache so repeated identical queries (e.g. re-opening an asset
+    # or toggling the dashboard severity filter) do not re-hit the NVD API.
+    CACHE_TTL_SECONDS = int(os.getenv("NVD_CACHE_TTL_SECONDS", "600"))
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
@@ -39,6 +42,7 @@ class NistNvdClient:
         if api_key:
             self.session_headers["apiKey"] = api_key
         self._cpe_cache: dict[str, list[str]] = {}
+        self._search_cache: dict[tuple, tuple[float, list["CVEData"]]] = {}
 
     def _make_request(
         self, params: dict[str, Any], url: Optional[str] = None
@@ -66,6 +70,11 @@ class NistNvdClient:
                     last_error = Exception(f"Rate limited: HTTP {response.status_code}")
                     time.sleep(wait)
                     continue
+                # A 404 means "no data for this query" (e.g. a CPE not in the
+                # dictionary), not that NVD is down: return an empty result set
+                # instead of raising, so it never surfaces as a 503.
+                if response.status_code == 404:
+                    return {}
                 response.raise_for_status()
                 return response.json()
             except httpx.TimeoutException as e:
@@ -97,14 +106,36 @@ class NistNvdClient:
         mod_end_date: Optional[datetime] = None,
         results_per_page: int = 20,
         start_index: int = 0,
+        use_cache: bool = True,
     ) -> list[CVEData]:
+        cache_key = self._search_cache_key(
+            cpe_name,
+            keyword,
+            pub_start_date,
+            pub_end_date,
+            mod_start_date,
+            mod_end_date,
+            results_per_page,
+            start_index,
+        )
+        now = time.monotonic()
+        if use_cache:
+            cached = self._search_cache.get(cache_key)
+            if cached is not None and now - cached[0] < self.CACHE_TTL_SECONDS:
+                return cached[1]
+
         params: dict[str, Any] = {
             "resultsPerPage": min(results_per_page, 2000),
             "startIndex": start_index,
         }
 
         if cpe_name:
-            params["cpeName"] = cpe_name
+            # NVD's exact ``cpeName`` filter 404s on a wildcard version; use the
+            # pattern-matching ``virtualMatchString`` for versionless CPEs.
+            if self._has_wildcard_version(cpe_name):
+                params["virtualMatchString"] = cpe_name
+            else:
+                params["cpeName"] = cpe_name
         if keyword:
             params["keywordSearch"] = keyword
         if pub_start_date:
@@ -118,10 +149,49 @@ class NistNvdClient:
 
         try:
             response = self._make_request(params)
-            return self._parse_cve_response(response)
+            cves = self._parse_cve_response(response)
         except Exception as e:
             logger.error(f"Error in CVE search: {e}")
             raise
+
+        self._search_cache[cache_key] = (now, cves)
+        return cves
+
+    @staticmethod
+    def _has_wildcard_version(cpe_name: str) -> bool:
+        """True when a CPE 2.3 name has an unspecified (wildcard) version."""
+        parts = cpe_name.split(":")
+        return len(parts) <= 5 or parts[5] in ("*", "-", "")
+
+    @staticmethod
+    def _search_cache_key(
+        cpe_name: Optional[str],
+        keyword: Optional[str],
+        pub_start_date: Optional[datetime],
+        pub_end_date: Optional[datetime],
+        mod_start_date: Optional[datetime],
+        mod_end_date: Optional[datetime],
+        results_per_page: int,
+        start_index: int,
+    ) -> tuple:
+        # Date windows are bucketed to the hour so time-windowed queries (e.g.
+        # "last 30 days", whose bounds shift by microseconds each call) still
+        # share a cache entry.
+        def bucket(dt: Optional[datetime]) -> Optional[str]:
+            if dt is None:
+                return None
+            return dt.replace(minute=0, second=0, microsecond=0).isoformat()
+
+        return (
+            cpe_name,
+            keyword,
+            bucket(pub_start_date),
+            bucket(pub_end_date),
+            bucket(mod_start_date),
+            bucket(mod_end_date),
+            results_per_page,
+            start_index,
+        )
 
     def get_recent_cves(
         self, days: int = 7, cpe_name: Optional[str] = None

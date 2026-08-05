@@ -1,5 +1,7 @@
 """Unit tests for the NIST NVD client (no network access)."""
 
+from datetime import datetime, timezone
+
 import httpx
 import pytest
 
@@ -257,6 +259,126 @@ def test_find_cpe_names_is_cached(monkeypatch):
     client.find_cpe_names("nginx")
 
     assert calls["n"] == 1
+
+
+def test_search_cves_caches_identical_queries(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_get(*args, **kwargs):
+        calls["n"] += 1
+        return FakeResponse(status_code=200, json_data={"vulnerabilities": []})
+
+    monkeypatch.setattr(nist_nvd.httpx, "get", fake_get)
+
+    client = NistNvdClient()
+    client.search_cves(cpe_name="cpe:2.3:a:x:y:1.0")
+    client.search_cves(cpe_name="cpe:2.3:a:x:y:1.0")
+
+    # Second identical query is served from the cache.
+    assert calls["n"] == 1
+
+
+def test_search_cves_cache_expires_after_ttl(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_get(*args, **kwargs):
+        calls["n"] += 1
+        return FakeResponse(status_code=200, json_data={"vulnerabilities": []})
+
+    monkeypatch.setattr(nist_nvd.httpx, "get", fake_get)
+
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(nist_nvd.time, "monotonic", lambda: clock["t"])
+
+    client = NistNvdClient()
+    client.search_cves(keyword="openssl")
+    clock["t"] += client.CACHE_TTL_SECONDS + 1
+    client.search_cves(keyword="openssl")
+
+    assert calls["n"] == 2
+
+
+def test_search_cves_buckets_date_window_by_hour(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_get(*args, **kwargs):
+        calls["n"] += 1
+        return FakeResponse(status_code=200, json_data={"vulnerabilities": []})
+
+    monkeypatch.setattr(nist_nvd.httpx, "get", fake_get)
+
+    client = NistNvdClient()
+    within_same_hour_a = datetime(2024, 1, 1, 10, 5, tzinfo=timezone.utc)
+    within_same_hour_b = datetime(2024, 1, 1, 10, 55, tzinfo=timezone.utc)
+    client.search_cves(cpe_name="cpe:2.3:a:x:y", pub_start_date=within_same_hour_a)
+    client.search_cves(cpe_name="cpe:2.3:a:x:y", pub_start_date=within_same_hour_b)
+
+    # Both windows fall in the same hour bucket -> a single request.
+    assert calls["n"] == 1
+
+
+def test_search_cves_use_cache_false_bypasses_read_but_refreshes(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_get(*args, **kwargs):
+        calls["n"] += 1
+        return FakeResponse(status_code=200, json_data={"vulnerabilities": []})
+
+    monkeypatch.setattr(nist_nvd.httpx, "get", fake_get)
+
+    client = NistNvdClient()
+    # use_cache=False always hits the API (so monitoring never misses new CVEs).
+    client.search_cves(cpe_name="cpe:2.3:a:x:y", use_cache=False)
+    client.search_cves(cpe_name="cpe:2.3:a:x:y", use_cache=False)
+    assert calls["n"] == 2
+
+    # ...but the fresh result still populated the cache for interactive readers.
+    client.search_cves(cpe_name="cpe:2.3:a:x:y")
+    assert calls["n"] == 2
+
+
+def test_search_cves_uses_virtual_match_for_wildcard_version(monkeypatch):
+    captured = {}
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        captured["params"] = params
+        return FakeResponse(status_code=200, json_data={"vulnerabilities": []})
+
+    monkeypatch.setattr(nist_nvd.httpx, "get", fake_get)
+    client = NistNvdClient()
+
+    # Wildcard version -> virtualMatchString (cpeName would 404 on NVD).
+    client.search_cves(cpe_name="cpe:2.3:a:f5:nginx:*:*:*:*:*:*:*:*")
+    assert (
+        captured["params"]["virtualMatchString"] == "cpe:2.3:a:f5:nginx:*:*:*:*:*:*:*:*"
+    )
+    assert "cpeName" not in captured["params"]
+
+    # Concrete version -> exact cpeName (server-side version-range evaluation).
+    client.search_cves(cpe_name="cpe:2.3:a:openssl:openssl:3.0.0:*:*:*:*:*:*:*")
+    assert (
+        captured["params"]["cpeName"] == "cpe:2.3:a:openssl:openssl:3.0.0:*:*:*:*:*:*:*"
+    )
+    assert "virtualMatchString" not in captured["params"]
+
+
+def test_make_request_treats_404_as_empty_not_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        nist_nvd.httpx, "get", lambda *a, **k: FakeResponse(status_code=404)
+    )
+    monkeypatch.setattr(nist_nvd.time, "sleep", lambda *_: None)
+
+    client = NistNvdClient()
+    # A 404 must NOT be reported as an outage (which would surface as a 503).
+    assert client._make_request({}) == {}
+
+
+def test_search_cves_returns_empty_on_404(monkeypatch):
+    monkeypatch.setattr(
+        nist_nvd.httpx, "get", lambda *a, **k: FakeResponse(status_code=404)
+    )
+    client = NistNvdClient()
+    assert client.search_cves(cpe_name="cpe:2.3:a:f5:nginx:*:*:*:*:*:*:*:*") == []
 
 
 def test_find_cpe_names_empty_keyword_returns_empty():
