@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785924667422,
+  "lastUpdate": 1785925951643,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -270,6 +270,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.0000034633307767552165",
             "extra": "mean: 56.68938596808366 usec\nrounds: 11203"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "07a12c694f0246af1c708daaa3927233ed614da2",
+          "message": "chore(release): 2.0.0",
+          "timestamp": "2026-08-05T12:31:59+02:00",
+          "tree_id": "b0d128af5a65d98cb8b406e9ab815a4a04a5530f",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/07a12c694f0246af1c708daaa3927233ed614da2"
+        },
+        "date": 1785925951374,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 84670.61657659354,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000001131574067471115",
+            "extra": "mean: 11.810472634215367 usec\nrounds: 22857"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 47342.57397068386,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000035094322572126534",
+            "extra": "mean: 21.12263690223591 usec\nrounds: 11647"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 17844.126532821003,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000038853465376137826",
+            "extra": "mean: 56.04084896846496 usec\nrounds: 10276"
           }
         ]
       }
