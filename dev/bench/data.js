@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785929820807,
+  "lastUpdate": 1785933154813,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -405,6 +405,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000004621544906543592",
             "extra": "mean: 42.46024735038468 usec\nrounds: 13398"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "e2010c2c96332ac0096f97c903234a2d71de70d6",
+          "message": "feat(dashboard): redesign as a static single-page UI\n\nReplace the inline HTML dashboard with a static single-page app under app/static (sidebar with Overview / Assets / Findings, dark & light themes, user menu). Mount StaticFiles and serve it at /dashboard.\n\nOverview shows the security posture; Assets offers full CRUD with an ecosystem field; Findings is a global table with inline triage, severity/KEV/EPSS badges, filtering and CSV/JSON export.",
+          "timestamp": "2026-08-05T14:31:59+02:00",
+          "tree_id": "e3fe02e71baf885d8200e10604360ddadb7acccb",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/e2010c2c96332ac0096f97c903234a2d71de70d6"
+        },
+        "date": 1785933154539,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 82915.36205800054,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000011772562601219857",
+            "extra": "mean: 12.060491266992058 usec\nrounds: 19352"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 47751.821765489025,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000031919836174715633",
+            "extra": "mean: 20.94160940939672 usec\nrounds: 12243"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 18300.020091125218,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000003915219965765256",
+            "extra": "mean: 54.64474875002789 usec\nrounds: 11801"
           }
         ]
       }
