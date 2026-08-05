@@ -301,3 +301,46 @@ def test_resolve_cpes_without_name_skips_lookup():
     svc.nist_client = client
     assert asyncio.run(svc._resolve_cpes(_asset(name=None))) == []
     assert client.calls == 0
+
+
+def test_multiple_cpes_are_searched_concurrently_and_merged():
+    # An asset resolving to several vendor CPEs is searched across all of them;
+    # results are merged and deduplicated (a CVE shared by two CPEs appears once).
+    svc = _service()
+
+    def _cveobj(cve_id, severity, score):
+        return SimpleNamespace(
+            cve_id=cve_id,
+            summary="",
+            severity=severity,
+            score=score,
+            publish_date=None,
+            modified_date=None,
+        )
+
+    class _Client:
+        def find_cpe_names(self, keyword, limit=500):
+            return [
+                "cpe:2.3:a:openssl:openssl:3.0.0:*:*:*:*:*:*:*",
+                "cpe:2.3:a:redhat:openssl:3.0.0:*:*:*:*:*:*:*",
+            ]
+
+        def search_cves(self, *, cpe_name=None, **kwargs):
+            if cpe_name and cpe_name.startswith("cpe:2.3:a:openssl:openssl"):
+                return [
+                    _cveobj("CVE-A", "HIGH", 7.5),
+                    _cveobj("CVE-SHARED", "CRITICAL", 9.8),
+                ]
+            return [
+                _cveobj("CVE-B", "MEDIUM", 5.0),
+                _cveobj("CVE-SHARED", "CRITICAL", 9.8),
+            ]
+
+    svc.nist_client = _Client()
+    asset = SimpleNamespace(name="openssl", version="3.0.0", cpe=None)
+    result = asyncio.run(svc._get_asset_vulnerabilities(asset))
+
+    assert {v["cve_id"] for v in result} == {"CVE-A", "CVE-B", "CVE-SHARED"}
+    assert len(result) == 3
+    # KEV-first then severity: the CRITICAL CVE sorts first.
+    assert result[0]["cve_id"] == "CVE-SHARED"

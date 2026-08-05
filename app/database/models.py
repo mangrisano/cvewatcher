@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Text, Float, JSON
+from sqlalchemy import Column, String, DateTime, Text, Float, JSON, ForeignKey
 from uuid import uuid4
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
@@ -25,7 +25,7 @@ class Asset(Base):
     name = Column(String(100), nullable=False)
     version = Column(String(50), nullable=True)
     cpe = Column(String(255), nullable=True)
-    user_email = Column(String(100), nullable=False)
+    user_email = Column(String(100), nullable=False, index=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -40,7 +40,7 @@ class CVE(Base):
     summary = Column(Text)
     severity = Column(String(20))
     score = Column(Float)
-    publish_date = Column(DateTime)
+    publish_date = Column(DateTime, index=True)
     modified_date = Column(DateTime, server_default=func.now(), onupdate=func.now())
     affected_products = Column(JSON)
 
@@ -58,3 +58,28 @@ class RevokedToken(Base):
 
     def __repr__(self):
         return f"<RevokedToken(jti='{self.jti}')>"
+
+
+class AssetCVE(Base):
+    """Association of an asset with a CVE that affects it.
+
+    Keeps the per-user "this asset is affected by this CVE" link out of the
+    shared ``cves`` table, so global CVE rows never carry tenant data.
+    """
+
+    __tablename__ = "asset_cves"
+
+    asset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("assets.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    cve_id = Column(
+        String(20),
+        ForeignKey("cves.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    first_seen = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<AssetCVE(asset_id='{self.asset_id}', cve_id='{self.cve_id}')>"

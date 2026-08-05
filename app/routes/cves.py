@@ -1,12 +1,35 @@
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 from uuid import UUID
 
+from app.database.connection import get_db
 from app.dependencies import get_current_user
 from app.services.cve_service import cve_service
+from app.services.cve_monitoring import CVEMonitoringService
+from app.services.nist_nvd import NvdUnavailableError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cves", tags=["CVE"])
+
+
+def _public_affected_products(products) -> list[dict]:
+    """Drop any legacy per-asset tracking entries (which carried tenant data).
+
+    Defence in depth: the tenant tracking now lives in ``asset_cves``, but a
+    deployment that has not yet run the scrub migration could still have such
+    dicts in ``cves.affected_products``; never expose them.
+    """
+    if not isinstance(products, list):
+        return []
+    return [
+        product
+        for product in products
+        if not (isinstance(product, dict) and "user_email" in product)
+    ]
 
 
 class CVEResponse(BaseModel):
@@ -30,6 +53,8 @@ class VulnerabilityResponse(BaseModel):
     score: Optional[float]
     summary: Optional[str]
     publish_date: Optional[str]
+    kev: bool = False
+    epss: Optional[float] = None
 
 
 @router.get("/fetch-recent")
@@ -44,10 +69,9 @@ async def fetch_recent_cves(
             "stored_count": stored_count,
             "days": days,
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error in retrieving CVE: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Error retrieving recent CVEs")
+        raise HTTPException(status_code=500, detail="Error retrieving CVEs")
 
 
 @router.get("/recent", response_model=list[CVEResponse])
@@ -70,49 +94,52 @@ async def get_recent_cves(
                 modified_date=cve.modified_date.isoformat()
                 if cve.modified_date is not None
                 else None,
-                affected_products=cve.affected_products  # type: ignore
-                if cve.affected_products is not None
-                else [],
+                affected_products=_public_affected_products(cve.affected_products),
             )
             response.append(cve_response)
 
         return response
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error in retrieving CVE: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Error retrieving stored CVEs")
+        raise HTTPException(status_code=500, detail="Error retrieving CVEs")
 
 
 @router.get("/vulnerabilities", response_model=list[VulnerabilityResponse])
-async def check_my_vulnerabilities(current_user: dict = Depends(get_current_user)):
+async def check_my_vulnerabilities(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_email = current_user.get("sub")
+    if not user_email:
+        raise HTTPException(status_code=401, detail="Invalid user token")
+
     try:
-        user_email = current_user.get("sub")
-        if not user_email:
-            raise HTTPException(status_code=401, detail="Invalid user token")
+        service = CVEMonitoringService(db)
+        vulnerabilities = await service.get_user_vulnerabilities(user_email)
 
-        vulnerabilities = cve_service.check_assets_vulnerabilities(user_email)
-
-        response = []
-        for vuln in vulnerabilities:
-            publish_date = vuln.get("publish_date")
-            vuln_response = VulnerabilityResponse(
-                asset_id=vuln.get("asset_id", 0),
+        return [
+            VulnerabilityResponse(
+                asset_id=vuln["asset_id"],
                 asset_name=vuln.get("asset_name", ""),
                 asset_version=vuln.get("asset_version"),
                 cve_id=vuln.get("cve_id", ""),
                 severity=vuln.get("severity"),
                 score=vuln.get("score"),
                 summary=vuln.get("summary"),
-                publish_date=publish_date.isoformat() if publish_date else None,
+                publish_date=vuln.get("publish_date"),
+                kev=vuln.get("kev", False),
+                epss=vuln.get("epss"),
             )
-            response.append(vuln_response)
-
-        return response
-    except Exception as e:
+            for vuln in vulnerabilities
+        ]
+    except NvdUnavailableError as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error in checking vulnerabilities: {str(e)}",
+            status_code=503,
+            detail=f"NVD service is currently unavailable. Please retry later. ({e})",
         )
+    except Exception:
+        logger.exception("Error checking vulnerabilities for %s", user_email)
+        raise HTTPException(status_code=500, detail="Error checking vulnerabilities")
 
 
 @router.get("/search")
@@ -150,5 +177,6 @@ async def search_cves(
             "cve_count": len(cves),
             "cves": response,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in CVE search: {str(e)}")
+    except Exception:
+        logger.exception("Error searching CVEs for product %s", product)
+        raise HTTPException(status_code=500, detail="Error searching CVEs")

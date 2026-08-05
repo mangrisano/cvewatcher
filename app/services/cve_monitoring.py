@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -6,17 +8,36 @@ from fastapi.concurrency import run_in_threadpool
 from packaging.version import InvalidVersion, Version
 from sqlalchemy.orm import Session
 
-from app.database.models import Asset, CVE
+from app.database.models import Asset, CVE, AssetCVE
 from app.services.nist_nvd import nist_client, NvdUnavailableError
+from app.services.enrichment import enrichment_service
 from app.models import AssetResponse
 
 logger = logging.getLogger(__name__)
+
+
+def _nvd_concurrency_limit() -> int:
+    """Max concurrent NVD requests. Without an API key NVD allows only 5 req/30s,
+    so keep the fan-out small; an API key (50 req/30s) allows much more.
+    """
+    override = os.getenv("NVD_MAX_CONCURRENCY", "")
+    if override.isdigit() and int(override) > 0:
+        return int(override)
+    return 10 if nist_client.api_key else 3
 
 
 class CVEMonitoringService:
     def __init__(self, db: Session):
         self.db = db
         self.nist_client = nist_client
+        # Bounds every NVD request made through this service (per request), so
+        # fanning out across assets and CPEs never bursts past NVD's rate limit.
+        self._nvd_semaphore: asyncio.Semaphore | None = None
+
+    def _nvd_sem(self) -> asyncio.Semaphore:
+        if self._nvd_semaphore is None:
+            self._nvd_semaphore = asyncio.Semaphore(_nvd_concurrency_limit())
+        return self._nvd_semaphore
 
     async def monitor_all_assets(self) -> dict[str, Any]:
         try:
@@ -75,12 +96,18 @@ class CVEMonitoringService:
         try:
             asset_response = AssetResponse.model_validate(asset)
 
+            # Monitoring must never miss a freshly published CVE, so it bypasses
+            # the read cache (the fetched result still refreshes it for readers).
             current_vulnerabilities = await self._get_asset_vulnerabilities(
-                asset_response
+                asset_response, use_cache=False
             )
 
-            existing_cves = self._get_existing_cves_for_asset(asset)
-            existing_cve_ids = {cve.id for cve in existing_cves}
+            candidate_cve_ids = [
+                vuln["cve_id"] for vuln in current_vulnerabilities if vuln.get("cve_id")
+            ]
+            existing_cve_ids = self._existing_cve_ids_for_asset(
+                asset, candidate_cve_ids
+            )
 
             new_vulnerabilities = []
             for vuln in current_vulnerabilities:
@@ -97,7 +124,7 @@ class CVEMonitoringService:
                 "user_email": asset.user_email,
                 "total_vulnerabilities": len(current_vulnerabilities),
                 "new_vulnerabilities": new_vulnerabilities,
-                "existing_vulnerabilities": len(existing_cves),
+                "existing_vulnerabilities": len(existing_cve_ids),
                 "last_monitored": datetime.now(timezone.utc),
                 "status": "success",
             }
@@ -111,8 +138,42 @@ class CVEMonitoringService:
                 "status": "error",
             }
 
+    async def get_user_vulnerabilities(
+        self, user_email: str, days: int = 0, severity_filter: str | None = None
+    ) -> list[dict[str, Any]]:
+        """All vulnerabilities across a user's assets, via the precise engine.
+
+        Uses the same CPE-aware, version-filtered, KEV/EPSS-enriched matching as
+        the per-asset endpoint, tagging each finding with its originating asset.
+        """
+        assets = self.db.query(Asset).filter(Asset.user_email == user_email).all()
+
+        async def for_asset(asset: Asset) -> list[dict[str, Any]]:
+            asset_response = AssetResponse.model_validate(asset)
+            vulns = await self._get_asset_vulnerabilities(
+                asset_response, days=days, severity_filter=severity_filter
+            )
+            return [
+                {
+                    **vuln,
+                    "asset_id": asset.id,
+                    "asset_name": asset.name,
+                    "asset_version": asset.version,
+                }
+                for vuln in vulns
+            ]
+
+        # Assets are independent read-only lookups; run them concurrently. The
+        # shared per-service semaphore keeps total NVD concurrency bounded.
+        per_asset = await asyncio.gather(*(for_asset(asset) for asset in assets))
+        return [vuln for asset_vulns in per_asset for vuln in asset_vulns]
+
     async def _get_asset_vulnerabilities(
-        self, asset: AssetResponse, days: int = 0, severity_filter: str | None = None
+        self,
+        asset: AssetResponse,
+        days: int = 0,
+        severity_filter: str | None = None,
+        use_cache: bool = True,
     ) -> list[dict[str, Any]]:
         pub_start_date = None
         pub_end_date = None
@@ -129,15 +190,22 @@ class CVEMonitoringService:
         if cpe_names:
             vulnerabilities = []
             nvd_failed = False
-            for cpe in cpe_names:
-                found, failed = await self._search_by_cpe(
-                    asset, cpe, pub_start_date, pub_end_date
+            # Independent CPE lookups run concurrently: an asset resolving to
+            # several vendor CPEs is the common slow case.
+            results = await asyncio.gather(
+                *(
+                    self._search_by_cpe(
+                        asset, cpe, pub_start_date, pub_end_date, use_cache
+                    )
+                    for cpe in cpe_names
                 )
+            )
+            for found, failed in results:
                 vulnerabilities.extend(found)
                 nvd_failed = nvd_failed or failed
         else:
             vulnerabilities, nvd_failed = await self._search_by_keyword(
-                asset, pub_start_date, pub_end_date
+                asset, pub_start_date, pub_end_date, use_cache
             )
 
         if nvd_failed and not vulnerabilities:
@@ -161,9 +229,15 @@ class CVEMonitoringService:
                 if vuln.get("severity", "").upper() == severity_filter_upper
             ]
 
+        await run_in_threadpool(enrichment_service.enrich, vulnerabilities_list)
+
+        # Actively-exploited (KEV) findings sort first, then by severity, then by
+        # exploit probability (EPSS), then recency.
         vulnerabilities_list.sort(
             key=lambda x: (
+                -int(bool(x.get("kev"))),
                 -self._get_severity_priority(x.get("severity")),
+                -(x.get("epss") or 0.0),
                 -(
                     datetime.fromisoformat(
                         x.get("publish_date", "1900-01-01T00:00:00").replace(
@@ -193,6 +267,7 @@ class CVEMonitoringService:
         cpe_name: str,
         pub_start_date: datetime | None,
         pub_end_date: datetime | None,
+        use_cache: bool = True,
     ) -> tuple[list[dict[str, Any]], bool]:
         """Precise lookup: let NVD resolve the CPE (version-aware, server-side).
 
@@ -201,13 +276,15 @@ class CVEMonitoringService:
         100-result keyword cap and the false positives/negatives of text search.
         """
         try:
-            cves = await run_in_threadpool(
-                self.nist_client.search_cves,
-                cpe_name=cpe_name,
-                results_per_page=2000,
-                pub_start_date=pub_start_date,
-                pub_end_date=pub_end_date,
-            )
+            async with self._nvd_sem():
+                cves = await run_in_threadpool(
+                    self.nist_client.search_cves,
+                    cpe_name=cpe_name,
+                    results_per_page=2000,
+                    pub_start_date=pub_start_date,
+                    pub_end_date=pub_end_date,
+                    use_cache=use_cache,
+                )
         except NvdUnavailableError as e:
             logger.error(f"NVD unavailable for CPE {cpe_name}: {e}")
             return [], True
@@ -223,6 +300,7 @@ class CVEMonitoringService:
         asset: AssetResponse,
         pub_start_date: datetime | None,
         pub_end_date: datetime | None,
+        use_cache: bool = True,
     ) -> tuple[list[dict[str, Any]], bool]:
         """Fallback lookup when no CPE is known: keyword search + local filtering.
 
@@ -230,32 +308,52 @@ class CVEMonitoringService:
         results and matches free text), so each candidate is filtered locally by
         product identity and version range via ``_is_relevant_to_asset``.
         """
+        queries = self._build_search_queries(asset)
+        results = await asyncio.gather(
+            *(
+                self._search_one_keyword(
+                    asset, query, pub_start_date, pub_end_date, use_cache
+                )
+                for query in queries
+            )
+        )
         vulnerabilities: list[dict[str, Any]] = []
         nvd_failed = False
-        for query in self._build_search_queries(asset):
-            try:
+        for found, failed in results:
+            vulnerabilities.extend(found)
+            nvd_failed = nvd_failed or failed
+        return vulnerabilities, nvd_failed
+
+    async def _search_one_keyword(
+        self,
+        asset: AssetResponse,
+        query: str,
+        pub_start_date: datetime | None,
+        pub_end_date: datetime | None,
+        use_cache: bool = True,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        try:
+            async with self._nvd_sem():
                 cves = await run_in_threadpool(
                     self.nist_client.search_cves,
                     keyword=query,
                     results_per_page=100,
                     pub_start_date=pub_start_date,
                     pub_end_date=pub_end_date,
+                    use_cache=use_cache,
                 )
-            except NvdUnavailableError as e:
-                logger.error(f"NVD unavailable while searching for {query}: {e}")
-                nvd_failed = True
-                continue
-            except Exception as e:
-                logger.error(f"Error searching for {query}: {e}")
-                continue
+        except NvdUnavailableError as e:
+            logger.error(f"NVD unavailable while searching for {query}: {e}")
+            return [], True
+        except Exception as e:
+            logger.error(f"Error searching for {query}: {e}")
+            return [], False
 
-            for cve in cves:
-                if self._is_relevant_to_asset(cve, asset):
-                    vulnerabilities.append(
-                        self._vuln_dict(cve, f"Matches asset name '{asset.name}'")
-                    )
-
-        return vulnerabilities, nvd_failed
+        return [
+            self._vuln_dict(cve, f"Matches asset name '{asset.name}'")
+            for cve in cves
+            if self._is_relevant_to_asset(cve, asset)
+        ], False
 
     def _vuln_dict(self, cve, reason: str) -> dict[str, Any]:
         return {
@@ -304,9 +402,10 @@ class CVEMonitoringService:
         if not asset.name:
             return []
         try:
-            cpe_names = await run_in_threadpool(
-                self.nist_client.find_cpe_names, asset.name
-            )
+            async with self._nvd_sem():
+                cpe_names = await run_in_threadpool(
+                    self.nist_client.find_cpe_names, asset.name
+                )
         except Exception as e:
             logger.warning(f"CPE resolution failed for '{asset.name}': {e}")
             return []
@@ -360,7 +459,7 @@ class CVEMonitoringService:
             norms.add(vendor_norm + product_norm)
         return norms
 
-    def _get_severity_priority(self, severity: str) -> int:
+    def _get_severity_priority(self, severity: str | None) -> int:
         severity_map = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
         return severity_map.get(severity or "LOW", 1)
 
@@ -490,25 +589,33 @@ class CVEMonitoringService:
         # Product-level CPE with no version info: assume affected.
         return True
 
-    def _get_existing_cves_for_asset(self, asset: Asset) -> list[CVE]:
-        existing_cves = []
-        for cve in self.db.query(CVE).all():
-            products = cve.affected_products or []
-            if isinstance(products, list) and any(
-                isinstance(product, dict)
-                and product.get("asset_name") == asset.name
-                and product.get("user_email") == asset.user_email
-                for product in products
-            ):
-                existing_cves.append(cve)
-        return existing_cves
+    def _existing_cve_ids_for_asset(
+        self, asset: Asset, candidate_cve_ids: list[str]
+    ) -> set[str]:
+        """CVE ids already linked to this asset, among the given candidates.
+
+        Only the candidate ids (the CVEs just found for the asset) are queried
+        against the ``asset_cves`` association, so this never scans the whole
+        table and the per-asset link carries no tenant data.
+        """
+        if not candidate_cve_ids:
+            return set()
+        rows = (
+            self.db.query(AssetCVE.cve_id)
+            .filter(
+                AssetCVE.asset_id == asset.id,
+                AssetCVE.cve_id.in_(candidate_cve_ids),
+            )
+            .all()
+        )
+        return {row[0] for row in rows}
 
     async def _store_cve_for_asset(self, vuln_data: dict[str, Any], asset: Asset):
+        cve_id = vuln_data.get("cve_id")
+        if not cve_id:
+            return
         try:
-            existing_cve = (
-                self.db.query(CVE).filter(CVE.id == vuln_data.get("cve_id")).first()
-            )
-
+            existing_cve = self.db.query(CVE).filter(CVE.id == cve_id).first()
             if not existing_cve:
                 publish_date = None
                 if vuln_data.get("publish_date"):
@@ -519,29 +626,31 @@ class CVEMonitoringService:
                     except Exception:
                         pass
 
-                new_cve = CVE(
-                    id=vuln_data.get("cve_id"),
-                    summary=vuln_data.get("summary", ""),
-                    severity=vuln_data.get("severity"),
-                    score=vuln_data.get("score"),
-                    publish_date=publish_date,
-                    affected_products=[
-                        {
-                            "asset_name": asset.name,
-                            "asset_version": asset.version,
-                            "user_email": asset.user_email,
-                        }
-                    ],
+                # The shared CVE row holds only global metadata; the per-asset
+                # link lives in ``asset_cves`` (no tenant data here).
+                self.db.add(
+                    CVE(
+                        id=cve_id,
+                        summary=vuln_data.get("summary", ""),
+                        severity=vuln_data.get("severity"),
+                        score=vuln_data.get("score"),
+                        publish_date=publish_date,
+                    )
                 )
 
-                self.db.add(new_cve)
-                self.db.commit()
-                logger.info(
-                    f"Stored new CVE: {vuln_data.get('cve_id')} for asset {asset.name}"
-                )
+            link_exists = (
+                self.db.query(AssetCVE)
+                .filter(AssetCVE.asset_id == asset.id, AssetCVE.cve_id == cve_id)
+                .first()
+            )
+            if not link_exists:
+                self.db.add(AssetCVE(asset_id=asset.id, cve_id=cve_id))
+
+            self.db.commit()
+            logger.info(f"Stored new CVE: {cve_id} for asset {asset.name}")
 
         except Exception as e:
-            logger.error(f"Error storing CVE {vuln_data.get('cve_id')}: {e}")
+            logger.error(f"Error storing CVE {cve_id}: {e}")
             self.db.rollback()
 
     async def get_monitoring_report(
@@ -683,60 +792,4 @@ class CVEMonitoringService:
 
         except Exception as e:
             logger.error(f"Error generating monitoring report: {e}")
-            return {"error": str(e)}
-
-    async def scan_for_new_cves_since(self, since_date: datetime) -> dict[str, Any]:
-        try:
-            assets = self.db.query(Asset).all()
-            new_findings = []
-
-            for asset in assets:
-                asset_response = AssetResponse.model_validate(asset)
-                search_queries = self._build_search_queries(asset_response)
-
-                for query in search_queries[:2]:
-                    try:
-                        cves = await run_in_threadpool(
-                            self.nist_client.search_cves,
-                            keyword=query,
-                            pub_start_date=since_date,
-                            results_per_page=50,
-                        )
-
-                        for cve in cves:
-                            if self._is_relevant_to_asset(cve, asset_response):
-                                new_findings.append(
-                                    {
-                                        "asset_id": asset.id,
-                                        "asset_name": asset.name,
-                                        "asset_version": asset.version,
-                                        "user_email": asset.user_email,
-                                        "cve_id": cve.cve_id,
-                                        "summary": cve.summary,
-                                        "severity": cve.severity,
-                                        "score": cve.score,
-                                        "publish_date": cve.publish_date.isoformat()
-                                        if cve.publish_date
-                                        else None,
-                                        "cve_url": f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={cve.cve_id}",
-                                    }
-                                )
-                    except Exception as e:
-                        logger.error(f"Error scanning {query}: {e}")
-                        continue
-
-            new_findings.sort(
-                key=lambda x: x.get("publish_date") or "1900-01-01T00:00:00",
-                reverse=True,
-            )
-
-            return {
-                "scan_date": datetime.now(timezone.utc),
-                "since_date": since_date,
-                "total_new_findings": len(new_findings),
-                "findings": new_findings,
-            }
-
-        except Exception as e:
-            logger.error(f"Error scanning for new CVEs: {e}")
             return {"error": str(e)}

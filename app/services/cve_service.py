@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.services.nist_nvd import nist_client, CVEData
-from app.database.models import CVE, Asset
+from app.database.models import CVE
 from app.database.connection import get_db
 
 logger = logging.getLogger(__name__)
@@ -42,50 +42,6 @@ class CVEService:
         except Exception as e:
             logger.error(f"Error in CVE search for asset {asset_name}: {e}")
             raise
-
-    def check_assets_vulnerabilities(self, user_email: str) -> list[dict]:
-        vulnerabilities = []
-
-        try:
-            with next(get_db()) as db:
-                user_assets = (
-                    db.query(Asset).filter(Asset.user_email == user_email).all()
-                )
-
-                for asset in user_assets:
-                    try:
-                        asset_name = str(asset.name)
-                        asset_version = (
-                            str(asset.version) if asset.version is not None else None
-                        )
-                        asset_cves = self.search_cves_for_asset(
-                            asset_name, asset_version
-                        )
-
-                        for cve_data in asset_cves:
-                            vulnerability = {
-                                "asset_id": asset.id,
-                                "asset_name": asset.name,
-                                "asset_version": asset.version,
-                                "cve_id": cve_data.cve_id,
-                                "severity": cve_data.severity,
-                                "score": cve_data.score,
-                                "summary": cve_data.summary,
-                                "publish_date": cve_data.publish_date,
-                            }
-                            vulnerabilities.append(vulnerability)
-
-                    except Exception as e:
-                        logger.warning(
-                            f"Error in vulnerability check per asset {asset.name}: {e}"
-                        )
-                        continue
-
-        except Exception as e:
-            logger.error(f"Error in vulnerability check per utente {user_email}: {e}")
-            raise
-
-        return vulnerabilities
 
     def _store_cve(self, db: Session, cve_data: CVEData) -> bool:
         existing_cve = db.query(CVE).filter(CVE.id == cve_data.cve_id).first()

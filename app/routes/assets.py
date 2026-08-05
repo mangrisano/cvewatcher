@@ -63,9 +63,9 @@ async def create_asset(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Asset creation error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error creating asset: {str(e)}")
+    except Exception:
+        logger.exception("Asset creation error")
+        raise HTTPException(status_code=500, detail="Error creating asset")
 
 
 @router.get("/", response_model=list[AssetResponse])
@@ -146,10 +146,9 @@ async def get_asset_vulnerabilities(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"NVD service is currently unavailable. Please retry later. ({e})",
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error retrieving vulnerabilities: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Error retrieving vulnerabilities for asset %s", asset_id)
+        raise HTTPException(status_code=500, detail="Error retrieving vulnerabilities")
 
 
 @router.patch("/{asset_id}", response_model=AssetResponse)
@@ -219,8 +218,9 @@ async def monitor_asset_cves(
             "monitoring_result": result,
         }
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error monitoring asset: {str(e)}")
+    except Exception:
+        logger.exception("Error monitoring asset %s", asset_id)
+        raise HTTPException(status_code=500, detail="Error monitoring asset")
 
 
 @router.get("/monitoring/report")
@@ -237,10 +237,9 @@ async def get_monitoring_report(
         )
         return report
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error generating report: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Error generating monitoring report")
+        raise HTTPException(status_code=500, detail="Error generating report")
 
 
 @router.post("/monitoring/scan-all")
@@ -271,5 +270,6 @@ async def scan_all_assets(
 
         return scan_results
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error scanning assets: {str(e)}")
+    except Exception:
+        logger.exception("Error scanning assets")
+        raise HTTPException(status_code=500, detail="Error scanning assets")
