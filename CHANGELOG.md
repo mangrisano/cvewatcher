@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-05
+
+### Changed
+
+- **BREAKING:** the minimum supported Python is now 3.13 (dropped 3.12). Docker
+  images are built on `python:3.13-slim` and CI runs on 3.13 only.
+
 ## [0.7.0] - 2026-08-05
 
 ### Added

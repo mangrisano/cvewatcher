@@ -1,11 +1,11 @@
 [project]
 name = "cvewatcher"
-version = "0.7.0"
+version = "1.0.0"
 description = "A FastAPI-based application for monitoring and tracking CVE (Common Vulnerabilities and Exposures) vulnerabilities for your software assets."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.16.4",
     "apscheduler>=3.10,<4.0",
@@ -41,7 +41,7 @@ select = ["E4", "E7", "E9", "F"]
 
 [tool.pyright]
 include = ["app"]
-pythonVersion = "3.12"
+pythonVersion = "3.13"
 typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]

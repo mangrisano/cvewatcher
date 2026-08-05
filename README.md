@@ -52,7 +52,7 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities" -H "Authorization: Bearer $TOKEN" 
 ## Requirements
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose (recommended), **or**
-- Python >= 3.12 and a PostgreSQL database for a local run
+- Python >= 3.13 and a PostgreSQL database for a local run
 
 ## Quick start
 
