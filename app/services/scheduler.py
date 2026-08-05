@@ -14,6 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.database.connection import SessionLocal
 from app.services.cve_monitoring import CVEMonitoringService
+from app.services.digest import digest_enabled, run_digest_cycle
 from app.services.notifications import Notifier, build_notifiers_from_env, dispatch
 
 logger = logging.getLogger(__name__)
@@ -67,28 +68,44 @@ async def run_monitoring_cycle(
 def start_scheduler() -> Optional[AsyncIOScheduler]:
     global _scheduler
 
-    if os.getenv("MONITOR_ENABLED", "false").strip().lower() not in (
+    monitor = os.getenv("MONITOR_ENABLED", "false").strip().lower() in (
         "1",
         "true",
         "yes",
         "on",
-    ):
+    )
+    digest = digest_enabled()
+    if not monitor and not digest:
         logger.info("Periodic monitoring disabled (set MONITOR_ENABLED=true to enable)")
         return None
 
-    interval_minutes = int(os.getenv("MONITOR_INTERVAL_MINUTES", "360"))
     _scheduler = AsyncIOScheduler()
-    _scheduler.add_job(
-        run_monitoring_cycle,
-        trigger="interval",
-        minutes=interval_minutes,
-        id="cve_monitoring",
-        next_run_time=datetime.now(timezone.utc),
-        max_instances=1,
-        coalesce=True,
-    )
+    if monitor:
+        interval_minutes = int(os.getenv("MONITOR_INTERVAL_MINUTES", "360"))
+        _scheduler.add_job(
+            run_monitoring_cycle,
+            trigger="interval",
+            minutes=interval_minutes,
+            id="cve_monitoring",
+            next_run_time=datetime.now(timezone.utc),
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info(
+            "Periodic monitoring started (every %d minute(s))", interval_minutes
+        )
+    if digest:
+        digest_interval = int(os.getenv("DIGEST_INTERVAL_MINUTES", "1440"))
+        _scheduler.add_job(
+            run_digest_cycle,
+            trigger="interval",
+            minutes=digest_interval,
+            id="email_digest",
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info("Email digest started (every %d minute(s))", digest_interval)
     _scheduler.start()
-    logger.info("Periodic monitoring started (every %d minute(s))", interval_minutes)
     return _scheduler
 
 

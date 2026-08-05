@@ -58,6 +58,7 @@ async def create_asset(
             name=asset_data.name,
             version=asset_data.version if asset_data.version else None,
             cpe=asset_data.cpe if asset_data.cpe else None,
+            ecosystem=asset_data.ecosystem if asset_data.ecosystem else None,
             user_email=user_email,
             description=asset_data.description if asset_data.description else None,
         )

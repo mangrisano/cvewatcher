@@ -53,6 +53,7 @@ class AssetCreate(BaseModel):
     name: str
     version: Optional[str] = None
     cpe: Optional[str] = None
+    ecosystem: Optional[str] = None
     description: Optional[str] = None
 
 
@@ -61,6 +62,7 @@ class AssetResponse(BaseModel):
     name: str
     version: Optional[str] = None
     cpe: Optional[str] = None
+    ecosystem: Optional[str] = None
     user_email: str
     description: Optional[str] = None
     created_at: datetime.datetime
@@ -102,6 +104,25 @@ class FindingStatus(StrEnum):
     FIXED = "fixed"
     FALSE_POSITIVE = "false_positive"
     ACCEPTED_RISK = "accepted_risk"
+
+
+# Statuses that take a finding out of the "active" set (hidden from the global
+# view, counts, metrics and exports unless explicitly requested).
+SUPPRESSED_STATUSES = frozenset(
+    {
+        FindingStatus.FIXED.value,
+        FindingStatus.FALSE_POSITIVE.value,
+        FindingStatus.ACCEPTED_RISK.value,
+    }
+)
+
+
+class FindingsSummary(BaseModel):
+    total: int
+    kev: int
+    by_severity: dict[str, int]
+    by_status: dict[str, int]
+    findings: list[VulnerabilityResponse]
 
 
 class FindingStatusUpdate(BaseModel):

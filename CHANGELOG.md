@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fixed`, `false_positive` or `accepted_risk` (with optional notes) via
   `PATCH /assets/{asset_id}/vulnerabilities/{cve_id}`. Every finding now carries
   its `status`, persisted in the `asset_cves` association.
+- **Global findings view**: `GET /findings` returns a cross-asset summary
+  (total, KEV count, counts by severity and by status) plus the findings; and
+  `GET /findings/export?format=csv|json` downloads them. Suppressed findings
+  (`fixed` / `false_positive` / `accepted_risk`) are hidden unless
+  `include_suppressed=true`.
+- **OSV.dev as a secondary source**: an asset can declare an `ecosystem` (PyPI,
+  npm, Go, Maven, …); when set, OSV.dev is queried alongside NVD and merged,
+  greatly improving coverage for language-package dependencies.
+- **Prometheus metrics** at `GET /metrics` — aggregate assets and findings by
+  severity and triage status (no live NVD calls).
+- **Scheduled email digest** (`DIGEST_ENABLED`, `DIGEST_INTERVAL_MINUTES`): a
+  periodic per-user summary of active findings, emailed to each user.
 
 ## [2.0.0] - 2026-08-05
 

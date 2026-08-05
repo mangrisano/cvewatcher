@@ -142,6 +142,51 @@ def _is_truthy(value: str) -> bool:
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _email_config_from_env() -> dict[str, Any] | None:
+    host = os.getenv("NOTIFY_EMAIL_HOST")
+    sender = os.getenv("NOTIFY_EMAIL_FROM")
+    if not host or not sender:
+        return None
+    return {
+        "host": host,
+        "port": int(os.getenv("NOTIFY_EMAIL_PORT", "587")),
+        "sender": sender,
+        "username": os.getenv("NOTIFY_EMAIL_USERNAME") or None,
+        "password": os.getenv("NOTIFY_EMAIL_PASSWORD") or None,
+        "use_tls": _is_truthy(os.getenv("NOTIFY_EMAIL_USE_TLS", "true")),
+    }
+
+
+def send_email(
+    recipients: list[str],
+    subject: str,
+    body: str,
+    config: dict[str, Any] | None = None,
+) -> bool:
+    """Send a plain-text email via the configured SMTP relay; best-effort."""
+    config = config or _email_config_from_env()
+    if not config or not recipients:
+        logger.warning("Email not configured; skipping send of %r", subject)
+        return False
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = config["sender"]
+    message["To"] = ", ".join(recipients)
+    message.set_content(body)
+    try:
+        with smtplib.SMTP(config["host"], config["port"], timeout=15) as server:
+            if config["use_tls"]:
+                server.starttls()
+            if config["username"] and config["password"]:
+                server.login(config["username"], config["password"])
+            server.send_message(message)
+        return True
+    except (smtplib.SMTPException, OSError) as e:
+        logger.error("Email send failed: %s", e)
+        return False
+
+
 def build_notifiers_from_env() -> list[Notifier]:
     notifiers: list[Notifier] = []
 

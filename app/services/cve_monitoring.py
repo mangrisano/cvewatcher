@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database.models import Asset, CVE, AssetCVE
 from app.services.nist_nvd import nist_client, NvdUnavailableError
 from app.services.enrichment import enrichment_service
+from app.services.osv import osv_client
 from app.models import AssetResponse
 
 logger = logging.getLogger(__name__)
@@ -207,6 +208,15 @@ class CVEMonitoringService:
             vulnerabilities, nvd_failed = await self._search_by_keyword(
                 asset, pub_start_date, pub_end_date, use_cache
             )
+
+        # Secondary source: OSV.dev covers language-package ecosystems that
+        # NVD/CPE matches poorly. Best-effort; merged and deduplicated below.
+        ecosystem = getattr(asset, "ecosystem", None)
+        if ecosystem:
+            osv_found = await run_in_threadpool(
+                osv_client.search, ecosystem, asset.name, asset.version
+            )
+            vulnerabilities.extend(osv_found)
 
         if nvd_failed and not vulnerabilities:
             raise NvdUnavailableError(

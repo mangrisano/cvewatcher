@@ -25,6 +25,7 @@ class Asset(Base):
     name = Column(String(100), nullable=False)
     version = Column(String(50), nullable=True)
     cpe = Column(String(255), nullable=True)
+    ecosystem = Column(String(50), nullable=True)
     user_email = Column(String(100), nullable=False, index=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
