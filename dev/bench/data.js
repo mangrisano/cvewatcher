@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785940459375,
+  "lastUpdate": 1785942188054,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -675,6 +675,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000003334726707053165",
             "extra": "mean: 54.0162280174994 usec\nrounds: 11657"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "d696a0ecd550f669be9d8be75558ea7af512ab0d",
+          "message": "fix(db): stop Alembic from disabling app/uvicorn loggers on startup\n\ninit_schema() (added in 2.3.1) runs `alembic upgrade head` in-process on\nevery startup. alembic/env.py calls fileConfig(config.config_file_name) when\na config file is attached to the Config object, and fileConfig() defaults to\ndisable_existing_loggers=True. alembic.ini only declares root/sqlalchemy/\nalembic loggers, so this silently disabled every other logger in the process\nafter the first migration ran — including uvicorn.access, which is why HTTP\naccess logs vanished with no error after startup. Building the Config\nwithout a file (script_location set directly instead) skips fileConfig()\nentirely.\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+          "timestamp": "2026-08-05T17:02:22+02:00",
+          "tree_id": "0f7abb5bf5798f7caab073136ea07b5dece16662",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/d696a0ecd550f669be9d8be75558ea7af512ab0d"
+        },
+        "date": 1785942187244,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 100539.06741721834,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000011878480947950781",
+            "extra": "mean: 9.946382293861816 usec\nrounds: 19914"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 56236.278967840684,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000026989908974389303",
+            "extra": "mean: 17.782115359585944 usec\nrounds: 16895"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 22146.464818576413,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000003252986923778193",
+            "extra": "mean: 45.15393351453555 usec\nrounds: 11777"
           }
         ]
       }
