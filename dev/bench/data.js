@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785924204720,
+  "lastUpdate": 1785924667422,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -225,6 +225,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000004318065656408562",
             "extra": "mean: 55.9317302809171 usec\nrounds: 11182"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "aad4a4e86d664005141aff429c3893606aad7d74",
+          "message": "chore(release)!: 1.0.0\n\nBREAKING CHANGE: require Python >= 3.13 (dropped 3.12). Docker images now build on python:3.13-slim and CI runs on 3.13 only.",
+          "timestamp": "2026-08-05T12:10:26+02:00",
+          "tree_id": "2cf90d4bf7a8058b8db4dfb05051a4fd0777e1f8",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/aad4a4e86d664005141aff429c3893606aad7d74"
+        },
+        "date": 1785924666939,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 79947.77015632081,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000012449654135196928",
+            "extra": "mean: 12.508166244595856 usec\nrounds: 22118"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 47327.132737238186,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000003017913034316046",
+            "extra": "mean: 21.129528500110776 usec\nrounds: 15035"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 17639.98644407621,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000034633307767552165",
+            "extra": "mean: 56.68938596808366 usec\nrounds: 11203"
           }
         ]
       }
