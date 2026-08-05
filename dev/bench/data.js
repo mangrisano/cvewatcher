@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785923867129,
+  "lastUpdate": 1785924204720,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -180,6 +180,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000002812670390350065",
             "extra": "mean: 53.76302577853281 usec\nrounds: 11560"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "08ee64f8b6281dea22d0f1286e2daa7d7b9770ee",
+          "message": "ci: install types-sqlalchemy so pyright resolves ORM attribute types",
+          "timestamp": "2026-08-05T12:02:46+02:00",
+          "tree_id": "02e50532d1fa9ecabb496d456011942c8e3f3b52",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/08ee64f8b6281dea22d0f1286e2daa7d7b9770ee"
+        },
+        "date": 1785924203894,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 84655.94716043667,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000012100476008201214",
+            "extra": "mean: 11.812519185507888 usec\nrounds: 22491"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 46743.034883891305,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000032799684752610768",
+            "extra": "mean: 21.393561682162453 usec\nrounds: 16431"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 17878.939109830866,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000004318065656408562",
+            "extra": "mean: 55.9317302809171 usec\nrounds: 11182"
           }
         ]
       }
