@@ -59,6 +59,7 @@ async def landing_page():
                         <a href="#features" class="text-gray-600 hover:text-cyan-600 transition">Features</a>
                         <a href="#demo" class="text-gray-600 hover:text-cyan-600 transition">Demo</a>
                         <a href="#opensource" class="text-gray-600 hover:text-cyan-600 transition">Open Source</a>
+                        <a href="#sponsor" class="text-gray-600 hover:text-cyan-600 transition">Sponsor</a>
                         <a href="/dashboard" class="text-gray-600 hover:text-cyan-600 transition">Dashboard</a>
                         <a href="/docs" class="text-gray-600 hover:text-cyan-600 transition">API Docs</a>
                         <a href="https://github.com/mangrisano/cvewatcher" class="text-gray-600 hover:text-cyan-600 transition" title="GitHub"><i class="fab fa-github text-xl"></i></a>
@@ -305,6 +306,33 @@ async def landing_page():
             </div>
         </section>
 
+        <!-- Sponsor Section -->
+        <section id="sponsor" class="py-20 bg-white">
+            <div class="container mx-auto px-6">
+                <div class="max-w-3xl mx-auto text-center">
+                    <div class="bg-pink-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-heart text-pink-500 text-2xl"></i>
+                    </div>
+                    <h2 class="text-4xl font-bold text-gray-900 mb-4">Support the project</h2>
+                    <p class="text-xl text-gray-600 mb-8">
+                        CVE Watcher is built and maintained by
+                        <a href="https://github.com/mangrisano" class="text-cyan-600 font-semibold hover:underline">Michele Angrisano</a>
+                        in his free time. If it saves you time or keeps your stack safer,
+                        consider sponsoring to help fund ongoing development and maintenance.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                        <a href="https://github.com/sponsors/mangrisano" class="bg-pink-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-pink-700 transition">
+                            <i class="fas fa-heart mr-2"></i>Sponsor on GitHub
+                        </a>
+                        <a href="https://github.com/mangrisano/cvewatcher/stargazers" class="border-2 border-gray-900 text-gray-900 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-900 hover:text-white transition">
+                            <i class="fas fa-star mr-2"></i>Star the repo
+                        </a>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-6">Every contribution &mdash; big or small &mdash; is genuinely appreciated.</p>
+                </div>
+            </div>
+        </section>
+
         <!-- CTA Section -->
         <section class="py-20 hero-section text-white">
             <div class="container mx-auto px-6 text-center">
@@ -361,6 +389,7 @@ async def landing_page():
                         <ul class="space-y-2 text-gray-400">
                             <li><a href="https://github.com/mangrisano/cvewatcher" class="hover:text-white">GitHub Repository</a></li>
                             <li><a href="https://github.com/mangrisano/cvewatcher/issues" class="hover:text-white">Report an Issue</a></li>
+                            <li><a href="https://github.com/sponsors/mangrisano" class="hover:text-white">Sponsor</a></li>
                             <li><a href="/dashboard" class="hover:text-white">Dashboard</a></li>
                         </ul>
                     </div>
