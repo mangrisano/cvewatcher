@@ -9,6 +9,8 @@ from typing import Optional, Any
 import httpx
 from dataclasses import dataclass
 
+from app.services.severity import band_from_score
+
 logger = logging.getLogger(__name__)
 
 
@@ -340,16 +342,7 @@ class NistNvdClient:
                             score = float(base)
                             break
 
-                if score is None:
-                    severity = None
-                elif score >= 9.0:
-                    severity = "CRITICAL"
-                elif score >= 7.0:
-                    severity = "HIGH"
-                elif score >= 4.0:
-                    severity = "MEDIUM"
-                else:
-                    severity = "LOW"
+                severity = band_from_score(score)
 
                 publish_date = self._parse_datetime(cve_item.get("published"))
                 modified_date = self._parse_datetime(cve_item.get("lastModified"))

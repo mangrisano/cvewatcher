@@ -18,7 +18,7 @@ from app.database.connection import get_db
 from app.dependencies import get_current_user
 from app.models import SUPPRESSED_STATUSES, FindingsSummary, VulnerabilityResponse
 from app.services.cve_monitoring import CVEMonitoringService
-from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
+from app.services.nist_nvd import MAX_DATE_RANGE_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +71,9 @@ async def findings_summary(
     if not user_email:
         raise HTTPException(status_code=401, detail="Invalid user token")
 
-    try:
-        findings = await _collect_findings(
-            db, user_email, days, include_suppressed, use_cache=not refresh
-        )
-    except NvdUnavailableError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"NVD service is currently unavailable. Please retry later. ({e})",
-        )
+    findings = await _collect_findings(
+        db, user_email, days, include_suppressed, use_cache=not refresh
+    )
 
     by_severity = Counter((f.get("severity") or "UNKNOWN") for f in findings)
     by_status = Counter((f.get("status") or "open") for f in findings)
@@ -104,13 +98,7 @@ async def export_findings(
     if not user_email:
         raise HTTPException(status_code=401, detail="Invalid user token")
 
-    try:
-        findings = await _collect_findings(db, user_email, days, include_suppressed)
-    except NvdUnavailableError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"NVD service is currently unavailable. Please retry later. ({e})",
-        )
+    findings = await _collect_findings(db, user_email, days, include_suppressed)
 
     if format == "csv":
         buffer = io.StringIO()

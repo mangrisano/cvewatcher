@@ -105,11 +105,8 @@ async def check_my_vulnerabilities(
         vulnerabilities = await service.get_user_vulnerabilities(user_email)
 
         return [VulnerabilityResponse(**vuln) for vuln in vulnerabilities]
-    except NvdUnavailableError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"NVD service is currently unavailable. Please retry later. ({e})",
-        )
+    except NvdUnavailableError:
+        raise
     except Exception:
         logger.exception("Error checking vulnerabilities for %s", user_email)
         raise HTTPException(status_code=500, detail="Error checking vulnerabilities")

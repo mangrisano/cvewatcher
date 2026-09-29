@@ -11,6 +11,8 @@ from typing import Any, Optional
 import httpx
 from cvss import CVSS2, CVSS3, CVSS4
 
+from app.services.severity import band_from_score
+
 logger = logging.getLogger(__name__)
 
 OSV_QUERY_URL = "https://api.osv.dev/v1/query"
@@ -54,17 +56,8 @@ def _cvss_base_score(vector: str) -> Optional[float]:
 
 
 def _band_from_score(score: Optional[float]) -> Optional[str]:
-    if score is None:
-        return None
-    if score >= 9.0:
-        return "CRITICAL"
-    if score >= 7.0:
-        return "HIGH"
-    if score >= 4.0:
-        return "MEDIUM"
-    if score > 0.0:
-        return "LOW"
-    return None
+    # A 0.0 base score means "no impact": no band, unlike an NVD 0.0.
+    return band_from_score(score) if score else None
 
 
 async def _http_post(url: str, **kwargs: Any) -> httpx.Response:

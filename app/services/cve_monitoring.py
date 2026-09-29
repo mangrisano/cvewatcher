@@ -11,6 +11,7 @@ from app.database.models import Asset, CVE, AssetCVE
 from app.services.nist_nvd import nist_client, NvdUnavailableError
 from app.services.enrichment import enrichment_service
 from app.services.osv import osv_client
+from app.services.severity import severity_rank
 from app.models import AssetResponse
 
 logger = logging.getLogger(__name__)
@@ -250,7 +251,7 @@ class CVEMonitoringService:
         vulnerabilities_list.sort(
             key=lambda x: (
                 -int(bool(x.get("kev"))),
-                -self._get_severity_priority(x.get("severity")),
+                -severity_rank(x.get("severity")),
                 -(x.get("epss") or 0.0),
                 -(
                     datetime.fromisoformat(
@@ -513,10 +514,6 @@ class CVEMonitoringService:
         if vendor_norm:
             norms.add(vendor_norm + product_norm)
         return norms
-
-    def _get_severity_priority(self, severity: str | None) -> int:
-        severity_map = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
-        return severity_map.get(severity or "LOW", 1)
 
     def _build_search_queries(self, asset: AssetResponse) -> list[str]:
         queries = []
@@ -785,7 +782,7 @@ class CVEMonitoringService:
 
             all_relevant_cves.sort(
                 key=lambda x: (
-                    -self._get_severity_priority(x.get("severity")),
+                    -severity_rank(x.get("severity")),
                     -(
                         datetime.fromisoformat(
                             x.get("publish_date", "1900-01-01T00:00:00").replace(

@@ -15,6 +15,7 @@ from app.routes.assets import router as assets_router
 from app.routes.cves import router as cves_router
 from app.routes.findings import router as findings_router
 from app.database import init_schema
+from app.services.nist_nvd import NvdUnavailableError
 from app.services.scheduler import start_scheduler, shutdown_scheduler
 from app.services.token_blocklist import BlocklistUnavailableError
 
@@ -48,6 +49,17 @@ async def blocklist_unavailable(request: Request, exc: BlocklistUnavailableError
         status_code=503,
         content={"detail": "Authentication temporarily unavailable"},
         headers={"Retry-After": "30"},
+    )
+
+
+@app.exception_handler(NvdUnavailableError)
+async def nvd_unavailable(request: Request, exc: NvdUnavailableError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "NVD service is currently unavailable. "
+            f"Please retry later. ({exc})"
+        },
     )
 
 

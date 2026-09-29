@@ -353,3 +353,22 @@ def test_waiting_on_nvd_does_not_block_other_requests(monkeypatch):
             return health.status_code, (await search).status_code
 
     assert asyncio.run(scenario()) == (200, 200)
+
+
+def test_findings_return_503_when_nvd_is_unavailable(client, monkeypatch):
+    from app.services import cve_monitoring
+    from app.services.nist_nvd import NvdUnavailableError
+
+    headers = _login(client, "kate", "kate@example.com")
+    client.post("/assets/", headers=headers, json={"name": "openssl"})
+
+    async def boom(*args, **kwargs):
+        raise NvdUnavailableError("NVD down")
+
+    monkeypatch.setattr(cve_monitoring.nist_client, "search_cves", boom)
+    monkeypatch.setattr(cve_monitoring.nist_client, "find_cpe_names", boom)
+
+    for url in ("/findings", "/findings/export"):
+        response = client.get(url, headers=headers)
+        assert response.status_code == 503
+        assert "NVD service is currently unavailable" in response.json()["detail"]
