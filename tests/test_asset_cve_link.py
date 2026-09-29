@@ -7,6 +7,7 @@ from app.database.models import Asset, AssetCVE, CVE
 from app.models import AssetResponse
 from app.services import cve_monitoring
 from app.services.cve_monitoring import CVEMonitoringService
+from app.services.findings_repository import FindingRepository
 
 _EMAIL = "linktest@example.com"
 _CVE = "CVE-2099-0001"
@@ -28,7 +29,7 @@ def test_store_cve_links_asset_without_tenant_data():
         db.commit()
         db.refresh(asset)
 
-        svc = CVEMonitoringService(db)
+        repo = FindingRepository(db)
         vuln = {
             "cve_id": _CVE,
             "summary": "test",
@@ -36,7 +37,7 @@ def test_store_cve_links_asset_without_tenant_data():
             "score": 7.5,
             "publish_date": None,
         }
-        asyncio.run(svc._store_cve_for_asset(vuln, asset))
+        repo.link(asset.id, vuln)
 
         # The shared CVE row carries no tenant data.
         cve = db.query(CVE).filter(CVE.id == _CVE).first()
@@ -52,11 +53,11 @@ def test_store_cve_links_asset_without_tenant_data():
         assert link is not None
 
         # The existing-ids lookup finds only linked candidates.
-        found = svc._existing_cve_ids_for_asset(asset, [_CVE, "CVE-2099-9999"])
+        found = repo.linked_cve_ids(asset.id, [_CVE, "CVE-2099-9999"])
         assert found == {_CVE}
 
         # Storing the same finding again is idempotent (no duplicate link).
-        asyncio.run(svc._store_cve_for_asset(vuln, asset))
+        repo.link(asset.id, vuln)
         links = db.query(AssetCVE).filter(AssetCVE.cve_id == _CVE).all()
         assert len(links) == 1
     finally:
@@ -75,13 +76,13 @@ def test_existing_ids_are_scoped_per_asset():
         db.refresh(mine)
         db.refresh(other)
 
-        svc = CVEMonitoringService(db)
+        repo = FindingRepository(db)
         vuln = {"cve_id": _CVE, "summary": "t", "severity": "LOW", "score": 1.0}
-        asyncio.run(svc._store_cve_for_asset(vuln, mine))
+        repo.link(mine.id, vuln)
 
         # The other asset is not linked, even for the same shared CVE.
-        assert svc._existing_cve_ids_for_asset(other, [_CVE]) == set()
-        assert svc._existing_cve_ids_for_asset(mine, [_CVE]) == {_CVE}
+        assert repo.linked_cve_ids(other.id, [_CVE]) == set()
+        assert repo.linked_cve_ids(mine.id, [_CVE]) == {_CVE}
     finally:
         db.query(AssetCVE).filter(AssetCVE.cve_id == _CVE).delete()
         db.query(CVE).filter(CVE.id == _CVE).delete()
@@ -142,9 +143,10 @@ def test_set_and_attach_finding_status():
         db.refresh(asset)
 
         svc = CVEMonitoringService(db)
+        repo = svc.findings
 
         # Setting a status on a not-yet-persisted CVE creates a stub CVE + link.
-        link = svc.set_finding_status(asset, _CVE, "false_positive", "not exploitable")
+        link = repo.set_status(asset.id, _CVE, "false_positive", "not exploitable")
         assert link.status == "false_positive"
         assert link.notes == "not exploitable"
         assert db.query(CVE).filter(CVE.id == _CVE).first() is not None
@@ -156,7 +158,7 @@ def test_set_and_attach_finding_status():
         assert findings[1]["status"] == "open"
 
         # Updating the status is idempotent on the same (asset, cve).
-        svc.set_finding_status(asset, _CVE, "fixed", None)
+        repo.set_status(asset.id, _CVE, "fixed", None)
         link2 = (
             db.query(AssetCVE)
             .filter(AssetCVE.asset_id == asset.id, AssetCVE.cve_id == _CVE)

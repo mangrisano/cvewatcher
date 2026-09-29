@@ -6,7 +6,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.database.models import Asset, CVE, AssetCVE
+from app.database.models import Asset
+from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import nist_client, NvdUnavailableError
 from app.services.enrichment import enrichment_service
 from app.services.osv import osv_client
@@ -30,6 +31,7 @@ def _nvd_concurrency_limit() -> int:
 class CVEMonitoringService:
     def __init__(self, db: Session):
         self.db = db
+        self.findings = FindingRepository(db)
         self.nist_client = nist_client
         # Bounds every NVD request made through this service (per request), so
         # fanning out across assets and CPEs never bursts past NVD's rate limit.
@@ -106,17 +108,14 @@ class CVEMonitoringService:
             candidate_cve_ids = [
                 vuln["cve_id"] for vuln in current_vulnerabilities if vuln.get("cve_id")
             ]
-            existing_cve_ids = self._existing_cve_ids_for_asset(
-                asset, candidate_cve_ids
-            )
+            existing_cve_ids = self.findings.linked_cve_ids(asset.id, candidate_cve_ids)
 
             new_vulnerabilities = []
             for vuln in current_vulnerabilities:
                 cve_id = vuln.get("cve_id")
                 if cve_id and cve_id not in existing_cve_ids:
                     new_vulnerabilities.append(vuln)
-
-                    await self._store_cve_for_asset(vuln, asset)
+                    self.findings.link(asset.id, vuln)
 
             return {
                 "asset_id": asset.id,
@@ -281,40 +280,13 @@ class CVEMonitoringService:
         self, asset: AssetResponse, findings: list[dict[str, Any]]
     ) -> None:
         """Tag each finding with its triage status from ``asset_cves`` (or 'open')."""
-        status_map: dict[str, str] = {}
         cve_ids = [f["cve_id"] for f in findings if f.get("cve_id")]
-        if self.db is not None and cve_ids:
-            rows = (
-                self.db.query(AssetCVE.cve_id, AssetCVE.status)
-                .filter(AssetCVE.asset_id == asset.id, AssetCVE.cve_id.in_(cve_ids))
-                .all()
-            )
-            status_map = {cve_id: status for cve_id, status in rows}
+        status_map = (
+            self.findings.statuses(asset.id, cve_ids) if self.db is not None else {}
+        )
         for finding in findings:
             cve_id = finding.get("cve_id")
             finding["status"] = status_map.get(cve_id, "open") if cve_id else "open"
-
-    def set_finding_status(
-        self, asset: Asset, cve_id: str, status: str, notes: str | None
-    ) -> AssetCVE:
-        """Create or update the triage status of an (asset, CVE) finding."""
-        link = (
-            self.db.query(AssetCVE)
-            .filter(AssetCVE.asset_id == asset.id, AssetCVE.cve_id == cve_id)
-            .first()
-        )
-        if link is None:
-            # The finding may not have been persisted yet; ensure the shared CVE
-            # row exists (FK) then create the link.
-            if not self.db.query(CVE).filter(CVE.id == cve_id).first():
-                self.db.add(CVE(id=cve_id))
-            link = AssetCVE(asset_id=asset.id, cve_id=cve_id)
-            self.db.add(link)
-        link.status = status  # type: ignore[assignment]
-        link.notes = notes  # type: ignore[assignment]
-        self.db.commit()
-        self.db.refresh(link)
-        return link
 
     async def _search_by_cpe(
         self,
@@ -441,70 +413,6 @@ class CVEMonitoringService:
             return []
 
         return matching.cpes_for_asset(cpe_names, asset.name, asset.version)
-
-    def _existing_cve_ids_for_asset(
-        self, asset: Asset, candidate_cve_ids: list[str]
-    ) -> set[str]:
-        """CVE ids already linked to this asset, among the given candidates.
-
-        Only the candidate ids (the CVEs just found for the asset) are queried
-        against the ``asset_cves`` association, so this never scans the whole
-        table and the per-asset link carries no tenant data.
-        """
-        if not candidate_cve_ids:
-            return set()
-        rows = (
-            self.db.query(AssetCVE.cve_id)
-            .filter(
-                AssetCVE.asset_id == asset.id,
-                AssetCVE.cve_id.in_(candidate_cve_ids),
-            )
-            .all()
-        )
-        return {row[0] for row in rows}
-
-    async def _store_cve_for_asset(self, vuln_data: dict[str, Any], asset: Asset):
-        cve_id = vuln_data.get("cve_id")
-        if not cve_id:
-            return
-        try:
-            existing_cve = self.db.query(CVE).filter(CVE.id == cve_id).first()
-            if not existing_cve:
-                publish_date = None
-                if vuln_data.get("publish_date"):
-                    try:
-                        publish_date = datetime.fromisoformat(
-                            vuln_data.get("publish_date", "").replace("Z", "+00:00")
-                        )
-                    except Exception:
-                        pass
-
-                # The shared CVE row holds only global metadata; the per-asset
-                # link lives in ``asset_cves`` (no tenant data here).
-                self.db.add(
-                    CVE(
-                        id=cve_id,
-                        summary=vuln_data.get("summary", ""),
-                        severity=vuln_data.get("severity"),
-                        score=vuln_data.get("score"),
-                        publish_date=publish_date,
-                    )
-                )
-
-            link_exists = (
-                self.db.query(AssetCVE)
-                .filter(AssetCVE.asset_id == asset.id, AssetCVE.cve_id == cve_id)
-                .first()
-            )
-            if not link_exists:
-                self.db.add(AssetCVE(asset_id=asset.id, cve_id=cve_id))
-
-            self.db.commit()
-            logger.info(f"Stored new CVE: {cve_id} for asset {asset.name}")
-
-        except Exception as e:
-            logger.error(f"Error storing CVE {cve_id}: {e}")
-            self.db.rollback()
 
     async def get_monitoring_report(
         self, user_email: str, days: int = 7

@@ -8,15 +8,15 @@ from app.models import (
     AssetResponse,
     AssetUpdate,
     AssetVulnerabilitiesResponse,
-    FindingStatus,
     FindingStatusResponse,
     FindingStatusUpdate,
     VulnerabilityResponse,
 )
 from app.database.connection import get_db
-from app.database.models import Asset, AssetCVE
+from app.database.models import Asset
 from app.dependencies import get_current_user, get_owned_asset
 from app.services.cve_monitoring import CVEMonitoringService
+from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -151,8 +151,9 @@ async def set_vulnerability_status(
     asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
 ):
-    service = CVEMonitoringService(db)
-    return service.set_finding_status(asset, cve_id, update.status.value, update.notes)
+    return FindingRepository(db).set_status(
+        asset.id, cve_id, update.status.value, update.notes
+    )
 
 
 @router.patch("/{asset_id}", response_model=AssetResponse)
@@ -193,10 +194,7 @@ async def update_asset(
     if identity_changed:
         # Untriaged findings belonged to the old identity; the next monitoring
         # cycle re-links those that still apply. Triaged ones keep their status.
-        db.query(AssetCVE).filter(
-            AssetCVE.asset_id == asset.id,
-            AssetCVE.status == FindingStatus.OPEN.value,
-        ).delete(synchronize_session=False)
+        FindingRepository(db).drop_untriaged(asset.id)
 
     db.commit()
     db.refresh(asset)
