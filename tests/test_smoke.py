@@ -372,3 +372,25 @@ def test_findings_return_503_when_nvd_is_unavailable(client, monkeypatch):
         response = client.get(url, headers=headers)
         assert response.status_code == 503
         assert "NVD service is currently unavailable" in response.json()["detail"]
+
+
+def test_assets_of_other_users_are_not_reachable(client):
+    owner = _login(client, "liam", "liam@example.com")
+    intruder = _login(client, "mona", "mona@example.com")
+    asset_id = client.post(
+        "/assets/", headers=owner, json={"name": "redis", "version": "7.2"}
+    ).json()["id"]
+    url = f"/assets/{asset_id}"
+
+    assert client.get(url, headers=intruder).status_code == 404
+    assert client.patch(url, headers=intruder, json={"name": "x"}).status_code == 404
+    assert (
+        client.patch(
+            f"{url}/vulnerabilities/CVE-2024-1234",
+            headers=intruder,
+            json={"status": "fixed"},
+        ).status_code
+        == 404
+    )
+    assert client.delete(url, headers=intruder).status_code == 404
+    assert client.get(url, headers=owner).json()["name"] == "redis"

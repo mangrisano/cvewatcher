@@ -1,5 +1,4 @@
 import logging
-from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -16,7 +15,7 @@ from app.models import (
 )
 from app.database.connection import get_db
 from app.database.models import Asset, AssetCVE
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_owned_asset
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
 
@@ -103,26 +102,12 @@ async def get_my_assets(
 
 
 @router.get("/{asset_id}", response_model=AssetResponse)
-async def get_asset(
-    asset_id: UUID,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    asset = (
-        db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
-        .first()
-    )
-
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
-
+async def get_asset(asset: Asset = Depends(get_owned_asset)):
     return AssetResponse.model_validate(asset)
 
 
 @router.get("/{asset_id}/vulnerabilities", response_model=AssetVulnerabilitiesResponse)
 async def get_asset_vulnerabilities(
-    asset_id: UUID,
     days: int = Query(
         default=0,
         ge=0,
@@ -130,21 +115,9 @@ async def get_asset_vulnerabilities(
         description="Only CVEs published in the last N days; 0 = all time",
     ),
     severity: SeverityLevel | None = None,
-    current_user: dict = Depends(get_current_user),
+    asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
 ):
-    asset = (
-        db.query(Asset)
-        .filter(
-            Asset.id == asset_id,
-            Asset.user_email == current_user.get("sub"),
-        )
-        .first()
-    )
-
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
-
     try:
         monitoring_service = CVEMonitoringService(db)
         asset_response = AssetResponse.model_validate(asset)
@@ -165,7 +138,7 @@ async def get_asset_vulnerabilities(
     except NvdUnavailableError:
         raise
     except Exception:
-        logger.exception("Error retrieving vulnerabilities for asset %s", asset_id)
+        logger.exception("Error retrieving vulnerabilities for asset %s", asset.id)
         raise HTTPException(status_code=500, detail="Error retrieving vulnerabilities")
 
 
@@ -173,41 +146,21 @@ async def get_asset_vulnerabilities(
     "/{asset_id}/vulnerabilities/{cve_id}", response_model=FindingStatusResponse
 )
 async def set_vulnerability_status(
-    asset_id: UUID,
     update: FindingStatusUpdate,
     cve_id: str = Path(max_length=20, pattern=_FINDING_ID_PATTERN),
-    current_user: dict = Depends(get_current_user),
+    asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
 ):
-    asset = (
-        db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
-        .first()
-    )
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
-
     service = CVEMonitoringService(db)
     return service.set_finding_status(asset, cve_id, update.status.value, update.notes)
 
 
 @router.patch("/{asset_id}", response_model=AssetResponse)
 async def update_asset(
-    asset_id: UUID,
     asset_data: AssetUpdate,
-    current_user: dict = Depends(get_current_user),
+    asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
 ):
-    user_email = current_user.get("sub")
-    asset = (
-        db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == user_email)
-        .first()
-    )
-
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
-
     changes = {
         key: value or None
         for key, value in asset_data.model_dump(exclude_unset=True).items()
@@ -218,7 +171,7 @@ async def update_asset(
         db.query(Asset)
         .filter(
             Asset.id != asset.id,
-            Asset.user_email == user_email,
+            Asset.user_email == asset.user_email,
             Asset.name == name,
             Asset.version == version,
         )
@@ -252,38 +205,18 @@ async def update_asset(
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_asset(
-    asset_id: UUID,
-    current_user: dict = Depends(get_current_user),
+    asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
 ):
-    asset = (
-        db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
-        .first()
-    )
-
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
-
     db.delete(asset)
     db.commit()
 
 
 @router.get("/{asset_id}/monitor")
 async def monitor_asset_cves(
-    asset_id: UUID,
-    current_user: dict = Depends(get_current_user),
+    asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
 ):
-    asset = (
-        db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
-        .first()
-    )
-
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
-
     try:
         monitoring_service = CVEMonitoringService(db)
         result = await monitoring_service._monitor_single_asset(asset)
@@ -294,7 +227,7 @@ async def monitor_asset_cves(
         }
 
     except Exception:
-        logger.exception("Error monitoring asset %s", asset_id)
+        logger.exception("Error monitoring asset %s", asset.id)
         raise HTTPException(status_code=500, detail="Error monitoring asset")
 
 
