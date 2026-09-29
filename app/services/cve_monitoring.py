@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -29,7 +30,6 @@ class CVEMonitoringService:
             if sources is not None
             else [NvdSource(nist_client), OsvSource(osv_client)]
         )
-        self.nist_client = nist_client
 
     async def monitor_all_assets(self) -> dict[str, Any]:
         try:
@@ -254,139 +254,60 @@ class CVEMonitoringService:
     async def get_monitoring_report(
         self, user_email: str, days: int = 7
     ) -> dict[str, Any]:
-        try:
-            user_assets = (
-                self.db.query(Asset).filter(Asset.user_email == user_email).all()
-            )
+        """CVEs published in the last ``days`` affecting the user's assets.
 
-            if not user_assets:
-                return {
-                    "message": "No assets registered for monitoring",
-                    "total_assets": 0,
-                }
-
-            logger.info(
-                f"Generating monitoring report for {len(user_assets)} assets over {days} days"
-            )
-
-            all_relevant_cves = []
-
-            for asset in user_assets:
-                logger.info(f"Searching for CVEs related to asset: {asset.name}")
-
-                asset_response = AssetResponse.model_validate(asset)
-                search_queries = matching.build_search_queries(asset_response)
-
-                try:
-                    logger.info(
-                        f"Searching for CVEs related to {asset.name} in last {days} days"
-                    )
-
-                    # Search for each query term separately to ensure we don't miss anything
-                    for query in search_queries:
-                        logger.info(f"Searching with keyword: {query}")
-                        query_cves = await self.nist_client.search_cves(
-                            keyword=query,
-                            pub_start_date=datetime.now(timezone.utc)
-                            - timedelta(days=days),
-                            pub_end_date=datetime.now(timezone.utc),
-                            results_per_page=100,
-                        )
-                        logger.info(
-                            f"Found {len(query_cves)} CVEs for keyword '{query}'"
-                        )
-
-                        for cve_data in query_cves:
-                            cve_dict = {
-                                "cve_id": cve_data.cve_id,
-                                "summary": cve_data.summary,
-                                "severity": cve_data.severity,
-                                "score": cve_data.score,
-                                "publish_date": cve_data.publish_date.isoformat()
-                                if cve_data.publish_date
-                                else None,
-                                "asset_name": asset.name,
-                                "matched_query": query,
-                                "cve_url": f"https://www.cve.org/CVERecord?id={cve_data.cve_id}",
-                            }
-
-                            # Avoid duplicates
-                            if not any(
-                                existing.get("cve_id") == cve_dict.get("cve_id")
-                                for existing in all_relevant_cves
-                            ):
-                                all_relevant_cves.append(cve_dict)
-                                logger.info(
-                                    f"Found relevant CVE: {cve_dict.get('cve_id')} (matched: {query})"
-                                )
-
-                except Exception as e:
-                    logger.error(f"Error fetching CVEs for asset {asset.name}: {e}")
-                    continue
-
-            logger.info(f"Found {len(all_relevant_cves)} relevant CVEs")
-
-            all_relevant_cves.sort(
-                key=lambda x: (
-                    -severity_rank(x.get("severity")),
-                    -(
-                        datetime.fromisoformat(
-                            x.get("publish_date", "1900-01-01T00:00:00").replace(
-                                "Z", "+00:00"
-                            )
-                        ).timestamp()
-                        if x.get("publish_date")
-                        else 0
-                    ),
-                )
-            )
-            logger.info(
-                "Sorted CVEs by severity (highest first), then by publish date (most recent first)"
-            )
-
-            report = {
-                "user_email": user_email,
-                "report_period_days": days,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "total_assets": len(user_assets),
-                "assets": [
-                    {
-                        "id": asset.id,
-                        "name": asset.name,
-                        "version": asset.version,
-                        "description": asset.description,
-                    }
-                    for asset in user_assets
-                ],
-                "recent_vulnerabilities": all_relevant_cves[:50],
-                "vulnerability_summary": {
-                    "total_recent": len(all_relevant_cves),
-                    "critical": sum(
-                        1
-                        for cve in all_relevant_cves
-                        if str(cve.get("severity", "")).upper() == "CRITICAL"
-                    ),
-                    "high": sum(
-                        1
-                        for cve in all_relevant_cves
-                        if str(cve.get("severity", "")).upper() == "HIGH"
-                    ),
-                    "medium": sum(
-                        1
-                        for cve in all_relevant_cves
-                        if str(cve.get("severity", "")).upper() == "MEDIUM"
-                    ),
-                    "low": sum(
-                        1
-                        for cve in all_relevant_cves
-                        if str(cve.get("severity", "")).upper() == "LOW"
-                    ),
-                },
-                "data_source": "NIST NVD API (live data)",
+        Uses the same engine as the findings endpoints (CPE-aware,
+        version-filtered, all sources), one entry per CVE.
+        """
+        user_assets = self.db.query(Asset).filter(Asset.user_email == user_email).all()
+        if not user_assets:
+            return {
+                "message": "No assets registered for monitoring",
+                "total_assets": 0,
             }
 
-            return report
+        findings = await self.get_user_vulnerabilities(user_email, days=days)
+        recent: dict[str, dict[str, Any]] = {}
+        for finding in findings:
+            recent.setdefault(finding["cve_id"], finding)
+        recent_cves = sorted(
+            recent.values(),
+            key=lambda x: (
+                -severity_rank(x.get("severity")),
+                -_timestamp(x.get("publish_date")),
+            ),
+        )
+        by_severity = Counter(
+            (cve.get("severity") or "").upper() for cve in recent_cves
+        )
 
-        except Exception as e:
-            logger.error(f"Error generating monitoring report: {e}")
-            return {"error": str(e)}
+        return {
+            "user_email": user_email,
+            "report_period_days": days,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "total_assets": len(user_assets),
+            "assets": [
+                {
+                    "id": asset.id,
+                    "name": asset.name,
+                    "version": asset.version,
+                    "description": asset.description,
+                }
+                for asset in user_assets
+            ],
+            "recent_vulnerabilities": recent_cves[:50],
+            "vulnerability_summary": {
+                "total_recent": len(recent_cves),
+                "critical": by_severity["CRITICAL"],
+                "high": by_severity["HIGH"],
+                "medium": by_severity["MEDIUM"],
+                "low": by_severity["LOW"],
+            },
+            "data_source": "NIST NVD + OSV.dev (live data)",
+        }
+
+
+def _timestamp(value: str | None) -> float:
+    if not value:
+        return 0
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()

@@ -265,3 +265,54 @@ def test_unavailable_source_with_no_findings_raises():
     svc = CVEMonitoringService(None, sources=[DownSource()])
     with pytest.raises(NvdUnavailableError):
         asyncio.run(svc._get_asset_vulnerabilities(_asset_response()))
+
+
+def test_monitoring_report_uses_the_matching_engine():
+    db = SessionLocal()
+    email = "report@example.com"
+    try:
+        db.query(Asset).filter(Asset.user_email == email).delete()
+        db.commit()
+        db.add_all(
+            [
+                Asset(name="nginx", version="1.24.0", user_email=email),
+                Asset(name="openssl", version="3.0.0", user_email=email),
+            ]
+        )
+        db.commit()
+
+        seen_windows = []
+
+        class FixedSource:
+            async def search(self, asset, start, end, use_cache):
+                seen_windows.append((end - start).days)
+                shared = {"cve_id": "CVE-2099-0100", "severity": "LOW"}
+                own = {
+                    "cve_id": f"CVE-2099-{asset.name}",
+                    "severity": "CRITICAL" if asset.name == "openssl" else "HIGH",
+                    "publish_date": "2099-01-01T00:00:00",
+                }
+                return sources.SourceResult([own, shared])
+
+        svc = CVEMonitoringService(db, sources=[FixedSource()])
+        report = asyncio.run(svc.get_monitoring_report(email, days=7))
+
+        assert seen_windows == [7, 7]
+        # One entry per CVE even when it affects several assets, highest first.
+        assert [v["cve_id"] for v in report["recent_vulnerabilities"]] == [
+            "CVE-2099-openssl",
+            "CVE-2099-nginx",
+            "CVE-2099-0100",
+        ]
+        assert report["vulnerability_summary"] == {
+            "total_recent": 3,
+            "critical": 1,
+            "high": 1,
+            "medium": 0,
+            "low": 1,
+        }
+        assert report["total_assets"] == 2
+    finally:
+        db.query(Asset).filter(Asset.user_email == email).delete()
+        db.commit()
+        db.close()

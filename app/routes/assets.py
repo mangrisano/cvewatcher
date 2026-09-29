@@ -243,6 +243,8 @@ async def get_monitoring_report(
         )
         return report
 
+    except NvdUnavailableError:
+        raise
     except Exception:
         logger.exception("Error generating monitoring report")
         raise HTTPException(status_code=500, detail="Error generating report")

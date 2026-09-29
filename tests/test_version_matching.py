@@ -187,7 +187,7 @@ def test_asset_with_cpe_uses_precise_nvd_lookup(monkeypatch):
             )
         ]
 
-    monkeypatch.setattr(svc.nist_client, "search_cves", fake_search)
+    monkeypatch.setattr(svc.sources[0].client, "search_cves", fake_search)
 
     asset = SimpleNamespace(
         name="nginx",

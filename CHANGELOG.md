@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`GET /assets/monitoring/report` listed unrelated CVEs**: it ran its own
+  NVD keyword search with no relevance or version filtering, ignored CPEs and
+  OSV, and returned HTTP 200 with an `error` field when something failed. It
+  now uses the same engine as `/findings` (CPE-aware, version-filtered, all
+  sources, KEV/EPSS and triage status on each entry), keeps one entry per CVE,
+  and fails with a proper 503/500. Entries carry `relevance_reason` instead of
+  `matched_query`.
+
 ## [2.4.0] - 2026-09-29
 
 ### Added
