@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 from types import SimpleNamespace
 
+from app.services import matching
 from app.services.cve_monitoring import CVEMonitoringService
 
 
@@ -24,7 +25,6 @@ def _cve(summary="", affected_products=None):
 
 
 def test_version_in_range_is_relevant():
-    svc = _service()
     cve = _cve(
         summary="A flaw in nginx",
         affected_products=[
@@ -37,11 +37,10 @@ def test_version_in_range_is_relevant():
             }
         ],
     )
-    assert svc._is_relevant_to_asset(cve, _asset(version="1.24.0")) is True
+    assert matching.is_relevant(cve, _asset(version="1.24.0")) is True
 
 
 def test_version_below_range_is_not_relevant():
-    svc = _service()
     # "nginx before 1.13.6": vulnerable only for versions < 1.13.6.
     cve = _cve(
         summary="nginx before 1.13.6 has a buffer overflow",
@@ -55,11 +54,10 @@ def test_version_below_range_is_not_relevant():
             }
         ],
     )
-    assert svc._is_relevant_to_asset(cve, _asset(version="1.24.0")) is False
+    assert matching.is_relevant(cve, _asset(version="1.24.0")) is False
 
 
 def test_exact_cpe_version_match():
-    svc = _service()
     cve = _cve(
         affected_products=[
             {
@@ -71,12 +69,11 @@ def test_exact_cpe_version_match():
             }
         ],
     )
-    assert svc._is_relevant_to_asset(cve, _asset(version="1.24.0")) is True
-    assert svc._is_relevant_to_asset(cve, _asset(version="1.23.0")) is False
+    assert matching.is_relevant(cve, _asset(version="1.24.0")) is True
+    assert matching.is_relevant(cve, _asset(version="1.23.0")) is False
 
 
 def test_third_party_product_with_version_is_filtered_out():
-    svc = _service()
     # CVE only mentions nginx in text; affected CPE is a different product.
     cve = _cve(
         summary="Pascom Cloud Phone System used in NGINX deployments",
@@ -92,11 +89,10 @@ def test_third_party_product_with_version_is_filtered_out():
     )
     # The CVE has CPE data but none reference nginx -> not relevant, even though
     # the summary mentions nginx. This is the Step B product-identity filter.
-    assert svc._is_relevant_to_asset(cve, _asset(version="1.24.0")) is False
+    assert matching.is_relevant(cve, _asset(version="1.24.0")) is False
 
 
 def test_third_party_product_without_version_is_filtered_out():
-    svc = _service()
     cve = _cve(
         summary="Authelia, a portal often deployed behind nginx, has a flaw",
         affected_products=[
@@ -111,17 +107,15 @@ def test_third_party_product_without_version_is_filtered_out():
     )
     # Even without an asset version, a CVE whose CPEs are all foreign products
     # is filtered out when CPE data is present.
-    assert svc._is_relevant_to_asset(cve, _asset(version=None)) is False
+    assert matching.is_relevant(cve, _asset(version=None)) is False
 
 
 def test_no_version_keeps_name_based_relevance():
-    svc = _service()
     cve = _cve(summary="A flaw in nginx web server")
-    assert svc._is_relevant_to_asset(cve, _asset(version=None)) is True
+    assert matching.is_relevant(cve, _asset(version=None)) is True
 
 
 def test_similar_named_product_is_not_matched():
-    svc = _service()
     # "nginx_proxy_manager" is a different product and must not match "nginx".
     cve = _cve(
         summary="jc21 Nginx Proxy Manager before 2.9.17 allows XSS",
@@ -135,11 +129,10 @@ def test_similar_named_product_is_not_matched():
             }
         ],
     )
-    assert svc._is_relevant_to_asset(cve, _asset(version="1.24.0")) is False
+    assert matching.is_relevant(cve, _asset(version="1.24.0")) is False
 
 
 def test_unparseable_asset_version_is_not_dropped():
-    svc = _service()
     cve = _cve(
         affected_products=[
             {
@@ -151,26 +144,26 @@ def test_unparseable_asset_version_is_not_dropped():
             }
         ],
     )
-    assert svc._is_relevant_to_asset(cve, _asset(version="weird-build")) is True
+    assert matching.is_relevant(cve, _asset(version="weird-build")) is True
 
 
 def test_full_cpe_pads_partial_cpe():
     # A partial CPE is padded to the 13-component CPE 2.3 form NVD requires.
     assert (
-        CVEMonitoringService._full_cpe("cpe:2.3:a:f5:nginx:1.24.0")
+        matching.full_cpe("cpe:2.3:a:f5:nginx:1.24.0")
         == "cpe:2.3:a:f5:nginx:1.24.0:*:*:*:*:*:*:*"
     )
 
 
 def test_full_cpe_keeps_complete_cpe():
     full = "cpe:2.3:a:f5:nginx:1.24.0:*:*:*:*:*:*:*"
-    assert CVEMonitoringService._full_cpe(full) == full
+    assert matching.full_cpe(full) == full
 
 
 def test_full_cpe_rejects_non_cpe_values():
-    assert CVEMonitoringService._full_cpe(None) is None
-    assert CVEMonitoringService._full_cpe("nginx 1.24.0") is None
-    assert CVEMonitoringService._full_cpe("") is None
+    assert matching.full_cpe(None) is None
+    assert matching.full_cpe("nginx 1.24.0") is None
+    assert matching.full_cpe("") is None
 
 
 def test_asset_with_cpe_uses_precise_nvd_lookup(monkeypatch):
@@ -219,7 +212,7 @@ def test_asset_with_cpe_uses_precise_nvd_lookup(monkeypatch):
             }
         ],
     )
-    assert svc._is_relevant_to_asset(cve, _asset(version="1.24.0")) is True
+    assert matching.is_relevant(cve, _asset(version="1.24.0")) is True
 
 
 class _FakeCpeClient:

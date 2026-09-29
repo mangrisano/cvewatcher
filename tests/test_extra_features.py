@@ -7,8 +7,7 @@ import httpx
 
 from app.database.connection import SessionLocal
 from app.database.models import Asset, AssetCVE, CVE
-from app.services import osv
-from app.services.cve_monitoring import CVEMonitoringService
+from app.services import matching, osv
 from app.services.digest import _format_digest
 from app.services.metrics import render_metrics
 from app.services.osv import OsvClient
@@ -73,7 +72,7 @@ def test_osv_to_finding_keeps_ghsa_band_but_scores_from_vector():
 def test_finding_richness_lets_scored_duplicate_win_merge():
     poor = {"cve_id": "CVE-1", "severity": None, "score": None}
     rich = {"cve_id": "CVE-1", "severity": "HIGH", "score": 7.5}
-    ordered = sorted([rich, poor], key=CVEMonitoringService._finding_richness)
+    ordered = sorted([rich, poor], key=matching.finding_richness)
     # Richest sorts last, so the dict-based dedup keeps it.
     assert ordered[-1] is rich
     merged = {v["cve_id"]: v for v in ordered}
