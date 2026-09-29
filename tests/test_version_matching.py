@@ -179,7 +179,7 @@ def test_asset_with_cpe_uses_precise_nvd_lookup(monkeypatch):
     svc = _service()
     calls = {}
 
-    def fake_search(*, cpe_name=None, keyword=None, **kwargs):
+    async def fake_search(*, cpe_name=None, keyword=None, **kwargs):
         calls["cpe_name"] = cpe_name
         calls["keyword"] = keyword
         return [
@@ -227,7 +227,7 @@ class _FakeCpeClient:
         self.names = names
         self.calls = 0
 
-    def find_cpe_names(self, keyword, limit=500):
+    async def find_cpe_names(self, keyword, limit=500):
         self.calls += 1
         return self.names
 
@@ -288,7 +288,7 @@ def test_resolve_cpes_returns_empty_when_lookup_fails():
     svc = _service()
 
     class _Boom:
-        def find_cpe_names(self, *a, **k):
+        async def find_cpe_names(self, *a, **k):
             raise RuntimeError("NVD down")
 
     svc.nist_client = _Boom()
@@ -319,13 +319,13 @@ def test_multiple_cpes_are_searched_concurrently_and_merged():
         )
 
     class _Client:
-        def find_cpe_names(self, keyword, limit=500):
+        async def find_cpe_names(self, keyword, limit=500):
             return [
                 "cpe:2.3:a:openssl:openssl:3.0.0:*:*:*:*:*:*:*",
                 "cpe:2.3:a:redhat:openssl:3.0.0:*:*:*:*:*:*:*",
             ]
 
-        def search_cves(self, *, cpe_name=None, **kwargs):
+        async def search_cves(self, *, cpe_name=None, **kwargs):
             if cpe_name and cpe_name.startswith("cpe:2.3:a:openssl:openssl"):
                 return [
                     _cveobj("CVE-A", "HIGH", 7.5),

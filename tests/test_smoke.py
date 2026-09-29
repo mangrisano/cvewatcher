@@ -318,3 +318,38 @@ def test_changing_asset_identity_drops_only_untriaged_findings(client):
         db.query(CVE).filter(CVE.id.in_(ids)).delete(synchronize_session=False)
         db.commit()
         db.close()
+
+
+def test_waiting_on_nvd_does_not_block_other_requests(monkeypatch):
+    import asyncio
+
+    import httpx
+
+    from app.main import app
+    from app.services import cve_service as cve_service_module
+    from app.utils.auth import create_access_token
+
+    nvd_released = None
+
+    async def slow_nvd(*args, **kwargs):
+        await nvd_released.wait()
+        return []
+
+    monkeypatch.setattr(
+        cve_service_module.nist_client, "search_cves_for_product", slow_nvd
+    )
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'k@x.it'})}"}
+
+    async def scenario():
+        nonlocal nvd_released
+        nvd_released = asyncio.Event()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+            search = asyncio.create_task(
+                c.get("/cves/search?product=nginx", headers=headers)
+            )
+            health = await asyncio.wait_for(c.get("/health"), timeout=2)
+            nvd_released.set()
+            return health.status_code, (await search).status_code
+
+    assert asyncio.run(scenario()) == (200, 200)

@@ -4,7 +4,6 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi.concurrency import run_in_threadpool
 from packaging.version import InvalidVersion, Version
 from sqlalchemy.orm import Session
 
@@ -220,9 +219,7 @@ class CVEMonitoringService:
         # NVD/CPE matches poorly. Best-effort; merged and deduplicated below.
         ecosystem = getattr(asset, "ecosystem", None)
         if ecosystem:
-            osv_found = await run_in_threadpool(
-                osv_client.search, ecosystem, asset.name, asset.version
-            )
+            osv_found = await osv_client.search(ecosystem, asset.name, asset.version)
             vulnerabilities.extend(osv_found)
 
         if nvd_failed and not vulnerabilities:
@@ -246,7 +243,7 @@ class CVEMonitoringService:
                 if (vuln.get("severity") or "").upper() == severity_filter_upper
             ]
 
-        await run_in_threadpool(enrichment_service.enrich, vulnerabilities_list)
+        await enrichment_service.enrich(vulnerabilities_list)
 
         # Actively-exploited (KEV) findings sort first, then by severity, then by
         # exploit probability (EPSS), then recency.
@@ -334,8 +331,7 @@ class CVEMonitoringService:
         """
         try:
             async with self._nvd_sem():
-                cves = await run_in_threadpool(
-                    self.nist_client.search_cves,
+                cves = await self.nist_client.search_cves(
                     cpe_name=cpe_name,
                     results_per_page=2000,
                     pub_start_date=pub_start_date,
@@ -391,8 +387,7 @@ class CVEMonitoringService:
     ) -> tuple[list[dict[str, Any]], bool]:
         try:
             async with self._nvd_sem():
-                cves = await run_in_threadpool(
-                    self.nist_client.search_cves,
+                cves = await self.nist_client.search_cves(
                     keyword=query,
                     results_per_page=100,
                     pub_start_date=pub_start_date,
@@ -460,9 +455,7 @@ class CVEMonitoringService:
             return []
         try:
             async with self._nvd_sem():
-                cpe_names = await run_in_threadpool(
-                    self.nist_client.find_cpe_names, asset.name
-                )
+                cpe_names = await self.nist_client.find_cpe_names(asset.name)
         except Exception as e:
             logger.warning(f"CPE resolution failed for '{asset.name}': {e}")
             return []
@@ -749,8 +742,7 @@ class CVEMonitoringService:
                     # Search for each query term separately to ensure we don't miss anything
                     for query in search_queries:
                         logger.info(f"Searching with keyword: {query}")
-                        query_cves = await run_in_threadpool(
-                            self.nist_client.search_cves,
+                        query_cves = await self.nist_client.search_cves(
                             keyword=query,
                             pub_start_date=datetime.now(timezone.utc)
                             - timedelta(days=days),

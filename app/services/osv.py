@@ -67,18 +67,23 @@ def _band_from_score(score: Optional[float]) -> Optional[str]:
     return None
 
 
+async def _http_post(url: str, **kwargs: Any) -> httpx.Response:
+    async with httpx.AsyncClient() as client:
+        return await client.post(url, **kwargs)
+
+
 class OsvClient:
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
 
-    def search(
+    async def search(
         self, ecosystem: str, name: str, version: Optional[str] = None
     ) -> list[dict[str, Any]]:
         body: dict[str, Any] = {"package": {"name": name, "ecosystem": ecosystem}}
         if version:
             body["version"] = version
         try:
-            response = httpx.post(OSV_QUERY_URL, json=body, timeout=self.timeout)
+            response = await _http_post(OSV_QUERY_URL, json=body, timeout=self.timeout)
             response.raise_for_status()
             payload = response.json()
         except (httpx.HTTPError, ValueError) as e:

@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version. Untriaged (`open`) findings are now dropped on such a change and
   the next monitoring cycle re-links those that still apply; triaged ones keep
   their status and notes.
+- **A slow NVD froze the whole server**: `/cves/fetch-recent` and
+  `/cves/search` called NVD synchronously (retries included, with
+  `time.sleep`) inside `async` routes, blocking the event loop for every user;
+  the other lookups held a threadpool thread per waiting request, which also
+  serves authentication. All outbound HTTP (NVD, OSV, CISA KEV, FIRST EPSS,
+  webhook/Slack notifiers) is now async; SMTP runs in a worker thread.
 - **Auto-running Alembic migrations was silently killing app logging**:
   `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
   file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`

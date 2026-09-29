@@ -38,6 +38,11 @@ def _is_truthy(value: str) -> bool:
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+async def _http_get(url: str, **kwargs: Any) -> httpx.Response:
+    async with httpx.AsyncClient() as client:
+        return await client.get(url, **kwargs)
+
+
 class EnrichmentService:
     def __init__(self, timeout: int = 10, ttl_seconds: int = 6 * 3600):
         self.timeout = timeout
@@ -51,14 +56,14 @@ class EnrichmentService:
     def enabled(self) -> bool:
         return _is_truthy(os.getenv("ENRICH_ENABLED", "true"))
 
-    def kev_ids(self) -> set[str]:
+    async def kev_ids(self) -> set[str]:
         """Return the set of CVE ids in the CISA KEV catalog (cached, best-effort)."""
         now = time.monotonic()
         if self._kev_ids is not None and now - self._kev_fetched_at < self.ttl_seconds:
             return self._kev_ids
 
         try:
-            response = httpx.get(KEV_FEED_URL, timeout=self.timeout)
+            response = await _http_get(KEV_FEED_URL, timeout=self.timeout)
             response.raise_for_status()
             payload = response.json()
         except (httpx.HTTPError, ValueError) as e:
@@ -76,7 +81,7 @@ class EnrichmentService:
         logger.info("Loaded %d CVE ids from the CISA KEV catalog", len(ids))
         return ids
 
-    def epss_scores(self, cve_ids: list[str]) -> dict[str, float]:
+    async def epss_scores(self, cve_ids: list[str]) -> dict[str, float]:
         """Return ``{cve_id: epss}`` for the requested ids (cached, best-effort)."""
         now = time.monotonic()
         wanted = {cve_id.strip().upper() for cve_id in cve_ids if cve_id}
@@ -89,7 +94,7 @@ class EnrichmentService:
 
         for start in range(0, len(missing), EPSS_BATCH_SIZE):
             batch = missing[start : start + EPSS_BATCH_SIZE]
-            self._fetch_epss_batch(batch, now)
+            await self._fetch_epss_batch(batch, now)
 
         return {
             cve_id: self._epss_cache[cve_id]
@@ -97,9 +102,9 @@ class EnrichmentService:
             if cve_id in self._epss_cache
         }
 
-    def _fetch_epss_batch(self, batch: list[str], now: float) -> None:
+    async def _fetch_epss_batch(self, batch: list[str], now: float) -> None:
         try:
-            response = httpx.get(
+            response = await _http_get(
                 EPSS_API_URL,
                 params={"cve": ",".join(batch)},
                 timeout=self.timeout,
@@ -124,7 +129,7 @@ class EnrichmentService:
         for cve_id in batch:
             self._epss_fetched_at.setdefault(cve_id, now)
 
-    def enrich(self, findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def enrich(self, findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Add ``kev`` and ``epss`` to each finding in place; best-effort.
 
         A failure in either feed leaves the corresponding field at its default
@@ -137,8 +142,8 @@ class EnrichmentService:
             return findings
 
         cve_ids = [f.get("cve_id", "") for f in findings if f.get("cve_id")]
-        kev_ids = self.kev_ids()
-        epss = self.epss_scores(cve_ids)
+        kev_ids = await self.kev_ids()
+        epss = await self.epss_scores(cve_ids)
 
         for finding in findings:
             cve_id = (finding.get("cve_id") or "").strip().upper()

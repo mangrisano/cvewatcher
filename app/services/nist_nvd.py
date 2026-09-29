@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -17,6 +18,11 @@ class NvdUnavailableError(Exception):
 
 # NVD rejects wider pub/mod date windows (with a 404, indistinguishable from "no data").
 MAX_DATE_RANGE_DAYS = 120
+
+
+async def _http_get(url: str, **kwargs: Any) -> httpx.Response:
+    async with httpx.AsyncClient() as client:
+        return await client.get(url, **kwargs)
 
 
 @dataclass
@@ -48,13 +54,13 @@ class NistNvdClient:
         self._cpe_cache: dict[str, list[str]] = {}
         self._search_cache: dict[tuple, tuple[float, list["CVEData"]]] = {}
 
-    def _make_request(
+    async def _make_request(
         self, params: dict[str, Any], url: Optional[str] = None
     ) -> dict[str, Any]:
         last_error: Optional[Exception] = None
         for attempt in range(self.MAX_RETRIES):
             try:
-                response = httpx.get(
+                response = await _http_get(
                     url or self.BASE_URL,
                     headers=self.session_headers,
                     params=params,
@@ -72,7 +78,7 @@ class NistNvdClient:
                         f"retrying in {wait}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
                     )
                     last_error = Exception(f"Rate limited: HTTP {response.status_code}")
-                    time.sleep(wait)
+                    await asyncio.sleep(wait)
                     continue
                 # A 404 means "no data for this query" (e.g. a CPE not in the
                 # dictionary), not that NVD is down: return an empty result set
@@ -88,7 +94,7 @@ class NistNvdClient:
                     f"NIST API timeout (attempt {attempt + 1}/{self.MAX_RETRIES}), "
                     f"retrying in {wait}s: {e}"
                 )
-                time.sleep(wait)
+                await asyncio.sleep(wait)
                 continue
             except httpx.HTTPError as e:
                 logger.error(f"NIST API connection error: {e}")
@@ -100,7 +106,7 @@ class NistNvdClient:
             f"NIST API request failed after {self.MAX_RETRIES} attempts: {last_error}"
         )
 
-    def search_cves(
+    async def search_cves(
         self,
         cpe_name: Optional[str] = None,
         keyword: Optional[str] = None,
@@ -161,7 +167,7 @@ class NistNvdClient:
             params["modEndDate"] = mod_end_date.strftime("%Y-%m-%dT%H:%M:%S.000")
 
         try:
-            response = self._make_request(params)
+            response = await self._make_request(params)
             cves = self._parse_cve_response(response)
         except Exception as e:
             logger.error(f"Error in CVE search: {e}")
@@ -206,29 +212,29 @@ class NistNvdClient:
             start_index,
         )
 
-    def get_recent_cves(
+    async def get_recent_cves(
         self, days: int = 7, cpe_name: Optional[str] = None
     ) -> list[CVEData]:
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
 
-        return self.search_cves(
+        return await self.search_cves(
             cpe_name=cpe_name,
             pub_start_date=start_date,
             pub_end_date=end_date,
             results_per_page=2000,
         )
 
-    def search_cves_for_product(
+    async def search_cves_for_product(
         self, product_name: str, version: Optional[str] = None
     ) -> list[CVEData]:
         keyword = product_name
         if version:
             keyword = f"{product_name} {version}"
 
-        return self.search_cves(keyword=keyword, results_per_page=100)
+        return await self.search_cves(keyword=keyword, results_per_page=100)
 
-    def find_cpe_names(self, keyword: str, limit: int = 500) -> list[str]:
+    async def find_cpe_names(self, keyword: str, limit: int = 500) -> list[str]:
         """Resolve a product name to canonical CPE names via the NVD CPE API.
 
         Returns the ``cpeName`` strings matching ``keyword`` so an asset that
@@ -245,7 +251,7 @@ class NistNvdClient:
             return self._cpe_cache[cache_key]
 
         params = {"keywordSearch": keyword, "resultsPerPage": min(limit, 10000)}
-        response = self._make_request(params, url=self.CPE_BASE_URL)
+        response = await self._make_request(params, url=self.CPE_BASE_URL)
 
         names: list[str] = []
         seen: set[str] = set()

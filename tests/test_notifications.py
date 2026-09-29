@@ -1,5 +1,7 @@
 """Tests for notification backends."""
 
+import asyncio
+
 from app.services import notifications
 from app.services.notifications import (
     ConsoleNotifier,
@@ -9,6 +11,13 @@ from app.services.notifications import (
     build_notifiers_from_env,
     dispatch,
 )
+
+
+def _as_async(fn):
+    async def wrapper(*args, **kwargs):
+        return fn(*args, **kwargs)
+
+    return wrapper
 
 
 FINDINGS = [
@@ -31,12 +40,12 @@ class RecordingNotifier:
     def __init__(self):
         self.received = None
 
-    def notify(self, findings):
+    async def notify(self, findings):
         self.received = findings
 
 
 def test_console_notifier_does_not_raise():
-    ConsoleNotifier().notify(FINDINGS)
+    asyncio.run(ConsoleNotifier().notify(FINDINGS))
 
 
 def test_webhook_notifier_posts_findings(monkeypatch):
@@ -47,8 +56,8 @@ def test_webhook_notifier_posts_findings(monkeypatch):
         captured["json"] = json
         captured["timeout"] = timeout
 
-    monkeypatch.setattr(notifications.httpx, "post", fake_post)
-    WebhookNotifier("https://hook.example.com", timeout=7).notify(FINDINGS)
+    monkeypatch.setattr(notifications, "_http_post", _as_async(fake_post))
+    asyncio.run(WebhookNotifier("https://hook.example.com", timeout=7).notify(FINDINGS))
 
     assert captured["url"] == "https://hook.example.com"
     assert captured["json"] == {"findings": FINDINGS}
@@ -61,31 +70,31 @@ def test_webhook_notifier_swallows_http_errors(monkeypatch):
     def boom(*args, **kwargs):
         raise httpx.ConnectError("down")
 
-    monkeypatch.setattr(notifications.httpx, "post", boom)
+    monkeypatch.setattr(notifications, "_http_post", _as_async(boom))
     # Should not raise.
-    WebhookNotifier("https://hook.example.com").notify(FINDINGS)
+    asyncio.run(WebhookNotifier("https://hook.example.com").notify(FINDINGS))
 
 
 def test_dispatch_skips_when_no_findings():
     recorder = RecordingNotifier()
-    dispatch([], [recorder])
+    asyncio.run(dispatch([], [recorder]))
     assert recorder.received is None
 
 
 def test_dispatch_sends_to_all_notifiers():
     recorder = RecordingNotifier()
-    dispatch(FINDINGS, [recorder])
+    asyncio.run(dispatch(FINDINGS, [recorder]))
     assert recorder.received == FINDINGS
 
 
 def test_dispatch_isolates_failing_notifier():
     class FailingNotifier:
-        def notify(self, findings):
+        async def notify(self, findings):
             raise RuntimeError("boom")
 
     recorder = RecordingNotifier()
     # The failing notifier must not prevent the recorder from being called.
-    dispatch(FINDINGS, [FailingNotifier(), recorder])
+    asyncio.run(dispatch(FINDINGS, [FailingNotifier(), recorder]))
     assert recorder.received == FINDINGS
 
 
@@ -110,8 +119,8 @@ def test_slack_notifier_posts_text(monkeypatch):
         captured["url"] = url
         captured["json"] = json
 
-    monkeypatch.setattr(notifications.httpx, "post", fake_post)
-    SlackNotifier("https://slack.example.com/hook").notify(FINDINGS)
+    monkeypatch.setattr(notifications, "_http_post", _as_async(fake_post))
+    asyncio.run(SlackNotifier("https://slack.example.com/hook").notify(FINDINGS))
 
     assert captured["url"] == "https://slack.example.com/hook"
     text = captured["json"]["text"]
@@ -126,8 +135,8 @@ def test_slack_notifier_swallows_http_errors(monkeypatch):
     def boom(*args, **kwargs):
         raise httpx.ConnectError("down")
 
-    monkeypatch.setattr(notifications.httpx, "post", boom)
-    SlackNotifier("https://slack.example.com/hook").notify(FINDINGS)
+    monkeypatch.setattr(notifications, "_http_post", _as_async(boom))
+    asyncio.run(SlackNotifier("https://slack.example.com/hook").notify(FINDINGS))
 
 
 def test_email_notifier_sends_message(monkeypatch):
@@ -157,15 +166,17 @@ def test_email_notifier_sends_message(monkeypatch):
 
     monkeypatch.setattr(notifications.smtplib, "SMTP", FakeSMTP)
 
-    EmailNotifier(
-        host="smtp.example.com",
-        port=587,
-        sender="cve@example.com",
-        recipients=["ops@example.com"],
-        username="user",
-        password="pass",
-        use_tls=True,
-    ).notify(FINDINGS)
+    asyncio.run(
+        EmailNotifier(
+            host="smtp.example.com",
+            port=587,
+            sender="cve@example.com",
+            recipients=["ops@example.com"],
+            username="user",
+            password="pass",
+            use_tls=True,
+        ).notify(FINDINGS)
+    )
 
     assert sent["host"] == "smtp.example.com"
     assert sent["tls"] is True
@@ -179,12 +190,14 @@ def test_email_notifier_swallows_smtp_errors(monkeypatch):
         raise OSError("connection refused")
 
     monkeypatch.setattr(notifications.smtplib, "SMTP", boom)
-    EmailNotifier(
-        host="smtp.example.com",
-        port=587,
-        sender="cve@example.com",
-        recipients=["ops@example.com"],
-    ).notify(FINDINGS)
+    asyncio.run(
+        EmailNotifier(
+            host="smtp.example.com",
+            port=587,
+            sender="cve@example.com",
+            recipients=["ops@example.com"],
+        ).notify(FINDINGS)
+    )
 
 
 def test_build_notifiers_includes_slack_and_email(monkeypatch):

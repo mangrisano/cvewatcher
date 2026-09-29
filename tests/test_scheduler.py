@@ -36,7 +36,7 @@ class RecordingNotifier:
     def __init__(self):
         self.received = None
 
-    def notify(self, findings):
+    async def notify(self, findings):
         self.received = findings
 
 

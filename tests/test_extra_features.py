@@ -1,5 +1,6 @@
 """Tests for the OSV client, Prometheus metrics and the email digest formatter."""
 
+import asyncio
 from types import SimpleNamespace
 
 import httpx
@@ -11,6 +12,13 @@ from app.services.cve_monitoring import CVEMonitoringService
 from app.services.digest import _format_digest
 from app.services.metrics import render_metrics
 from app.services.osv import OsvClient
+
+
+def _as_async(fn):
+    async def wrapper(*args, **kwargs):
+        return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def test_osv_to_finding_prefers_cve_alias():
@@ -79,16 +87,16 @@ def test_osv_search_parses_and_degrades(monkeypatch):
             json=lambda: {"vulns": [{"id": "GHSA-1", "aliases": []}]},
         )
 
-    monkeypatch.setattr(osv.httpx, "post", fake_post)
-    assert OsvClient().search("PyPI", "django", "4.0") == [
+    monkeypatch.setattr(osv, "_http_post", _as_async(fake_post))
+    assert asyncio.run(OsvClient().search("PyPI", "django", "4.0")) == [
         OsvClient._to_finding({"id": "GHSA-1", "aliases": []})
     ]
 
     def boom(*a, **k):
         raise httpx.ConnectError("down")
 
-    monkeypatch.setattr(osv.httpx, "post", boom)
-    assert OsvClient().search("PyPI", "django") == []
+    monkeypatch.setattr(osv, "_http_post", _as_async(boom))
+    assert asyncio.run(OsvClient().search("PyPI", "django")) == []
 
 
 def test_format_digest():

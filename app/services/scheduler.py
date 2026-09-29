@@ -56,7 +56,7 @@ async def run_monitoring_cycle(
         results = await service.monitor_all_assets()
         findings = _extract_new_findings(results)
         logger.info("Monitoring cycle complete: %d new finding(s)", len(findings))
-        dispatch(findings, notifiers)
+        await dispatch(findings, notifiers)
         return findings
     except Exception as e:
         logger.error("Monitoring cycle failed: %s", e)

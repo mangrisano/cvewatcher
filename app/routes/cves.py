@@ -50,7 +50,7 @@ async def fetch_recent_cves(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        stored_count = cve_service.fetch_and_store_recent_cves(days=days)
+        stored_count = await cve_service.fetch_and_store_recent_cves(days=days)
         return {
             "message": f"Retrieved and saved {stored_count} CVEs from the last {days} days",
             "stored_count": stored_count,
@@ -62,7 +62,7 @@ async def fetch_recent_cves(
 
 
 @router.get("/recent", response_model=list[CVEResponse])
-async def get_recent_cves(
+def get_recent_cves(
     limit: int = Query(default=20, ge=1, le=100, description="Number of CVE to return"),
     offset: int = Query(default=0, ge=0, description="Number of CVE to skip"),
     current_user: dict = Depends(get_current_user),
@@ -124,7 +124,7 @@ async def search_cves(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        cves = cve_service.search_cves_for_asset(product, version)
+        cves = await cve_service.search_cves_for_asset(product, version)
 
         response = []
         for cve_data in cves:

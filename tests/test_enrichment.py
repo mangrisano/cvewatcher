@@ -1,10 +1,18 @@
 """Tests for the KEV/EPSS enrichment service (network fully mocked)."""
 
+import asyncio
 import httpx
 import pytest
 
 from app.services import enrichment
 from app.services.enrichment import EnrichmentService
+
+
+def _as_async(fn):
+    async def wrapper(*args, **kwargs):
+        return fn(*args, **kwargs)
+
+    return wrapper
 
 
 class FakeResponse:
@@ -40,12 +48,12 @@ def test_kev_ids_parses_and_caches(monkeypatch):
             }
         )
 
-    monkeypatch.setattr(enrichment.httpx, "get", fake_get)
+    monkeypatch.setattr(enrichment, "_http_get", _as_async(fake_get))
     service = EnrichmentService()
 
-    assert service.kev_ids() == {"CVE-2021-1", "CVE-2021-2"}
+    assert asyncio.run(service.kev_ids()) == {"CVE-2021-1", "CVE-2021-2"}
     # Second call is served from cache (no extra HTTP request).
-    assert service.kev_ids() == {"CVE-2021-1", "CVE-2021-2"}
+    assert asyncio.run(service.kev_ids()) == {"CVE-2021-1", "CVE-2021-2"}
     assert calls["n"] == 1
 
 
@@ -53,9 +61,9 @@ def test_kev_ids_degrades_to_empty_on_failure(monkeypatch):
     def boom(url, **kwargs):
         raise httpx.ConnectError("down")
 
-    monkeypatch.setattr(enrichment.httpx, "get", boom)
+    monkeypatch.setattr(enrichment, "_http_get", _as_async(boom))
     service = EnrichmentService()
-    assert service.kev_ids() == set()
+    assert asyncio.run(service.kev_ids()) == set()
 
 
 def test_epss_scores_parses_and_caches(monkeypatch):
@@ -72,13 +80,13 @@ def test_epss_scores_parses_and_caches(monkeypatch):
             }
         )
 
-    monkeypatch.setattr(enrichment.httpx, "get", fake_get)
+    monkeypatch.setattr(enrichment, "_http_get", _as_async(fake_get))
     service = EnrichmentService()
 
-    scores = service.epss_scores(["CVE-2021-1", "CVE-2021-2"])
+    scores = asyncio.run(service.epss_scores(["CVE-2021-1", "CVE-2021-2"]))
     assert scores == {"CVE-2021-1": 0.97, "CVE-2021-2": 0.10}
     # Cached: asking again does not trigger another request.
-    service.epss_scores(["CVE-2021-1"])
+    asyncio.run(service.epss_scores(["CVE-2021-1"]))
     assert calls["n"] == 1
 
 
@@ -88,14 +96,14 @@ def test_enrich_adds_kev_and_epss(monkeypatch):
             return FakeResponse({"vulnerabilities": [{"cveID": "CVE-2021-1"}]})
         return FakeResponse({"data": [{"cve": "CVE-2021-1", "epss": "0.5"}]})
 
-    monkeypatch.setattr(enrichment.httpx, "get", fake_get)
+    monkeypatch.setattr(enrichment, "_http_get", _as_async(fake_get))
     service = EnrichmentService()
 
     findings = [
         {"cve_id": "CVE-2021-1"},
         {"cve_id": "CVE-2021-2"},
     ]
-    service.enrich(findings)
+    asyncio.run(service.enrich(findings))
 
     assert findings[0]["kev"] is True
     assert findings[0]["epss"] == 0.5
@@ -109,10 +117,10 @@ def test_enrich_disabled_sets_defaults_without_network(monkeypatch):
     def boom(url, **kwargs):
         raise AssertionError("network must not be touched when disabled")
 
-    monkeypatch.setattr(enrichment.httpx, "get", boom)
+    monkeypatch.setattr(enrichment, "_http_get", _as_async(boom))
     service = EnrichmentService()
 
     findings = [{"cve_id": "CVE-2021-1"}]
-    service.enrich(findings)
+    asyncio.run(service.enrich(findings))
     assert findings[0]["kev"] is False
     assert findings[0]["epss"] is None

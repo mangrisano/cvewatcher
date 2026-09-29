@@ -5,6 +5,7 @@ the application can run without any external service. Each notifier receives a
 list of "finding" dicts and is responsible for delivering them.
 """
 
+import asyncio
 import logging
 import os
 import smtplib
@@ -40,13 +41,18 @@ def _format_finding(finding: Finding) -> str:
 
 
 class Notifier(Protocol):
-    def notify(self, findings: list[Finding]) -> None: ...
+    async def notify(self, findings: list[Finding]) -> None: ...
+
+
+async def _http_post(url: str, **kwargs: Any) -> httpx.Response:
+    async with httpx.AsyncClient() as client:
+        return await client.post(url, **kwargs)
 
 
 class ConsoleNotifier:
     """Logs each finding through the standard logging system."""
 
-    def notify(self, findings: list[Finding]) -> None:
+    async def notify(self, findings: list[Finding]) -> None:
         for finding in findings:
             logger.warning(
                 "New vulnerability for %s v%s (%s): %s [%s]%s - %s",
@@ -67,9 +73,11 @@ class WebhookNotifier:
         self.url = url
         self.timeout = timeout
 
-    def notify(self, findings: list[Finding]) -> None:
+    async def notify(self, findings: list[Finding]) -> None:
         try:
-            httpx.post(self.url, json={"findings": findings}, timeout=self.timeout)
+            await _http_post(
+                self.url, json={"findings": findings}, timeout=self.timeout
+            )
         except httpx.HTTPError as e:
             logger.error("Webhook notification to %s failed: %s", self.url, e)
 
@@ -81,11 +89,11 @@ class SlackNotifier:
         self.webhook_url = webhook_url
         self.timeout = timeout
 
-    def notify(self, findings: list[Finding]) -> None:
+    async def notify(self, findings: list[Finding]) -> None:
         header = f"*CVE Watcher* — {len(findings)} new vulnerability finding(s)"
         lines = "\n".join(f"• {_format_finding(f)}" for f in findings)
         try:
-            httpx.post(
+            await _http_post(
                 self.webhook_url,
                 json={"text": f"{header}\n{lines}"},
                 timeout=self.timeout,
@@ -117,7 +125,10 @@ class EmailNotifier:
         self.use_tls = use_tls
         self.timeout = timeout
 
-    def notify(self, findings: list[Finding]) -> None:
+    async def notify(self, findings: list[Finding]) -> None:
+        await asyncio.to_thread(self._send, findings)
+
+    def _send(self, findings: list[Finding]) -> None:
         message = EmailMessage()
         message["Subject"] = (
             f"CVE Watcher: {len(findings)} new vulnerability finding(s)"
@@ -221,12 +232,12 @@ def build_notifiers_from_env() -> list[Notifier]:
     return notifiers
 
 
-def dispatch(findings: list[Finding], notifiers: list[Notifier]) -> None:
+async def dispatch(findings: list[Finding], notifiers: list[Notifier]) -> None:
     """Send findings to every notifier; a failing notifier never blocks others."""
     if not findings:
         return
     for notifier in notifiers:
         try:
-            notifier.notify(findings)
+            await notifier.notify(findings)
         except Exception as e:
             logger.error("Notifier %s failed: %s", type(notifier).__name__, e)

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -13,17 +14,11 @@ class CVEService:
     def __init__(self):
         self.nist_client = nist_client
 
-    def fetch_and_store_recent_cves(self, days: int = 7) -> int:
+    async def fetch_and_store_recent_cves(self, days: int = 7) -> int:
         try:
-            recent_cves = nist_client.get_recent_cves(days=days)
-
-            stored_count = 0
-            with next(get_db()) as db:
-                for cve_data in recent_cves:
-                    if self._store_cve(db, cve_data):
-                        stored_count += 1
-
-                db.commit()
+            recent_cves = await self.nist_client.get_recent_cves(days=days)
+            # Thousands of upserts: keep them off the event loop.
+            stored_count = await asyncio.to_thread(self._store_all, recent_cves)
 
             logger.info(
                 f"Stored {stored_count} recent CVEs out of {len(recent_cves)} retrieved"
@@ -34,11 +29,20 @@ class CVEService:
             logger.error(f"Error retrieving recent CVEs: {e}")
             raise
 
-    def search_cves_for_asset(
+    def _store_all(self, cves: list[CVEData]) -> int:
+        stored_count = 0
+        with next(get_db()) as db:
+            for cve_data in cves:
+                if self._store_cve(db, cve_data):
+                    stored_count += 1
+            db.commit()
+        return stored_count
+
+    async def search_cves_for_asset(
         self, asset_name: str, version: Optional[str] = None
     ) -> list[CVEData]:
         try:
-            return self.nist_client.search_cves_for_product(asset_name, version)
+            return await self.nist_client.search_cves_for_product(asset_name, version)
         except Exception as e:
             logger.error(f"Error in CVE search for asset {asset_name}: {e}")
             raise
