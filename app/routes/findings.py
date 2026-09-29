@@ -18,7 +18,7 @@ from app.database.connection import get_db
 from app.dependencies import get_current_user
 from app.models import SUPPRESSED_STATUSES, FindingsSummary, VulnerabilityResponse
 from app.services.cve_monitoring import CVEMonitoringService
-from app.services.nist_nvd import NvdUnavailableError
+from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,9 @@ async def _collect_findings(
 
 @router.get("", response_model=FindingsSummary)
 async def findings_summary(
-    days: int = Query(default=0, ge=0, description="0 = all time"),
+    days: int = Query(
+        default=0, ge=0, le=MAX_DATE_RANGE_DAYS, description="0 = all time"
+    ),
     include_suppressed: bool = Query(default=False),
     refresh: bool = Query(
         default=False, description="Bypass caches for a live re-check"
@@ -93,7 +95,7 @@ async def findings_summary(
 @router.get("/export")
 async def export_findings(
     format: str = Query(default="json", pattern="^(json|csv)$"),
-    days: int = Query(default=0, ge=0),
+    days: int = Query(default=0, ge=0, le=MAX_DATE_RANGE_DAYS),
     include_suppressed: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),

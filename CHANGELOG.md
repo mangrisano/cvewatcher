@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Findings without a severity (e.g. OSV advisories without CVSS) crashed**
   the severity filter (HTTP 500) and the scheduled monitoring cycle; the
   failed cycle had already stored the CVEs, so their notifications were lost.
+- **`days` above 120 silently returned no vulnerabilities**: NVD rejects
+  wider date windows with a 404, which was read as "no results". `days` is now
+  capped at 120 (422 above) on `/findings`, `/findings/export`,
+  `/assets/{id}/vulnerabilities` and `/assets/monitoring/report`.
 - **Auto-running Alembic migrations was silently killing app logging**:
   `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
   file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`

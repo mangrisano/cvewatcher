@@ -383,3 +383,17 @@ def test_search_cves_returns_empty_on_404(monkeypatch):
 
 def test_find_cpe_names_empty_keyword_returns_empty():
     assert NistNvdClient().find_cpe_names("") == []
+
+
+def test_search_cves_rejects_date_ranges_nvd_would_refuse():
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NistNvdClient
+
+    end = datetime.now(timezone.utc)
+    with pytest.raises(ValueError, match="cannot exceed"):
+        NistNvdClient().search_cves(
+            keyword="nginx",
+            pub_start_date=end - timedelta(days=MAX_DATE_RANGE_DAYS + 1),
+            pub_end_date=end,
+        )

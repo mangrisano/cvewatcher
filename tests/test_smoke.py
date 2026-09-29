@@ -202,3 +202,24 @@ def test_init_schema_follows_the_engine_when_database_url_is_unset(monkeypatch):
 
     database.init_schema()
     assert called == [True]
+
+
+def _login(client, username, email):
+    client.post(
+        "/auth/register",
+        json={"username": username, "email": email, "password": "Password123"},
+    )
+    token = client.post(
+        "/auth/login", json={"email": email, "password": "Password123"}
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_days_beyond_the_nvd_window_are_rejected(client):
+    headers = _login(client, "gina", "gina@example.com")
+    assert client.get("/findings?days=365", headers=headers).status_code == 422
+    assert client.get("/findings/export?days=121", headers=headers).status_code == 422
+    assert (
+        client.get("/assets/monitoring/report?days=0", headers=headers).status_code
+        == 422
+    )

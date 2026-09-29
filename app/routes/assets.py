@@ -16,7 +16,7 @@ from app.database.connection import get_db
 from app.database.models import Asset
 from app.dependencies import get_current_user
 from app.services.cve_monitoring import CVEMonitoringService
-from app.services.nist_nvd import NvdUnavailableError
+from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,7 @@ async def get_asset_vulnerabilities(
     days: int = Query(
         default=0,
         ge=0,
+        le=MAX_DATE_RANGE_DAYS,
         description="Only CVEs published in the last N days; 0 = all time",
     ),
     severity: SeverityLevel | None = None,
@@ -259,7 +260,7 @@ async def monitor_asset_cves(
 
 @router.get("/monitoring/report")
 async def get_monitoring_report(
-    days: int = 7,
+    days: int = Query(default=7, ge=1, le=MAX_DATE_RANGE_DAYS),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

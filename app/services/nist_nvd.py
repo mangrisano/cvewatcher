@@ -15,6 +15,10 @@ class NvdUnavailableError(Exception):
     """Raised when the NVD API cannot be reached or keeps failing."""
 
 
+# NVD rejects wider pub/mod date windows (with a 404, indistinguishable from "no data").
+MAX_DATE_RANGE_DAYS = 120
+
+
 @dataclass
 class CVEData:
     cve_id: str
@@ -108,6 +112,15 @@ class NistNvdClient:
         start_index: int = 0,
         use_cache: bool = True,
     ) -> list[CVEData]:
+        for start, end in (
+            (pub_start_date, pub_end_date),
+            (mod_start_date, mod_end_date),
+        ):
+            if start and end and end - start > timedelta(days=MAX_DATE_RANGE_DAYS):
+                raise ValueError(
+                    f"NVD date range cannot exceed {MAX_DATE_RANGE_DAYS} days"
+                )
+
         cache_key = self._search_cache_key(
             cpe_name,
             keyword,
