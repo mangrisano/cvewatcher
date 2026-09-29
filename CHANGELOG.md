@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Logout could revoke another user's refresh token**: a refresh token passed
   to `/auth/logout` is now revoked only if it belongs to the caller.
 
+### Changed
+
+- The Compose `db` service no longer publishes port 5432 on the host, so the
+  stack starts even when a local PostgreSQL already uses it. The app reaches
+  the database over the Compose network; to inspect it, use
+  `docker exec -it cvewatcher_db psql -U <user> <database>`.
+
 ## [2.6.0] - 2026-09-29
 
 ### Security
