@@ -213,3 +213,10 @@ def test_build_notifiers_includes_slack_and_email(monkeypatch):
     assert any(isinstance(n, SlackNotifier) for n in notifiers)
     email = next(n for n in notifiers if isinstance(n, EmailNotifier))
     assert email.recipients == ["ops@example.com", "sec@example.com"]
+
+
+def test_format_finding_labels_unscored_findings():
+    line = notifications._format_finding(
+        {"cve_id": "CVE-2099-1", "severity": None, "score": None}
+    )
+    assert line.startswith("CVE-2099-1 [UNKNOWN] ")

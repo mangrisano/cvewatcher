@@ -21,9 +21,12 @@ Finding = dict[str, Any]
 
 def _format_finding(finding: Finding) -> str:
     """One-line human summary of a finding, including KEV/EPSS triage signals."""
+    rating = finding.get("severity") or "UNKNOWN"
+    if finding.get("score") is not None:
+        rating += f" {finding['score']}"
     parts = [
         f"{finding.get('cve_id')}",
-        f"[{finding.get('severity')} {finding.get('score')}]",
+        f"[{rating}]",
         f"{finding.get('asset_name')} v{finding.get('asset_version')}",
     ]
     signals = []
@@ -60,7 +63,7 @@ class ConsoleNotifier:
                 finding.get("asset_version"),
                 finding.get("user_email"),
                 finding.get("cve_id"),
-                finding.get("severity"),
+                finding.get("severity") or "UNKNOWN",
                 " KEV" if finding.get("kev") else "",
                 finding.get("cve_url"),
             )

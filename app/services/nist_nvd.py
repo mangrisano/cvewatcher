@@ -42,6 +42,10 @@ class NistNvdClient:
     CPE_BASE_URL = "https://services.nvd.nist.gov/rest/json/cpes/2.0"
     MAX_RETRIES = 3
     BACKOFF_BASE_SECONDS = 6
+    PAGE_SIZE = 2000
+    MAX_PAGES = 20
+    # NVD asks keyless clients to pause ~6s between requests (5 req / 30s).
+    KEYLESS_PAGE_DELAY_SECONDS = 6
     # Short-lived cache so repeated identical queries (e.g. re-opening an asset
     # or toggling the dashboard severity filter) do not re-hit the NVD API.
     CACHE_TTL_SECONDS = int(os.getenv("NVD_CACHE_TTL_SECONDS", "600"))
@@ -117,7 +121,9 @@ class NistNvdClient:
         results_per_page: int = 20,
         start_index: int = 0,
         use_cache: bool = True,
+        all_pages: bool = False,
     ) -> list[CVEData]:
+        """Search NVD. ``all_pages`` follows ``totalResults`` (up to MAX_PAGES)."""
         for start, end in (
             (pub_start_date, pub_end_date),
             (mod_start_date, mod_end_date),
@@ -136,6 +142,7 @@ class NistNvdClient:
             mod_end_date,
             results_per_page,
             start_index,
+            all_pages,
         )
         now = time.monotonic()
         if use_cache:
@@ -144,7 +151,9 @@ class NistNvdClient:
                 return cached[1]
 
         params: dict[str, Any] = {
-            "resultsPerPage": min(results_per_page, 2000),
+            "resultsPerPage": self.PAGE_SIZE
+            if all_pages
+            else min(results_per_page, self.PAGE_SIZE),
             "startIndex": start_index,
         }
 
@@ -169,11 +178,37 @@ class NistNvdClient:
         try:
             response = await self._make_request(params)
             cves = self._parse_cve_response(response)
+            if all_pages:
+                cves += await self._remaining_pages(params, response)
         except Exception as e:
             logger.error(f"Error in CVE search: {e}")
             raise
 
         self._search_cache[cache_key] = (now, cves)
+        return cves
+
+    async def _remaining_pages(
+        self, params: dict[str, Any], first: dict[str, Any]
+    ) -> list[CVEData]:
+        total = int(first.get("totalResults") or 0)
+        next_index = params["startIndex"] + self.PAGE_SIZE
+        cves: list[CVEData] = []
+        pages = 1
+        while next_index < total and pages < self.MAX_PAGES:
+            if not self.api_key:
+                await asyncio.sleep(self.KEYLESS_PAGE_DELAY_SECONDS)
+            response = await self._make_request({**params, "startIndex": next_index})
+            cves += self._parse_cve_response(response)
+            next_index += self.PAGE_SIZE
+            pages += 1
+        if next_index < total:
+            logger.warning(
+                "NVD query truncated at %d of %d results (MAX_PAGES=%d): %s",
+                next_index,
+                total,
+                self.MAX_PAGES,
+                {k: v for k, v in params.items() if k != "startIndex"},
+            )
         return cves
 
     @staticmethod
@@ -192,6 +227,7 @@ class NistNvdClient:
         mod_end_date: Optional[datetime],
         results_per_page: int,
         start_index: int,
+        all_pages: bool = False,
     ) -> tuple:
         # Date windows are bucketed to the hour so time-windowed queries (e.g.
         # "last 30 days", whose bounds shift by microseconds each call) still
@@ -210,6 +246,7 @@ class NistNvdClient:
             bucket(mod_end_date),
             results_per_page,
             start_index,
+            all_pages,
         )
 
     async def get_recent_cves(
@@ -222,7 +259,7 @@ class NistNvdClient:
             cpe_name=cpe_name,
             pub_start_date=start_date,
             pub_end_date=end_date,
-            results_per_page=2000,
+            all_pages=True,
         )
 
     async def search_cves_for_product(
@@ -293,16 +330,19 @@ class NistNvdClient:
                 )
 
                 metrics = cve_item.get("metrics", {})
-                score = 0.0
+                # None when NVD has not scored it yet ("awaiting analysis").
+                score: Optional[float] = None
                 for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
                     metric = metrics.get(key)
                     if metric:
-                        cvss_data = metric[0].get("cvssData", {})
-                        score = cvss_data.get("baseScore", 0.0)
-                        if score:
+                        base = metric[0].get("cvssData", {}).get("baseScore")
+                        if base is not None:
+                            score = float(base)
                             break
 
-                if score >= 9.0:
+                if score is None:
+                    severity = None
+                elif score >= 9.0:
                     severity = "CRITICAL"
                 elif score >= 7.0:
                     severity = "HIGH"

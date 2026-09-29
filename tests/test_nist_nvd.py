@@ -421,3 +421,81 @@ def test_search_cves_rejects_date_ranges_nvd_would_refuse():
                 pub_end_date=end,
             )
         )
+
+
+def test_unscored_cve_has_no_severity_or_score():
+    response = {
+        "vulnerabilities": [
+            {"cve": {"id": "CVE-2099-1", "descriptions": [], "metrics": {}}}
+        ]
+    }
+    cve = NistNvdClient()._parse_cve_response(response)[0]
+    assert cve.severity is None
+    assert cve.score is None
+
+
+def _page(start, total, size):
+    ids = range(start, min(start + size, total))
+    return {
+        "totalResults": total,
+        "vulnerabilities": [
+            {"cve": {"id": f"CVE-2099-{i}", "descriptions": []}} for i in ids
+        ],
+    }
+
+
+def test_search_cves_all_pages_follows_total_results(monkeypatch):
+    starts = []
+    sleeps = []
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        starts.append(params["startIndex"])
+        return FakeResponse(json_data=_page(params["startIndex"], 5, 2))
+
+    async def record_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(nist_nvd, "_http_get", _as_async(fake_get))
+    monkeypatch.setattr(nist_nvd.asyncio, "sleep", record_sleep)
+    monkeypatch.setattr(NistNvdClient, "PAGE_SIZE", 2)
+
+    cves = asyncio.run(
+        NistNvdClient().search_cves(cpe_name="cpe:2.3:a:x:y", all_pages=True)
+    )
+
+    assert starts == [0, 2, 4]
+    assert [c.cve_id for c in cves] == [f"CVE-2099-{i}" for i in range(5)]
+    # Keyless clients pause between pages to respect NVD's rate limit.
+    assert sleeps == [NistNvdClient.KEYLESS_PAGE_DELAY_SECONDS] * 2
+
+
+def test_search_cves_all_pages_stops_at_max_pages(monkeypatch, caplog):
+    def fake_get(url, headers=None, params=None, timeout=None):
+        return FakeResponse(json_data=_page(params["startIndex"], 100, 2))
+
+    monkeypatch.setattr(nist_nvd, "_http_get", _as_async(fake_get))
+    monkeypatch.setattr(nist_nvd.asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(NistNvdClient, "PAGE_SIZE", 2)
+    monkeypatch.setattr(NistNvdClient, "MAX_PAGES", 3)
+
+    cves = asyncio.run(
+        NistNvdClient(api_key="k").search_cves(keyword="linux", all_pages=True)
+    )
+
+    assert len(cves) == 6
+    assert "truncated" in caplog.text
+
+
+def test_search_cves_without_all_pages_reads_one_page(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        calls["n"] += 1
+        return FakeResponse(json_data=_page(params["startIndex"], 500, 100))
+
+    monkeypatch.setattr(nist_nvd, "_http_get", _as_async(fake_get))
+    cves = asyncio.run(
+        NistNvdClient().search_cves(keyword="nginx", results_per_page=100)
+    )
+    assert calls["n"] == 1
+    assert len(cves) == 100

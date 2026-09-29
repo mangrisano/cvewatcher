@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the other lookups held a threadpool thread per waiting request, which also
   serves authentication. All outbound HTTP (NVD, OSV, CISA KEV, FIRST EPSS,
   webhook/Slack notifiers) is now async; SMTP runs in a worker thread.
+- **CVEs not yet scored by NVD were reported as LOW (score 0.0)**, hiding
+  freshly published critical issues. They now have no severity/score and show
+  as `UNKNOWN`.
+- **NVD results were silently capped at 2000**: CPE lookups and
+  `/cves/fetch-recent` read only the first page (e.g. `linux_kernel` has over
+  19,000 CVEs). They now follow `totalResults` up to 20 pages, pausing 6s
+  between pages without an API key, and log a warning if still truncated.
 - **Auto-running Alembic migrations was silently killing app logging**:
   `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
   file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`

@@ -333,7 +333,7 @@ class CVEMonitoringService:
             async with self._nvd_sem():
                 cves = await self.nist_client.search_cves(
                     cpe_name=cpe_name,
-                    results_per_page=2000,
+                    all_pages=True,
                     pub_start_date=pub_start_date,
                     pub_end_date=pub_end_date,
                     use_cache=use_cache,
