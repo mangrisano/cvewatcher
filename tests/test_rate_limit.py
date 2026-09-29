@@ -83,3 +83,41 @@ def test_login_is_rate_limited_after_repeated_failures(client):
 
     # Cleanup shared limiter state for other tests.
     login_rate_limiter.reset(f"{email}:testclient")
+
+
+def test_rate_limiter_lookups_do_not_grow_memory():
+    limiter = InMemoryRateLimiter()
+    for i in range(1000):
+        limiter.retry_after(f"user{i}@example.com:1.2.3.4")
+    assert len(limiter._attempts) == 0
+
+
+def test_rate_limiter_sweeps_expired_keys(monkeypatch):
+    fake_time = {"now": 1000.0}
+    monkeypatch.setattr(rate_limit.time, "monotonic", lambda: fake_time["now"])
+    monkeypatch.setattr(InMemoryRateLimiter, "SWEEP_EVERY", 10)
+
+    limiter = InMemoryRateLimiter(max_attempts=5, window_seconds=60)
+    for i in range(9):
+        limiter.record_failure(f"old{i}")
+    fake_time["now"] += 61
+    limiter.record_failure("fresh")
+
+    assert set(limiter._attempts) == {"fresh"}
+
+
+def test_login_is_rate_limited_per_ip_across_accounts(client, monkeypatch):
+    from app.routes import auth as auth_routes
+
+    limiter = InMemoryRateLimiter(max_attempts=3, window_seconds=60)
+    monkeypatch.setattr(auth_routes, "login_ip_rate_limiter", limiter)
+
+    statuses = [
+        client.post(
+            "/auth/login",
+            json={"email": f"spray{i}@example.com", "password": "WrongPass123"},
+        ).status_code
+        for i in range(4)
+    ]
+
+    assert statuses == [401, 401, 401, 429]

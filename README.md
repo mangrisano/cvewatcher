@@ -108,21 +108,29 @@ expires (`JWT_REFRESH_TOKEN_EXPIRE_DAYS`).
 
 ## Authentication & Access Control
 
-| Variable                    | Default | Description                                                        |
-| ---------------------------- | ------- | -------------------------------------------------------------------- |
-| `REGISTRATION_ENABLED`       | `false` | Allow new sign-ups after the first (bootstrap) account is created    |
-| `REGISTER_MAX_ATTEMPTS`      | `5`     | Max `/auth/register` attempts per IP within the window               |
-| `REGISTER_WINDOW_SECONDS`    | `3600`  | Rate-limit window (seconds) for registration attempts                |
-| `LOGIN_MAX_ATTEMPTS`         | `5`     | Max failed `/auth/login` attempts per email+IP within the window     |
-| `LOGIN_WINDOW_SECONDS`       | `300`   | Rate-limit window (seconds) for failed login attempts                |
-| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime; the dashboard refreshes it silently on expiry |
-| `JWT_REFRESH_TOKEN_EXPIRE_DAYS`  | `7`  | Refresh token lifetime; expiry forces a real re-login                |
+| Variable                          | Default | Description                                                              |
+| --------------------------------- | ------- | ------------------------------------------------------------------------ |
+| `REGISTRATION_ENABLED`            | `false` | Allow new sign-ups after the first (bootstrap) account is created        |
+| `REGISTER_MAX_ATTEMPTS`           | `5`     | Max `/auth/register` attempts per IP within the window                   |
+| `REGISTER_WINDOW_SECONDS`         | `3600`  | Rate-limit window (seconds) for registration attempts                    |
+| `LOGIN_MAX_ATTEMPTS`              | `5`     | Max failed `/auth/login` attempts per email+IP within the window         |
+| `LOGIN_IP_MAX_ATTEMPTS`           | `30`    | Max failed `/auth/login` attempts per IP (any account) within the window |
+| `LOGIN_WINDOW_SECONDS`            | `300`   | Rate-limit window (seconds) for failed login attempts                    |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30`    | Access token lifetime; the dashboard refreshes it silently on expiry     |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS`   | `7`     | Refresh token lifetime; expiry forces a real re-login                    |
 
 The very first account created on a fresh install always succeeds — this
 bootstrap exception lets you stand up an admin user without pre-configuring
 anything. Once at least one user exists, further registration is gated by
 `REGISTRATION_ENABLED`. Check `GET /auth/registration-status` to see whether
 sign-up is currently open.
+
+**Behind a reverse proxy** (nginx, traefik, …) rate limits are keyed on the
+client IP, so uvicorn must trust the proxy's `X-Forwarded-For`: set
+`FORWARDED_ALLOW_IPS` to the proxy's IP or subnet (e.g. the Docker network).
+Otherwise every client appears as the proxy and shares one limit. Avoid `*`
+unless port 8000 is reachable only through the proxy: anyone reaching it
+directly could forge the header and bypass the limits.
 
 ## How Vulnerability Matching Works
 

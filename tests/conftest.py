@@ -11,6 +11,7 @@ os.environ.setdefault("ENRICH_ENABLED", "false")
 # Tests share one database and register many users, so keep registration open.
 os.environ.setdefault("REGISTRATION_ENABLED", "true")
 os.environ.setdefault("REGISTER_MAX_ATTEMPTS", "1000")
+os.environ.setdefault("LOGIN_IP_MAX_ATTEMPTS", "1000")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

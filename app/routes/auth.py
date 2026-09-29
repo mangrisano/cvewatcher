@@ -13,7 +13,11 @@ from app.utils.auth import (
     verify_refresh_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
-from app.utils.rate_limit import login_rate_limiter, registration_rate_limiter
+from app.utils.rate_limit import (
+    login_ip_rate_limiter,
+    login_rate_limiter,
+    registration_rate_limiter,
+)
 from app.dependencies import get_current_user
 from app.services.token_blocklist import revoke_token, is_token_revoked
 from app.database import get_db, User
@@ -86,7 +90,10 @@ async def login_user(
     client_ip = request.client.host if request.client else "unknown"
     rate_limit_key = f"{user.email.lower()}:{client_ip}"
 
-    retry_after = login_rate_limiter.retry_after(rate_limit_key)
+    retry_after = max(
+        login_rate_limiter.retry_after(rate_limit_key),
+        login_ip_rate_limiter.retry_after(client_ip),
+    )
     if retry_after > 0:
         raise HTTPException(
             status_code=429,
@@ -98,8 +105,10 @@ async def login_user(
 
     if not db_user or not verify_password(user.password, str(db_user.password_hash)):
         login_rate_limiter.record_failure(rate_limit_key)
+        login_ip_rate_limiter.record_failure(client_ip)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # The per-IP counter is not reset: one valid account must not unlock spraying.
     login_rate_limiter.reset(rate_limit_key)
 
     access_token = create_access_token(data={"sub": user.email})

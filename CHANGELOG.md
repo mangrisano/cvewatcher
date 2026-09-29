@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Per-IP login limit** (`LOGIN_IP_MAX_ATTEMPTS`, default 30 failures per
+  `LOGIN_WINDOW_SECONDS`) on top of the per email+IP one, so a single source
+  can no longer try one password against thousands of accounts. A successful
+  login does not reset it.
+- **Reverse-proxy note**: README and `.env.example` document
+  `FORWARDED_ALLOW_IPS`, without which every client behind a proxy shares the
+  proxy's IP and therefore one rate limit.
+
 ### Security
 
 - **Refresh tokens were accepted as access tokens**: any endpoint took a
@@ -53,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/cves/fetch-recent` read only the first page (e.g. `linux_kernel` has over
   19,000 CVEs). They now follow `totalResults` up to 20 pages, pausing 6s
   between pages without an API key, and log a warning if still truncated.
+- **The login/registration rate limiter leaked memory**: every lookup created
+  a key that was never removed (50,000 logins with distinct emails left 50,000
+  entries). Lookups no longer create keys, empty keys are dropped and expired
+  ones are swept periodically.
 - **Auto-running Alembic migrations was silently killing app logging**:
   `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
   file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`
