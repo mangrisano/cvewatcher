@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sources, KEV/EPSS and triage status on each entry), keeps one entry per CVE,
   and fails with a proper 503/500. Entries carry `relevance_reason` instead of
   `matched_query`.
+- **`days` was ignored for OSV advisories**: OSV has no date filter, so
+  `/findings?days=N`, `/assets/{id}/vulnerabilities?days=N` and the monitoring
+  report returned every OSV advisory ever published for the package (e.g. 63
+  instead of 8 for django 3.2.0 over 120 days). OSV findings are now filtered
+  on their publication date whenever a window is requested.
 
 ## [2.4.0] - 2026-09-29
 

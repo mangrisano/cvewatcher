@@ -9,7 +9,7 @@ service.
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional, Protocol
 
 from app.config import get_settings
@@ -181,7 +181,8 @@ class OsvSource:
     """OSV.dev: language-package ecosystems that NVD/CPE matches poorly.
 
     Best-effort (failures yield no findings) and only for assets that declare
-    an ecosystem; OSV has no publication-date filter, so the window is ignored.
+    an ecosystem. OSV has no publication-date filter, so a requested window is
+    applied here on each advisory's ``published`` date.
     """
 
     def __init__(self, client: OsvClient):
@@ -197,9 +198,31 @@ class OsvSource:
         ecosystem = getattr(asset, "ecosystem", None)
         if not ecosystem:
             return SourceResult()
-        return SourceResult(
-            await self.client.search(ecosystem, asset.name, asset.version)
-        )
+        findings = await self.client.search(ecosystem, asset.name, asset.version)
+        if pub_start_date or pub_end_date:
+            findings = [
+                f
+                for f in findings
+                if _published_within(
+                    f.get("publish_date"), pub_start_date, pub_end_date
+                )
+            ]
+        return SourceResult(findings)
+
+
+def _published_within(
+    value: Optional[str], start: Optional[datetime], end: Optional[datetime]
+) -> bool:
+    """Whether an ISO timestamp falls in [start, end]; unknown dates do not."""
+    if not value:
+        return False
+    try:
+        published = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if published.tzinfo is None:
+        published = published.replace(tzinfo=timezone.utc)
+    return (start is None or published >= start) and (end is None or published <= end)
 
 
 def default_sources() -> list[VulnerabilitySource]:

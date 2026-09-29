@@ -145,3 +145,30 @@ def test_render_metrics_exposes_gauges():
     finally:
         _clean()
         db.close()
+
+
+def test_osv_source_applies_the_publication_window():
+    from datetime import datetime, timezone
+
+    from app.services.sources import OsvSource
+
+    class FakeOsvClient:
+        async def search(self, ecosystem, name, version):
+            return [
+                {"cve_id": "OLD", "publish_date": "2019-03-01T00:00:00Z"},
+                {"cve_id": "RECENT", "publish_date": "2026-09-20T08:30:00.123456789Z"},
+                {"cve_id": "NAIVE", "publish_date": "2026-09-21T00:00:00"},
+                {"cve_id": "UNDATED", "publish_date": None},
+            ]
+
+    source = OsvSource(FakeOsvClient())
+    asset = SimpleNamespace(name="django", version="3.2", ecosystem="PyPI")
+    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 29, tzinfo=timezone.utc)
+
+    windowed = asyncio.run(source.search(asset, start, end, True))
+    assert [f["cve_id"] for f in windowed.findings] == ["RECENT", "NAIVE"]
+
+    # No window (days=0 = all time): nothing is dropped, undated included.
+    everything = asyncio.run(source.search(asset, None, None, True))
+    assert len(everything.findings) == 4
