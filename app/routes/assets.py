@@ -1,6 +1,6 @@
 import logging
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -21,6 +21,9 @@ from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assets", tags=["Assets"])
+
+# CVE ids plus OSV ids (GHSA-…, PYSEC-…, GO-…, RUSTSEC-…); 20 = cves.id column size.
+_FINDING_ID_PATTERN = r"^[A-Z][A-Z0-9]{1,15}-[A-Za-z0-9-]+$"
 
 
 class SeverityLevel(StrEnum):
@@ -169,8 +172,8 @@ async def get_asset_vulnerabilities(
 )
 async def set_vulnerability_status(
     asset_id: UUID,
-    cve_id: str,
     update: FindingStatusUpdate,
+    cve_id: str = Path(max_length=20, pattern=_FINDING_ID_PATTERN),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

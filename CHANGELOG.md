@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   change, which have no `type`, stay valid until they expire).
 - **`JWT_SECRET_KEY` must now be at least 32 bytes** (RFC 7518 §3.2); a
   shorter secret stops the app at startup. Check your `.env` before upgrading.
+- **`PATCH /assets/{id}/vulnerabilities/{cve_id}` accepted any string**, which
+  was stored in the shared `cves` table and shown to every user by
+  `/cves/recent`. The id must now look like a CVE or OSV id (max 20 chars).
 
 ### Fixed
 

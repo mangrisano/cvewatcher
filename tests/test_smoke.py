@@ -223,3 +223,21 @@ def test_days_beyond_the_nvd_window_are_rejected(client):
         client.get("/assets/monitoring/report?days=0", headers=headers).status_code
         == 422
     )
+
+
+def test_finding_status_rejects_malformed_ids(client):
+    headers = _login(client, "hank", "hank@example.com")
+    asset_id = client.post(
+        "/assets/", headers=headers, json={"name": "django", "version": "4.0"}
+    ).json()["id"]
+    url = f"/assets/{asset_id}/vulnerabilities"
+    body = {"status": "fixed"}
+
+    for bad in ("<img src=x>", "CVE-2024-" + "1" * 20, "not-an-id"):
+        assert (
+            client.patch(f"{url}/{bad}", headers=headers, json=body).status_code == 422
+        )
+    for good in ("CVE-2024-12345", "GHSA-jfh8-c2jp-5v3q", "PYSEC-2021-123"):
+        assert (
+            client.patch(f"{url}/{good}", headers=headers, json=body).status_code == 200
+        )
