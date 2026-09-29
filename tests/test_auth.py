@@ -61,3 +61,19 @@ def test_refresh_token_cannot_call_the_api(client):
     refresh = auth.create_refresh_token({"sub": "user@example.com"})
     response = client.get("/assets/", headers={"Authorization": f"Bearer {refresh}"})
     assert response.status_code == 401
+
+
+def test_short_jwt_secret_is_rejected_at_startup():
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "JWT_SECRET_KEY": "too-short"}
+    result = subprocess.run(
+        [sys.executable, "-c", "import app.utils.auth"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "at least 32 bytes" in result.stderr

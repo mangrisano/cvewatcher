@@ -16,6 +16,9 @@ _secret_key = os.getenv("JWT_SECRET_KEY")
 
 if not _secret_key:
     raise ValueError("JWT_SECRET_KEY environment variable is required")
+# RFC 7518 §3.2: an HMAC key must be at least as long as the hash output.
+if len(_secret_key.encode()) < 32:
+    raise ValueError("JWT_SECRET_KEY must be at least 32 bytes long")
 
 SECRET_KEY: str = _secret_key
 _JWT_KEY = OctKey.import_key(SECRET_KEY)

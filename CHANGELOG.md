@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   7-day refresh token as a bearer token. Access tokens now carry
   `type: "access"` and anything else is rejected (tokens issued before this
   change, which have no `type`, stay valid until they expire).
+- **`JWT_SECRET_KEY` must now be at least 32 bytes** (RFC 7518 §3.2); a
+  shorter secret stops the app at startup. Check your `.env` before upgrading.
 
 ### Fixed
 
