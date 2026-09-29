@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models import UserRegistrationRequest, UserLoginRequest, RefreshTokenRequest
 from app.utils.auth import (
@@ -38,6 +39,11 @@ def _expiry(claims: dict) -> datetime:
     )
 
 
+def _email_matches(email: str):
+    # Emails identify users case-insensitively, so case variants can't coexist.
+    return func.lower(User.email) == email.lower()
+
+
 def _registration_open(db: Session) -> bool:
     # The first account can always be created (bootstrap); afterwards
     # registration must be explicitly enabled via REGISTRATION_ENABLED.
@@ -68,9 +74,10 @@ async def register_user(
         )
     registration_rate_limiter.record_failure(client_ip)
 
+    email = user.email.lower()
     existing_user = (
         db.query(User)
-        .filter((User.email == user.email) | (User.username == user.username))
+        .filter((_email_matches(email)) | (User.username == user.username))
         .first()
     )
 
@@ -78,9 +85,7 @@ async def register_user(
         raise HTTPException(status_code=400, detail="User already exists")
 
     hashed_password = hash_password(user.password)
-    db_user = User(
-        username=user.username, email=user.email, password_hash=hashed_password
-    )
+    db_user = User(username=user.username, email=email, password_hash=hashed_password)
 
     db.add(db_user)
     db.commit()
@@ -88,7 +93,7 @@ async def register_user(
 
     return {
         "message": f"User {user.username} registered successfully",
-        "email": user.email,
+        "email": email,
     }
 
 
@@ -110,7 +115,7 @@ async def login_user(
             headers={"Retry-After": str(retry_after)},
         )
 
-    db_user = db.query(User).filter(User.email == user.email).first()
+    db_user = db.query(User).filter(_email_matches(user.email)).first()
 
     if not db_user or not verify_password(user.password, str(db_user.password_hash)):
         login_rate_limiter.record_failure(rate_limit_key)
@@ -120,8 +125,9 @@ async def login_user(
     # The per-IP counter is not reset: one valid account must not unlock spraying.
     login_rate_limiter.reset(rate_limit_key)
 
-    access_token = create_access_token(data={"sub": user.email})
-    refresh_token = create_refresh_token(data={"sub": user.email})
+    # Tokens carry the stored email: assets are owned by that exact string.
+    access_token = create_access_token(data={"sub": db_user.email})
+    refresh_token = create_refresh_token(data={"sub": db_user.email})
 
     return {
         "message": "Login successful",
@@ -184,7 +190,8 @@ async def logout_user(
     if body and body.refresh_token:
         try:
             refresh_payload = verify_refresh_token(body.refresh_token)
-            revoke_token(db, refresh_payload.get("jti"), _expiry(refresh_payload))
+            if refresh_payload.get("sub") == current_user.get("sub"):
+                revoke_token(db, refresh_payload.get("jti"), _expiry(refresh_payload))
         except HTTPException:
             # An invalid or already-expired refresh token does not block logout.
             pass

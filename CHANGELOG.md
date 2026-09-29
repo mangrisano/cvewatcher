@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Admin rights through a differently-cased email**: `ADMIN_EMAILS` is
+  compared case-insensitively, but registration and login compared emails
+  exactly, so `ADMIN@example.com` could register next to `admin@example.com`
+  and be treated as an admin. Emails now identify an account regardless of
+  case: a case variant of an existing email can't register, new emails are
+  stored lowercased, and logging in with any casing gets a token for the
+  stored email. Existing accounts are unchanged.
+- **Logout could revoke another user's refresh token**: a refresh token passed
+  to `/auth/logout` is now revoked only if it belongs to the caller.
+
 ## [2.6.0] - 2026-09-29
 
 ### Security

@@ -487,3 +487,50 @@ def test_fetch_recent_is_admin_only(client, monkeypatch):
     assert denied.status_code == 403
     assert allowed.status_code == 200
     assert allowed.json()["stored_count"] == 3
+
+
+def test_email_case_variants_cannot_register_or_become_admin(client, monkeypatch):
+    from app.dependencies import get_cve_service
+    from app.main import app
+
+    class FakeCveService:
+        async def fetch_and_store_recent_cves(self, days):
+            return 0
+
+    _login(client, "rootadmin", "rootadmin@example.com")
+    response = client.post(
+        "/auth/register",
+        json={
+            "username": "impostor",
+            "email": "RootAdmin@example.com",
+            "password": "Password123",
+        },
+    )
+    assert response.status_code == 400
+
+    # Logging in with another casing is the same account, not a new identity.
+    monkeypatch.setenv("ADMIN_EMAILS", "RootAdmin@Example.com")
+    get_settings.cache_clear()
+    headers = _login(client, "rootadmin", "ROOTADMIN@example.com")
+    app.dependency_overrides[get_cve_service] = FakeCveService
+    try:
+        assert client.get("/cves/fetch-recent", headers=headers).status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_cve_service)
+    assert client.get("/user", headers=headers).json()["email"] == (
+        "rootadmin@example.com"
+    )
+
+
+def test_logout_cannot_revoke_another_users_refresh_token(client):
+    _login(client, "rita", "rita@example.com")
+    victim = client.post(
+        "/auth/login", json={"email": "rita@example.com", "password": "Password123"}
+    ).json()["refresh_token"]
+    attacker = _login(client, "sam", "sam@example.com")
+
+    client.post("/auth/logout", headers=attacker, json={"refresh_token": victim})
+
+    assert (
+        client.post("/auth/refresh", json={"refresh_token": victim}).status_code == 200
+    )
