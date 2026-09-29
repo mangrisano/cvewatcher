@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790706506997,
+  "lastUpdate": 1790713089679,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -945,6 +945,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000002720150486860628",
             "extra": "mean: 29.155670024613567 usec\nrounds: 18265"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "8b9378636bdd58105b47629f1f64abbe5f1aa3f7",
+          "message": "refactor(config): read all settings from one typed Settings object\n\nAbout 40 os.getenv calls were spread over 13 modules, each with its own\ndefault and parsing (three copies of _is_truthy, ad-hoc int() casts).\napp/config.py now declares every setting once with pydantic-settings and\nget_settings() (cached) is the only way modules read configuration.\n\nMalformed values (e.g. MONITOR_ENABLED=maybe, NVD_MAX_CONCURRENCY=0) now\nstop startup with a validation error instead of silently becoming false or\nbeing ignored; empty variables still fall back to the default. Adds\npydantic-settings to the dependencies.",
+          "timestamp": "2026-09-29T21:05:18+02:00",
+          "tree_id": "147316ed4c1c958b6622d749942300b852f8f098",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/8b9378636bdd58105b47629f1f64abbe5f1aa3f7"
+        },
+        "date": 1790713088897,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 86310.7712411622,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000013187552378831",
+            "extra": "mean: 11.586039443511464 usec\nrounds: 37953"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 48875.21435892676,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00000271152775650136",
+            "extra": "mean: 20.460268320385506 usec\nrounds: 17576"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 18663.753468134375,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000033907037919745553",
+            "extra": "mean: 53.57979045894243 usec\nrounds: 11592"
           }
         ]
       }
