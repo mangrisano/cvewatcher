@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-09-29
+
 ### Added
 
 - **Per-IP login limit** (`LOGIN_IP_MAX_ATTEMPTS`, default 30 failures per
