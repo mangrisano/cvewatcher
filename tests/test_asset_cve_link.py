@@ -168,3 +168,57 @@ def test_set_and_attach_finding_status():
     finally:
         _cleanup(db)
         db.close()
+
+
+def _asset_response(name="django"):
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    return AssetResponse(
+        id=uuid4(),
+        name=name,
+        user_email=_EMAIL,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+def test_severity_filter_tolerates_findings_without_severity(monkeypatch):
+    db = SessionLocal()
+    try:
+        svc = CVEMonitoringService(db)
+
+        async def no_cpes(asset):
+            return []
+
+        async def keyword(asset, start, end, use_cache=True):
+            return [
+                {"cve_id": "GHSA-aaaa-bbbb-cccc", "severity": None},
+                {"cve_id": "CVE-2099-0002", "severity": "HIGH"},
+            ], False
+
+        monkeypatch.setattr(svc, "_resolve_cpes", no_cpes)
+        monkeypatch.setattr(svc, "_search_by_keyword", keyword)
+
+        out = asyncio.run(
+            svc._get_asset_vulnerabilities(_asset_response(), severity_filter="HIGH")
+        )
+        assert [v["cve_id"] for v in out] == ["CVE-2099-0002"]
+    finally:
+        db.close()
+
+
+def test_monitor_all_assets_survives_findings_without_severity(monkeypatch):
+    from types import SimpleNamespace
+
+    asset = SimpleNamespace(name="django", version="4.0")
+    db = SimpleNamespace(query=lambda model: SimpleNamespace(all=lambda: [asset]))
+    svc = CVEMonitoringService(db)
+
+    async def monitor(a):
+        return {"new_vulnerabilities": [{"cve_id": "GHSA-x", "severity": None}]}
+
+    monkeypatch.setattr(svc, "_monitor_single_asset", monitor)
+
+    results = asyncio.run(svc.monitor_all_assets())
+    assert "error" not in results
+    assert results["summary"]["new_vulnerabilities"] == 1

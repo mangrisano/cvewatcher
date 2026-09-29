@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defaulted to SQLite but `init_schema()` took the Alembic path with no URL.
   It now follows the engine's dialect and passes the same URL to Alembic
   (with `%` escaped, so URL-encoded passwords work).
+- **Findings without a severity (e.g. OSV advisories without CVSS) crashed**
+  the severity filter (HTTP 500) and the scheduled monitoring cycle; the
+  failed cycle had already stored the CVEs, so their notifications were lost.
 - **Auto-running Alembic migrations was silently killing app logging**:
   `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
   file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`

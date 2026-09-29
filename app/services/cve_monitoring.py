@@ -66,7 +66,7 @@ class CVEMonitoringService:
                     asset_result.get("new_vulnerabilities", [])
                 )
                 for vuln in asset_result.get("new_vulnerabilities", []):
-                    severity = vuln.get("severity", "").upper()
+                    severity = (vuln.get("severity") or "").upper()
                     if severity == "CRITICAL":
                         monitoring_results["summary"]["critical_vulnerabilities"] += 1
                     elif severity == "HIGH":
@@ -243,7 +243,7 @@ class CVEMonitoringService:
             vulnerabilities_list = [
                 vuln
                 for vuln in vulnerabilities_list
-                if vuln.get("severity", "").upper() == severity_filter_upper
+                if (vuln.get("severity") or "").upper() == severity_filter_upper
             ]
 
         await run_in_threadpool(enrichment_service.enrich, vulnerabilities_list)
