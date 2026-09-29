@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Refresh tokens are now rotated**: `/auth/refresh` revokes the refresh
+  token it receives and returns a new `refresh_token` next to the access token.
+  Previously the same refresh token could mint access tokens for its whole
+  7-day lifetime, even if stolen. API clients must store the new token; the
+  dashboard does, and a tab that loses the race with another tab reuses the
+  pair that tab stored instead of logging out.
+
 ## [2.5.0] - 2026-09-29
 
 ### Changed

@@ -104,7 +104,9 @@ register — after that, new sign-ups require `REGISTRATION_ENABLED=true` (see
 [Authentication & Access Control](#authentication--access-control)). Sessions
 refresh themselves silently in the background using the refresh token, so you
 stay signed in without re-entering credentials until the refresh token itself
-expires (`JWT_REFRESH_TOKEN_EXPIRE_DAYS`).
+expires (`JWT_REFRESH_TOKEN_EXPIRE_DAYS`). Refresh tokens are single-use: each
+refresh returns a new one, so a stolen token stops working as soon as the real
+user refreshes.
 
 ## Authentication & Access Control
 
@@ -191,7 +193,7 @@ flag and EPSS score so the most urgent findings stand out. Independently,
 - `GET /auth/registration-status` - Check whether public sign-up is currently open
 - `POST /auth/register` - Register new user (subject to registration gating and rate limiting)
 - `POST /auth/login` - User login (rate-limited per email+IP)
-- `POST /auth/refresh` - Refresh access token
+- `POST /auth/refresh` - Exchange a refresh token for a new access token **and a new refresh token** (the one sent is revoked: store the new one)
 - `POST /auth/logout` - Logout user (revokes access and refresh tokens)
 
 ### Asset Management

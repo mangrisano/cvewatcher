@@ -79,9 +79,12 @@
                 body: JSON.stringify({ refresh_token: rt }),
             })
                 .then(async (res) => {
-                    if (!res.ok) return false;
+                    // Another tab may have rotated the token first: its new pair
+                    // is already in localStorage, so the caller can just retry.
+                    if (!res.ok) return refreshToken() !== rt;
                     const data = await res.json();
                     localStorage.setItem(TOKEN_KEY, data.access_token);
+                    localStorage.setItem(REFRESH_KEY, data.refresh_token);
                     return true;
                 })
                 .catch(() => false)

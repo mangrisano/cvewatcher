@@ -192,3 +192,37 @@ def test_concurrent_revoke_is_not_an_error(monkeypatch):
         monkeypatch.undo()
         db.rollback()
         db.close()
+
+
+def test_refresh_rotates_the_refresh_token(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "gina2",
+            "email": "gina2@example.com",
+            "password": "Password123",
+        },
+    )
+    first = client.post(
+        "/auth/login", json={"email": "gina2@example.com", "password": "Password123"}
+    ).json()["refresh_token"]
+
+    rotated = client.post("/auth/refresh", json={"refresh_token": first})
+    assert rotated.status_code == 200
+    second = rotated.json()["refresh_token"]
+    assert second != first
+    assert (
+        client.get(
+            "/user",
+            headers={"Authorization": f"Bearer {rotated.json()['access_token']}"},
+        ).status_code
+        == 200
+    )
+
+    # The used token is single-use; the new one keeps working.
+    assert (
+        client.post("/auth/refresh", json={"refresh_token": first}).status_code == 401
+    )
+    assert (
+        client.post("/auth/refresh", json={"refresh_token": second}).status_code == 200
+    )

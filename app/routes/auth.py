@@ -29,6 +29,15 @@ from app.config import get_settings
 router = APIRouter()
 
 
+def _expiry(claims: dict) -> datetime:
+    exp = claims.get("exp")
+    return (
+        datetime.fromtimestamp(exp, tz=timezone.utc)
+        if exp
+        else datetime.now(timezone.utc)
+    )
+
+
 def _registration_open(db: Session) -> bool:
     # The first account can always be created (bootstrap); afterwards
     # registration must be explicitly enabled via REGISTRATION_ENABLED.
@@ -148,10 +157,12 @@ async def refresh_access_token(
         if not db_user:
             raise HTTPException(status_code=401, detail="User not found")
 
-        new_access_token = create_access_token(data={"sub": user_email})
+        # Rotation: the presented refresh token is single-use.
+        revoke_token(db, payload.get("jti"), _expiry(payload))
 
         return {
-            "access_token": new_access_token,
+            "access_token": create_access_token(data={"sub": user_email}),
+            "refresh_token": create_refresh_token(data={"sub": user_email}),
             "token_type": "bearer",
             "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
         }
@@ -168,24 +179,12 @@ async def logout_user(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    access_exp = current_user.get("exp")
-    access_expires = (
-        datetime.fromtimestamp(access_exp, tz=timezone.utc)
-        if access_exp
-        else datetime.now(timezone.utc)
-    )
-    revoke_token(db, current_user.get("jti"), access_expires)
+    revoke_token(db, current_user.get("jti"), _expiry(current_user))
 
     if body and body.refresh_token:
         try:
             refresh_payload = verify_refresh_token(body.refresh_token)
-            refresh_exp = refresh_payload.get("exp")
-            refresh_expires = (
-                datetime.fromtimestamp(refresh_exp, tz=timezone.utc)
-                if refresh_exp
-                else datetime.now(timezone.utc)
-            )
-            revoke_token(db, refresh_payload.get("jti"), refresh_expires)
+            revoke_token(db, refresh_payload.get("jti"), _expiry(refresh_payload))
         except HTTPException:
             # An invalid or already-expired refresh token does not block logout.
             pass
