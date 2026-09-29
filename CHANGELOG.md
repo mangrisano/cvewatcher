@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   30 days, thousands of CVEs) written to the shared table. It is now limited
   to the emails listed in the new `ADMIN_EMAILS` setting (empty by default,
   i.e. nobody).
+- **Docker image hardening**: a `.dockerignore` keeps `.env` (JWT secret, SMTP
+  password), `.venv`, `.git` and local databases out of locally built images
+  (a local build used to copy `.env` into the image); the app runs as an
+  unprivileged `cvewatcher` user instead of root; compilers live only in a
+  build stage, so the image drops from ~850 MB to ~480 MB. The compose file
+  binds Postgres to `127.0.0.1` instead of every interface.
 
 ## [2.5.0] - 2026-09-29
 

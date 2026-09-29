@@ -1,26 +1,38 @@
 # syntax=docker/dockerfile:1
-FROM python:3.13-slim
 
-WORKDIR /app
+# Build stage: compilers stay here, only the resulting wheels move on.
+FROM python:3.13-slim AS build
 
-# Install system dependencies
 RUN apt-get update && \
-	apt-get upgrade -y && \
 	apt-get install -y --no-install-recommends build-essential libpq-dev && \
-	apt-get clean && \
 	rm -rf /var/lib/apt/lists/*
 
-# Copy project files
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+
+
+FROM python:3.13-slim
+
+RUN apt-get update && \
+	apt-get upgrade -y && \
+	rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /wheels /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+WORKDIR /app
 COPY . /app
 
-# Install Python dependencies
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+# Code stays root-owned (read-only for the app); /app itself is writable so the
+# default SQLite database can be created there.
+RUN useradd --system --uid 10001 --no-create-home cvewatcher && \
+	chown cvewatcher /app
+USER cvewatcher
 
-# Expose port (default FastAPI/uvicorn)
+ENV PYTHONUNBUFFERED=1 \
+	PYTHONDONTWRITEBYTECODE=1
+
 EXPOSE 8000
-
-ENV PYTHONUNBUFFERED=1
 
 # Alembic migrations run automatically on startup (see app/database/init_schema).
 
