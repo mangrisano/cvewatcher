@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786003810766,
+  "lastUpdate": 1790703823346,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -810,6 +810,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000004043370411464627",
             "extra": "mean: 56.73525746202549 usec\nrounds: 10654"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "d1d090e59f12deff88595aa8731e07c077a81904",
+          "message": "fix(assets): drop untriaged findings when an asset's identity changes\n\nChanging name, version, CPE or ecosystem left the old version's findings\nlinked, so digests and metrics kept reporting CVEs that no longer apply.\nOpen findings are now dropped on such a change and the next monitoring cycle\nre-links the ones that still apply; triaged findings keep status and notes.",
+          "timestamp": "2026-09-29T19:43:15+02:00",
+          "tree_id": "515d4f285d9c6c78fa6146c0ac2ae42523db79a3",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/d1d090e59f12deff88595aa8731e07c077a81904"
+        },
+        "date": 1790703822570,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 116890.61805041207,
+            "unit": "iter/sec",
+            "range": "stddev: 8.878096545624841e-7",
+            "extra": "mean: 8.555006523865964 usec\nrounds: 39547"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 68374.36265954853,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00000226972655635135",
+            "extra": "mean: 14.625364845873987 usec\nrounds: 20595"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 26226.793652123284,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000002098991324593799",
+            "extra": "mean: 38.128946041371755 usec\nrounds: 15864"
           }
         ]
       }
