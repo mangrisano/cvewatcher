@@ -5,7 +5,7 @@ import asyncio
 from app.database.connection import SessionLocal
 from app.database.models import Asset, AssetCVE, CVE
 from app.models import AssetResponse
-from app.services import cve_monitoring
+from app.services import cve_monitoring, sources
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.findings_repository import FindingRepository
 
@@ -96,9 +96,9 @@ def test_existing_ids_are_scoped_per_asset():
 def test_nvd_concurrency_limit(monkeypatch):
     monkeypatch.delenv("NVD_MAX_CONCURRENCY", raising=False)
     # No API key in the test env -> small default fan-out.
-    assert cve_monitoring._nvd_concurrency_limit() == 3
+    assert sources.nvd_concurrency_limit(cve_monitoring.nist_client) == 3
     monkeypatch.setenv("NVD_MAX_CONCURRENCY", "7")
-    assert cve_monitoring._nvd_concurrency_limit() == 7
+    assert sources.nvd_concurrency_limit(cve_monitoring.nist_client) == 7
 
 
 def test_get_user_vulnerabilities_aggregates_across_assets(monkeypatch):
@@ -184,22 +184,20 @@ def _asset_response(name="django"):
     )
 
 
-def test_severity_filter_tolerates_findings_without_severity(monkeypatch):
+def test_severity_filter_tolerates_findings_without_severity():
     db = SessionLocal()
     try:
-        svc = CVEMonitoringService(db)
 
-        async def no_cpes(asset):
-            return []
+        class FixedSource:
+            async def search(self, asset, start, end, use_cache):
+                return sources.SourceResult(
+                    [
+                        {"cve_id": "GHSA-aaaa-bbbb-cccc", "severity": None},
+                        {"cve_id": "CVE-2099-0002", "severity": "HIGH"},
+                    ]
+                )
 
-        async def keyword(asset, start, end, use_cache=True):
-            return [
-                {"cve_id": "GHSA-aaaa-bbbb-cccc", "severity": None},
-                {"cve_id": "CVE-2099-0002", "severity": "HIGH"},
-            ], False
-
-        monkeypatch.setattr(svc, "_resolve_cpes", no_cpes)
-        monkeypatch.setattr(svc, "_search_by_keyword", keyword)
+        svc = CVEMonitoringService(db, sources=[FixedSource()])
 
         out = asyncio.run(
             svc._get_asset_vulnerabilities(_asset_response(), severity_filter="HIGH")
@@ -224,3 +222,46 @@ def test_monitor_all_assets_survives_findings_without_severity(monkeypatch):
     results = asyncio.run(svc.monitor_all_assets())
     assert "error" not in results
     assert results["summary"]["new_vulnerabilities"] == 1
+
+
+def test_findings_from_all_sources_are_merged():
+    class FixedSource:
+        def __init__(self, findings, unavailable=False):
+            self.result = sources.SourceResult(findings, unavailable)
+
+        async def search(self, asset, start, end, use_cache):
+            return self.result
+
+    svc = CVEMonitoringService(
+        None,
+        sources=[
+            FixedSource([{"cve_id": "CVE-2099-0010", "severity": None}]),
+            FixedSource(
+                [
+                    {"cve_id": "CVE-2099-0010", "severity": "HIGH", "score": 7.5},
+                    {"cve_id": "GHSA-aaaa-bbbb-cccc", "severity": "LOW"},
+                ]
+            ),
+        ],
+    )
+    out = asyncio.run(svc._get_asset_vulnerabilities(_asset_response()))
+
+    # One entry per id; the scored duplicate wins the merge.
+    assert {v["cve_id"]: v["severity"] for v in out} == {
+        "CVE-2099-0010": "HIGH",
+        "GHSA-aaaa-bbbb-cccc": "LOW",
+    }
+
+
+def test_unavailable_source_with_no_findings_raises():
+    import pytest
+
+    from app.services.nist_nvd import NvdUnavailableError
+
+    class DownSource:
+        async def search(self, asset, start, end, use_cache):
+            return sources.SourceResult(unavailable=True)
+
+    svc = CVEMonitoringService(None, sources=[DownSource()])
+    with pytest.raises(NvdUnavailableError):
+        asyncio.run(svc._get_asset_vulnerabilities(_asset_response()))

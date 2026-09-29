@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from app.services import matching
 from app.services.cve_monitoring import CVEMonitoringService
+from app.services.sources import NvdSource
 
 
 def _service():
@@ -226,8 +227,8 @@ class _FakeCpeClient:
 
 
 def test_resolve_cpes_builds_version_injected_cpes():
-    svc = _service()
-    svc.nist_client = _FakeCpeClient(
+    svc = NvdSource(None)
+    svc.client = _FakeCpeClient(
         [
             "cpe:2.3:a:nginx:nginx:0.1.27:*:*:*:*:*:*:*",
             "cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*",
@@ -245,8 +246,8 @@ def test_resolve_cpes_builds_version_injected_cpes():
 
 
 def test_resolve_cpes_uses_wildcard_when_no_version():
-    svc = _service()
-    svc.nist_client = _FakeCpeClient(["cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*"])
+    svc = NvdSource(None)
+    svc.client = _FakeCpeClient(["cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*"])
     cpes = asyncio.run(svc._resolve_cpes(_asset(name="nginx", version=None)))
     assert cpes == ["cpe:2.3:a:f5:nginx:*:*:*:*:*:*:*:*"]
 
@@ -254,8 +255,8 @@ def test_resolve_cpes_uses_wildcard_when_no_version():
 def test_resolve_cpes_matches_vendor_plus_product():
     # A display name that differs from the bare product still resolves when it
     # equals "vendor + product" (e.g. Apache HTTP Server -> apache:http_server).
-    svc = _service()
-    svc.nist_client = _FakeCpeClient(
+    svc = NvdSource(None)
+    svc.client = _FakeCpeClient(
         [
             "cpe:2.3:a:apache:http_server:2.4.0:*:*:*:*:*:*:*",
             "cpe:2.3:a:other:http_server:1.0:*:*:*:*:*:*:*",  # vendor mismatch -> skip
@@ -269,29 +270,27 @@ def test_resolve_cpes_matches_vendor_plus_product():
 
 def test_resolve_cpes_includes_operating_systems():
     # Operating systems (part "o") are resolved too, preserving the part.
-    svc = _service()
-    svc.nist_client = _FakeCpeClient(
-        ["cpe:2.3:o:microsoft:windows_10:21h2:*:*:*:*:*:*:*"]
-    )
+    svc = NvdSource(None)
+    svc.client = _FakeCpeClient(["cpe:2.3:o:microsoft:windows_10:21h2:*:*:*:*:*:*:*"])
     cpes = asyncio.run(svc._resolve_cpes(_asset(name="windows 10", version="22h2")))
     assert cpes == ["cpe:2.3:o:microsoft:windows_10:22h2:*:*:*:*:*:*:*"]
 
 
 def test_resolve_cpes_returns_empty_when_lookup_fails():
-    svc = _service()
+    svc = NvdSource(None)
 
     class _Boom:
         async def find_cpe_names(self, *a, **k):
             raise RuntimeError("NVD down")
 
-    svc.nist_client = _Boom()
+    svc.client = _Boom()
     assert asyncio.run(svc._resolve_cpes(_asset(name="nginx"))) == []
 
 
 def test_resolve_cpes_without_name_skips_lookup():
-    svc = _service()
+    svc = NvdSource(None)
     client = _FakeCpeClient(["cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*"])
-    svc.nist_client = client
+    svc.client = client
     assert asyncio.run(svc._resolve_cpes(_asset(name=None))) == []
     assert client.calls == 0
 
@@ -329,7 +328,7 @@ def test_multiple_cpes_are_searched_concurrently_and_merged():
                 _cveobj("CVE-SHARED", "CRITICAL", 9.8),
             ]
 
-    svc.nist_client = _Client()
+    svc.sources = [NvdSource(_Client())]
     asset = SimpleNamespace(name="openssl", version="3.0.0", cpe=None)
     result = asyncio.run(svc._get_asset_vulnerabilities(asset))
 

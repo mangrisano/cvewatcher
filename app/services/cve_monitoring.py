@@ -1,8 +1,7 @@
 import asyncio
 import logging
-import os
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +10,7 @@ from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import nist_client, NvdUnavailableError
 from app.services.enrichment import enrichment_service
 from app.services.osv import osv_client
+from app.services.sources import NvdSource, OsvSource, VulnerabilitySource
 from app.services import matching
 from app.services.severity import severity_rank
 from app.models import AssetResponse
@@ -18,29 +18,18 @@ from app.models import AssetResponse
 logger = logging.getLogger(__name__)
 
 
-def _nvd_concurrency_limit() -> int:
-    """Max concurrent NVD requests. Without an API key NVD allows only 5 req/30s,
-    so keep the fan-out small; an API key (50 req/30s) allows much more.
-    """
-    override = os.getenv("NVD_MAX_CONCURRENCY", "")
-    if override.isdigit() and int(override) > 0:
-        return int(override)
-    return 10 if nist_client.api_key else 3
-
-
 class CVEMonitoringService:
-    def __init__(self, db: Session):
+    def __init__(
+        self, db: Session, sources: Optional[list[VulnerabilitySource]] = None
+    ):
         self.db = db
         self.findings = FindingRepository(db)
+        self.sources = (
+            sources
+            if sources is not None
+            else [NvdSource(nist_client), OsvSource(osv_client)]
+        )
         self.nist_client = nist_client
-        # Bounds every NVD request made through this service (per request), so
-        # fanning out across assets and CPEs never bursts past NVD's rate limit.
-        self._nvd_semaphore: asyncio.Semaphore | None = None
-
-    def _nvd_sem(self) -> asyncio.Semaphore:
-        if self._nvd_semaphore is None:
-            self._nvd_semaphore = asyncio.Semaphore(_nvd_concurrency_limit())
-        return self._nvd_semaphore
 
     async def monitor_all_assets(self) -> dict[str, Any]:
         try:
@@ -188,41 +177,15 @@ class CVEMonitoringService:
             pub_end_date = datetime.now(timezone.utc)
             pub_start_date = pub_end_date - timedelta(days=days)
 
-        cpe_name = matching.full_cpe(asset.cpe)
-        if cpe_name:
-            cpe_names = [cpe_name]
-        else:
-            cpe_names = await self._resolve_cpes(asset)
-
-        if cpe_names:
-            vulnerabilities = []
-            nvd_failed = False
-            # Independent CPE lookups run concurrently: an asset resolving to
-            # several vendor CPEs is the common slow case.
-            results = await asyncio.gather(
-                *(
-                    self._search_by_cpe(
-                        asset, cpe, pub_start_date, pub_end_date, use_cache
-                    )
-                    for cpe in cpe_names
-                )
+        results = await asyncio.gather(
+            *(
+                source.search(asset, pub_start_date, pub_end_date, use_cache)
+                for source in self.sources
             )
-            for found, failed in results:
-                vulnerabilities.extend(found)
-                nvd_failed = nvd_failed or failed
-        else:
-            vulnerabilities, nvd_failed = await self._search_by_keyword(
-                asset, pub_start_date, pub_end_date, use_cache
-            )
+        )
+        vulnerabilities = [f for result in results for f in result.findings]
 
-        # Secondary source: OSV.dev covers language-package ecosystems that
-        # NVD/CPE matches poorly. Best-effort; merged and deduplicated below.
-        ecosystem = getattr(asset, "ecosystem", None)
-        if ecosystem:
-            osv_found = await osv_client.search(ecosystem, asset.name, asset.version)
-            vulnerabilities.extend(osv_found)
-
-        if nvd_failed and not vulnerabilities:
+        if not vulnerabilities and any(result.unavailable for result in results):
             raise NvdUnavailableError(
                 "Could not retrieve vulnerabilities: the NVD service is unavailable."
             )
@@ -287,132 +250,6 @@ class CVEMonitoringService:
         for finding in findings:
             cve_id = finding.get("cve_id")
             finding["status"] = status_map.get(cve_id, "open") if cve_id else "open"
-
-    async def _search_by_cpe(
-        self,
-        asset: AssetResponse,
-        cpe_name: str,
-        pub_start_date: datetime | None,
-        pub_end_date: datetime | None,
-        use_cache: bool = True,
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """Precise lookup: let NVD resolve the CPE (version-aware, server-side).
-
-        When an asset declares a CPE we trust NVD's matching engine, which
-        evaluates version ranges in each CVE configuration. This avoids both the
-        100-result keyword cap and the false positives/negatives of text search.
-        """
-        try:
-            async with self._nvd_sem():
-                cves = await self.nist_client.search_cves(
-                    cpe_name=cpe_name,
-                    all_pages=True,
-                    pub_start_date=pub_start_date,
-                    pub_end_date=pub_end_date,
-                    use_cache=use_cache,
-                )
-        except NvdUnavailableError as e:
-            logger.error(f"NVD unavailable for CPE {cpe_name}: {e}")
-            return [], True
-        except Exception as e:
-            logger.error(f"Error searching CPE {cpe_name}: {e}")
-            return [], False
-
-        reason = f"NVD matched CPE '{cpe_name}'"
-        return [self._vuln_dict(cve, reason) for cve in cves], False
-
-    async def _search_by_keyword(
-        self,
-        asset: AssetResponse,
-        pub_start_date: datetime | None,
-        pub_end_date: datetime | None,
-        use_cache: bool = True,
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """Fallback lookup when no CPE is known: keyword search + local filtering.
-
-        Less precise than a CPE lookup (NVD keyword search is capped at 100
-        results and matches free text), so each candidate is filtered locally by
-        product identity and version range via ``matching.is_relevant``.
-        """
-        queries = matching.build_search_queries(asset)
-        results = await asyncio.gather(
-            *(
-                self._search_one_keyword(
-                    asset, query, pub_start_date, pub_end_date, use_cache
-                )
-                for query in queries
-            )
-        )
-        vulnerabilities: list[dict[str, Any]] = []
-        nvd_failed = False
-        for found, failed in results:
-            vulnerabilities.extend(found)
-            nvd_failed = nvd_failed or failed
-        return vulnerabilities, nvd_failed
-
-    async def _search_one_keyword(
-        self,
-        asset: AssetResponse,
-        query: str,
-        pub_start_date: datetime | None,
-        pub_end_date: datetime | None,
-        use_cache: bool = True,
-    ) -> tuple[list[dict[str, Any]], bool]:
-        try:
-            async with self._nvd_sem():
-                cves = await self.nist_client.search_cves(
-                    keyword=query,
-                    results_per_page=100,
-                    pub_start_date=pub_start_date,
-                    pub_end_date=pub_end_date,
-                    use_cache=use_cache,
-                )
-        except NvdUnavailableError as e:
-            logger.error(f"NVD unavailable while searching for {query}: {e}")
-            return [], True
-        except Exception as e:
-            logger.error(f"Error searching for {query}: {e}")
-            return [], False
-
-        return [
-            self._vuln_dict(cve, f"Matches asset name '{asset.name}'")
-            for cve in cves
-            if matching.is_relevant(cve, asset)
-        ], False
-
-    def _vuln_dict(self, cve, reason: str) -> dict[str, Any]:
-        return {
-            "cve_id": cve.cve_id,
-            "summary": cve.summary,
-            "severity": cve.severity,
-            "score": cve.score,
-            "publish_date": cve.publish_date.isoformat() if cve.publish_date else None,
-            "modified_date": cve.modified_date.isoformat()
-            if cve.modified_date
-            else None,
-            "relevance_reason": reason,
-            "cve_url": f"https://www.cve.org/CVERecord?id={cve.cve_id}",
-        }
-
-    async def _resolve_cpes(self, asset: AssetResponse) -> list[str]:
-        """Best-effort: turn an asset name into precise CPE names via NVD.
-
-        When the user did not provide a CPE, look the product name up in the
-        NVD CPE dictionary and build a fully specified CPE for each matching
-        vendor/product pair, injecting the asset version so NVD can evaluate
-        version ranges server-side. Returns an empty list (caller falls back to
-        keyword search) when the name cannot be resolved or NVD is unreachable.
-        """
-        if not asset.name:
-            return []
-        try:
-            async with self._nvd_sem():
-                cpe_names = await self.nist_client.find_cpe_names(asset.name)
-        except Exception as e:
-            logger.warning(f"CPE resolution failed for '{asset.name}': {e}")
-            return []
-
-        return matching.cpes_for_asset(cpe_names, asset.name, asset.version)
 
     async def get_monitoring_report(
         self, user_email: str, days: int = 7
