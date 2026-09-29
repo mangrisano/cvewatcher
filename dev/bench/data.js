@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790713089679,
+  "lastUpdate": 1790713528965,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -990,6 +990,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.0000033907037919745553",
             "extra": "mean: 53.57979045894243 usec\nrounds: 11592"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "f2d8476176b2f4981b55efe64113acf13755ed82",
+          "message": "fix(types): accept ORM asset ids in FindingRepository\n\nCI's pyright step failed after the repository refactor: the 1.x-style\nmodels type Asset.id as a Column, which is not assignable to the UUID the\nrepository methods declared. The asset id is now typed UUID | Column.",
+          "timestamp": "2026-09-29T22:23:42+02:00",
+          "tree_id": "f3282e50461b4adc05bf39009d24e09c38ce626a",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/f2d8476176b2f4981b55efe64113acf13755ed82"
+        },
+        "date": 1790713528365,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 87819.26426100874,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000001454511663501447",
+            "extra": "mean: 11.387023205157895 usec\nrounds: 26632"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 48261.319629181664,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000002689834234293042",
+            "extra": "mean: 20.720527488339556 usec\nrounds: 17371"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 18553.275965968038,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000035129586072164817",
+            "extra": "mean: 53.89883715599785 usec\nrounds: 11772"
           }
         ]
       }
