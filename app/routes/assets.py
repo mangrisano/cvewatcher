@@ -9,12 +9,13 @@ from app.models import (
     AssetResponse,
     AssetUpdate,
     AssetVulnerabilitiesResponse,
+    FindingStatus,
     FindingStatusResponse,
     FindingStatusUpdate,
     VulnerabilityResponse,
 )
 from app.database.connection import get_db
-from app.database.models import Asset
+from app.database.models import Asset, AssetCVE
 from app.dependencies import get_current_user
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
@@ -25,6 +26,9 @@ router = APIRouter(prefix="/assets", tags=["Assets"])
 
 # CVE ids plus OSV ids (GHSA-…, PYSEC-…, GO-…, RUSTSEC-…); 20 = cves.id column size.
 _FINDING_ID_PATTERN = r"^[A-Z][A-Z0-9]{1,15}-[A-Za-z0-9-]+$"
+
+# Fields that decide which CVEs match an asset.
+_IDENTITY_FIELDS = ("name", "version", "cpe", "ecosystem")
 
 
 class SeverityLevel(StrEnum):
@@ -229,8 +233,20 @@ async def update_asset(
             detail=f"Asset '{name}' version '{version}' already exists",
         )
 
+    identity_changed = any(
+        key in _IDENTITY_FIELDS and getattr(asset, key) != value
+        for key, value in changes.items()
+    )
     for key, value in changes.items():
         setattr(asset, key, value)
+
+    if identity_changed:
+        # Untriaged findings belonged to the old identity; the next monitoring
+        # cycle re-links those that still apply. Triaged ones keep their status.
+        db.query(AssetCVE).filter(
+            AssetCVE.asset_id == asset.id,
+            AssetCVE.status == FindingStatus.OPEN.value,
+        ).delete(synchronize_session=False)
 
     db.commit()
     db.refresh(asset)

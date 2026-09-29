@@ -272,3 +272,49 @@ def test_asset_patch_is_partial(client):
     assert client.patch(url, headers=headers, json={"name": " "}).status_code == 422
     duplicate = client.patch(url, headers=headers, json={"version": "1.25.0"})
     assert duplicate.status_code == 400
+
+
+def test_changing_asset_identity_drops_only_untriaged_findings(client):
+    from uuid import UUID
+
+    from app.database.connection import SessionLocal
+    from app.database.models import AssetCVE, CVE
+
+    headers = _login(client, "judy", "judy@example.com")
+    asset_id = client.post(
+        "/assets/", headers=headers, json={"name": "nginx", "version": "1.20.0"}
+    ).json()["id"]
+    ids = {"CVE-2099-1001": "open", "CVE-2099-1002": "false_positive"}
+
+    db = SessionLocal()
+    try:
+        for cve_id in ids:
+            if not db.get(CVE, cve_id):
+                db.add(CVE(id=cve_id))
+        db.add_all(
+            AssetCVE(asset_id=UUID(asset_id), cve_id=cve_id, status=status)
+            for cve_id, status in ids.items()
+        )
+        db.commit()
+
+        def linked():
+            db.expire_all()
+            rows = db.query(AssetCVE).filter(AssetCVE.asset_id == UUID(asset_id))
+            return {row.cve_id: row.status for row in rows}
+
+        url = f"/assets/{asset_id}"
+        client.patch(url, headers=headers, json={"description": "edge"})
+        assert linked() == ids
+
+        client.patch(url, headers=headers, json={"version": "1.20.0"})
+        assert linked() == ids
+
+        client.patch(url, headers=headers, json={"version": "1.26.0"})
+        assert linked() == {"CVE-2099-1002": "false_positive"}
+    finally:
+        db.query(AssetCVE).filter(AssetCVE.cve_id.in_(ids)).delete(
+            synchronize_session=False
+        )
+        db.query(CVE).filter(CVE.id.in_(ids)).delete(synchronize_session=False)
+        db.commit()
+        db.close()

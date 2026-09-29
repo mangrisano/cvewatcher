@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PATCH /assets/{id}` cleared every field not sent** and allowed
   duplicates. It is now a partial update (`null`/empty clears an optional
   field) and rejects a name/version already used by another asset.
+- **Changing an asset's name, version, CPE or ecosystem kept the old
+  findings**, so digests and metrics still reported CVEs of the previous
+  version. Untriaged (`open`) findings are now dropped on such a change and
+  the next monitoring cycle re-links those that still apply; triaged ones keep
+  their status and notes.
 - **Auto-running Alembic migrations was silently killing app logging**:
   `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
   file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`
