@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790703823346,
+  "lastUpdate": 1790706384691,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -855,6 +855,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000002098991324593799",
             "extra": "mean: 38.128946041371755 usec\nrounds: 15864"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "b309e76f38c10aa7c418e47542fc4622f606690b",
+          "message": "fix(auth): fail closed on Redis outages and prune the DB blocklist\n\nWith REDIS_URL set, a worker that could not ping Redis at startup fell\nback to the database blocklist for its whole lifetime and never saw\nrevocations stored in Redis, accepting revoked tokens. Redis is now the only\nbackend when configured; errors raise BlocklistUnavailableError, served as\n503, and the client reconnects on its own.\n\nThe database backend never pruned expired rows (purge_expired_tokens had no\ncaller) and a duplicate revoke raced into an IntegrityError. Expired rows\nare now deleted on every revocation and the duplicate is ignored.",
+          "timestamp": "2026-09-29T20:24:15+02:00",
+          "tree_id": "a8cae0662d21caad81fa8ac233c3eaa4eb172c56",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/b309e76f38c10aa7c418e47542fc4622f606690b"
+        },
+        "date": 1790706383926,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 117705.38787521642,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000012779261505196162",
+            "extra": "mean: 8.495787814404341 usec\nrounds: 26835"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 66033.92554083036,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000018464280842036372",
+            "extra": "mean: 15.14373092027788 usec\nrounds: 21135"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 25937.798245266633,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000003943579308562594",
+            "extra": "mean: 38.55377355256008 usec\nrounds: 15752"
           }
         ]
       }
