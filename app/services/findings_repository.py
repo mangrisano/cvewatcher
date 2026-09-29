@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Iterable
 from uuid import UUID
 
+from sqlalchemy import Column
 from sqlalchemy.orm import Session
 
 from app.database.models import CVE, AssetCVE
@@ -12,12 +13,15 @@ from app.models import FindingStatus
 
 logger = logging.getLogger(__name__)
 
+# The 1.x-style models type ``Asset.id`` as a Column for static checkers.
+AssetId = UUID | Column
+
 
 class FindingRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def statuses(self, asset_id: UUID, cve_ids: Iterable[str]) -> dict[str, str]:
+    def statuses(self, asset_id: AssetId, cve_ids: Iterable[str]) -> dict[str, str]:
         """Triage status of the given CVEs on an asset (only those linked)."""
         cve_ids = list(cve_ids)
         if not cve_ids:
@@ -29,7 +33,7 @@ class FindingRepository:
         )
         return {cve_id: status for cve_id, status in rows}
 
-    def linked_cve_ids(self, asset_id: UUID, candidates: Iterable[str]) -> set[str]:
+    def linked_cve_ids(self, asset_id: AssetId, candidates: Iterable[str]) -> set[str]:
         """CVE ids already linked to the asset, among the given candidates.
 
         Only the candidate ids are queried, so this never scans the whole table.
@@ -44,7 +48,7 @@ class FindingRepository:
         )
         return {row[0] for row in rows}
 
-    def link(self, asset_id: UUID, finding: dict[str, Any]) -> None:
+    def link(self, asset_id: AssetId, finding: dict[str, Any]) -> None:
         """Persist a newly seen finding; best-effort (errors are logged)."""
         cve_id = finding.get("cve_id")
         if not cve_id:
@@ -71,7 +75,7 @@ class FindingRepository:
             self.db.rollback()
 
     def set_status(
-        self, asset_id: UUID, cve_id: str, status: str, notes: str | None
+        self, asset_id: AssetId, cve_id: str, status: str, notes: str | None
     ) -> AssetCVE:
         """Create or update the triage status of an (asset, CVE) finding."""
         link = self._get_link(asset_id, cve_id)
@@ -88,14 +92,14 @@ class FindingRepository:
         self.db.refresh(link)
         return link
 
-    def drop_untriaged(self, asset_id: UUID) -> None:
+    def drop_untriaged(self, asset_id: AssetId) -> None:
         """Remove the asset's ``open`` links, within the caller's transaction."""
         self.db.query(AssetCVE).filter(
             AssetCVE.asset_id == asset_id,
             AssetCVE.status == FindingStatus.OPEN.value,
         ).delete(synchronize_session=False)
 
-    def _get_link(self, asset_id: UUID, cve_id: str) -> AssetCVE | None:
+    def _get_link(self, asset_id: AssetId, cve_id: str) -> AssetCVE | None:
         return (
             self.db.query(AssetCVE)
             .filter(AssetCVE.asset_id == asset_id, AssetCVE.cve_id == cve_id)
