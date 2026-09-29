@@ -120,3 +120,75 @@ def test_logout_revokes_refresh_token(client):
     # The revoked refresh token can no longer mint new access tokens.
     response = client.post("/auth/refresh", json={"refresh_token": refresh})
     assert response.status_code == 401
+
+
+class DownRedis:
+    def set(self, *args, **kwargs):
+        import redis
+
+        raise redis.ConnectionError("connection refused")
+
+    exists = set
+
+
+def test_redis_outage_fails_closed(monkeypatch):
+    import pytest
+
+    monkeypatch.setattr(token_blocklist, "_get_redis", lambda: DownRedis())
+    expires = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+    with pytest.raises(token_blocklist.BlocklistUnavailableError):
+        is_token_revoked(None, "jti-any")
+    with pytest.raises(token_blocklist.BlocklistUnavailableError):
+        revoke_token(None, "jti-any", expires)
+
+
+def test_redis_outage_returns_503_on_protected_endpoints(client, monkeypatch):
+    from app.utils.auth import create_access_token
+
+    monkeypatch.setattr(token_blocklist, "_get_redis", lambda: DownRedis())
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'r@x.it'})}"}
+
+    response = client.get("/user", headers=headers)
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "30"
+
+
+def test_revoking_prunes_expired_rows():
+    from app.database.models import RevokedToken
+
+    db = _make_session()
+    try:
+        past = datetime.now(timezone.utc) - timedelta(minutes=1)
+        future = datetime.now(timezone.utc) + timedelta(minutes=30)
+        db.add(RevokedToken(jti="jti-stale", expires_at=past))
+        db.commit()
+
+        revoke_token(db, "jti-live", future)
+
+        assert is_token_revoked(db, "jti-stale") is False
+        assert is_token_revoked(db, "jti-live") is True
+    finally:
+        db.close()
+
+
+def test_concurrent_revoke_is_not_an_error(monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+
+    db = _make_session()
+    try:
+        rolled_back = []
+
+        def lost_race():
+            raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+
+        monkeypatch.setattr(db, "commit", lost_race)
+        monkeypatch.setattr(db, "rollback", lambda: rolled_back.append(True))
+
+        future = datetime.now(timezone.utc) + timedelta(minutes=30)
+        revoke_token(db, "jti-race", future)
+        assert rolled_back == [True]
+    finally:
+        monkeypatch.undo()
+        db.rollback()
+        db.close()

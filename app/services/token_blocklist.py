@@ -1,14 +1,16 @@
 """Token revocation list (denylist) with a pluggable backend.
 
-Logout and refresh-token rotation add a token's ``jti`` here so it can no longer
-be used, even though JWTs are otherwise stateless.
+Logout adds a token's ``jti`` here so it can no longer be used, even though
+JWTs are otherwise stateless.
 
 Backends:
-- **Redis** (preferred) when ``REDIS_URL`` is set: keys carry a TTL equal to the
-  token lifetime, so expired entries clean themselves up and state is shared
-  across workers/instances.
-- **Database** fallback otherwise: rows store the token expiry and can be pruned
-  with :func:`purge_expired_tokens`.
+- **Redis** when ``REDIS_URL`` is set: keys carry a TTL equal to the token
+  lifetime, so expired entries clean themselves up and state is shared across
+  workers/instances. If Redis is unreachable the check fails closed
+  (:class:`BlocklistUnavailableError`, served as 503) instead of silently
+  falling back to a per-process view that would accept revoked tokens.
+- **Database** otherwise: rows store the token expiry; expired rows are pruned
+  on every revocation (or explicitly with :func:`purge_expired_tokens`).
 """
 
 import logging
@@ -16,6 +18,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.models import RevokedToken
@@ -23,32 +26,34 @@ from app.database.models import RevokedToken
 logger = logging.getLogger(__name__)
 
 _redis_client: Optional[Any] = None
-_redis_initialized = False
+
+
+class BlocklistUnavailableError(Exception):
+    """The configured revocation backend cannot be reached."""
 
 
 def _get_redis() -> Optional[Any]:
-    global _redis_client, _redis_initialized
-    if _redis_initialized:
-        return _redis_client
-
-    _redis_initialized = True
+    global _redis_client
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
-        _redis_client = None
         return None
-
-    try:
+    if _redis_client is None:
         import redis
 
-        client = redis.Redis.from_url(redis_url, decode_responses=True)
-        client.ping()
-        _redis_client = client
+        # Connects lazily and reconnects on its own after an outage.
+        _redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
         logger.info("Token blocklist using Redis backend")
-    except Exception as e:
-        logger.error("Redis unavailable (%s); falling back to database blocklist", e)
-        _redis_client = None
-
     return _redis_client
+
+
+def _redis_call(operation, *args, **kwargs):
+    import redis
+
+    try:
+        return operation(*args, **kwargs)
+    except redis.RedisError as e:
+        logger.error("Redis blocklist unavailable: %s", e)
+        raise BlocklistUnavailableError("Token revocation backend unavailable") from e
 
 
 def _redis_key(jti: str) -> str:
@@ -62,13 +67,20 @@ def revoke_token(db: Session, jti: Optional[str], expires_at: datetime) -> None:
     client = _get_redis()
     if client is not None:
         ttl = int((expires_at - datetime.now(timezone.utc)).total_seconds())
-        client.set(_redis_key(jti), "1", ex=max(ttl, 1))
+        _redis_call(client.set, _redis_key(jti), "1", ex=max(ttl, 1))
         return
 
-    if db.query(RevokedToken).filter(RevokedToken.jti == jti).first():
-        return
-    db.add(RevokedToken(jti=jti, expires_at=expires_at))
-    db.commit()
+    now = datetime.now(timezone.utc)
+    db.query(RevokedToken).filter(RevokedToken.expires_at < now).delete(
+        synchronize_session=False
+    )
+    if not db.query(RevokedToken).filter(RevokedToken.jti == jti).first():
+        db.add(RevokedToken(jti=jti, expires_at=expires_at))
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request revoked the same token first.
+        db.rollback()
 
 
 def is_token_revoked(db: Session, jti: Optional[str]) -> bool:
@@ -77,7 +89,7 @@ def is_token_revoked(db: Session, jti: Optional[str]) -> bool:
 
     client = _get_redis()
     if client is not None:
-        return bool(client.exists(_redis_key(jti)))
+        return bool(_redis_call(client.exists, _redis_key(jti)))
 
     return db.query(RevokedToken).filter(RevokedToken.jti == jti).first() is not None
 

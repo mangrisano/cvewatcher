@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PATCH /assets/{id}/vulnerabilities/{cve_id}` accepted any string**, which
   was stored in the shared `cves` table and shown to every user by
   `/cves/recent`. The id must now look like a CVE or OSV id (max 20 chars).
+- **A Redis outage could let revoked tokens through**: a worker that could not
+  reach Redis at startup silently used the database blocklist forever, which
+  does not see revocations stored in Redis. With `REDIS_URL` set, Redis is now
+  the only backend: when it is unreachable authenticated requests get 503
+  (fail closed), and the client reconnects on its own once it is back.
 
 ### Fixed
 
@@ -67,6 +72,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a key that was never removed (50,000 logins with distinct emails left 50,000
   entries). Lookups no longer create keys, empty keys are dropped and expired
   ones are swept periodically.
+- **The database token blocklist was never pruned** (`purge_expired_tokens`
+  had no caller), and two simultaneous logouts of the same token could fail
+  with a 500. Expired rows are now removed on every revocation and a duplicate
+  revocation is ignored.
 - **Auto-running Alembic migrations was silently killing app logging**:
   `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
   file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`

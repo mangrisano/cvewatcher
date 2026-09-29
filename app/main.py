@@ -2,8 +2,9 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.concurrency import asynccontextmanager
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.routes.landing import router as landing_router
 from app.routes.dashboard import router as dashboard_router
@@ -15,6 +16,7 @@ from app.routes.cves import router as cves_router
 from app.routes.findings import router as findings_router
 from app.database import init_schema
 from app.services.scheduler import start_scheduler, shutdown_scheduler
+from app.services.token_blocklist import BlocklistUnavailableError
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -38,6 +40,16 @@ app = FastAPI(
     version="2.3.1",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(BlocklistUnavailableError)
+async def blocklist_unavailable(request: Request, exc: BlocklistUnavailableError):
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Authentication temporarily unavailable"},
+        headers={"Retry-After": "30"},
+    )
+
 
 app.include_router(landing_router)
 app.include_router(dashboard_router)

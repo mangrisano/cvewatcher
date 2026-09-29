@@ -19,7 +19,11 @@ from app.utils.rate_limit import (
     registration_rate_limiter,
 )
 from app.dependencies import get_current_user
-from app.services.token_blocklist import revoke_token, is_token_revoked
+from app.services.token_blocklist import (
+    BlocklistUnavailableError,
+    is_token_revoked,
+    revoke_token,
+)
 from app.database import get_db, User
 
 router = APIRouter()
@@ -156,7 +160,7 @@ async def refresh_access_token(
             "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
         }
 
-    except HTTPException:
+    except (HTTPException, BlocklistUnavailableError):
         raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
