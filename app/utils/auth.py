@@ -59,6 +59,7 @@ def create_access_token(
             "exp": int(expire.timestamp()),
             "iat": int(datetime.datetime.now(datetime.timezone.utc).timestamp()),
             "jti": uuid.uuid4().hex,
+            "type": "access",
         }
     )
     return jwt.encode({"alg": ALGORITHM}, to_encode, _JWT_KEY)
@@ -84,7 +85,15 @@ def verify_access_token(token: str) -> dict:
     try:
         decoded = jwt.decode(token, _JWT_KEY, algorithms=[ALGORITHM])
         _CLAIMS_REGISTRY.validate(decoded.claims)
-        return decoded.claims
+        claims = decoded.claims
+
+        # Tokens issued before the "type" claim existed are access tokens.
+        if claims.get("type", "access") != "access":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+
+        return claims
+    except HTTPException:
+        raise
     except JoseError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     except Exception:

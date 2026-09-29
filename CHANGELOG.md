@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Refresh tokens were accepted as access tokens**: any endpoint took a
+  7-day refresh token as a bearer token. Access tokens now carry
+  `type: "access"` and anything else is rejected (tokens issued before this
+  change, which have no `type`, stay valid until they expire).
+
 ### Fixed
 
 - **The app crashed on startup when `DATABASE_URL` was unset**: the engine

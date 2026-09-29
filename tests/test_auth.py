@@ -48,3 +48,16 @@ def test_refresh_token_roundtrip():
     token = auth.create_refresh_token({"sub": "user@example.com"})
     claims = auth.verify_refresh_token(token)
     assert claims["type"] == "refresh"
+
+
+def test_access_token_rejects_refresh_token():
+    refresh = auth.create_refresh_token({"sub": "user@example.com"})
+    with pytest.raises(HTTPException) as exc:
+        auth.verify_access_token(refresh)
+    assert exc.value.status_code == 401
+
+
+def test_refresh_token_cannot_call_the_api(client):
+    refresh = auth.create_refresh_token({"sub": "user@example.com"})
+    response = client.get("/assets/", headers={"Authorization": f"Bearer {refresh}"})
+    assert response.status_code == 401
