@@ -2,6 +2,7 @@
 
 import asyncio
 
+from app.config import get_settings
 from app.database.connection import SessionLocal
 from app.database.models import Asset, AssetCVE, CVE
 from app.models import AssetResponse
@@ -98,6 +99,7 @@ def test_nvd_concurrency_limit(monkeypatch):
     # No API key in the test env -> small default fan-out.
     assert sources.nvd_concurrency_limit(nist_nvd.nist_client) == 3
     monkeypatch.setenv("NVD_MAX_CONCURRENCY", "7")
+    get_settings.cache_clear()
     assert sources.nvd_concurrency_limit(nist_nvd.nist_client) == 7
 
 

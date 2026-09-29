@@ -2,7 +2,6 @@ import datetime
 import hashlib
 import secrets
 import hmac
-import os
 import uuid
 from typing import Optional
 
@@ -11,21 +10,20 @@ from joserfc import jwt
 from joserfc.jwk import OctKey
 from joserfc.errors import JoseError
 
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-_secret_key = os.getenv("JWT_SECRET_KEY")
+from app.config import get_settings
 
-if not _secret_key:
+_settings = get_settings()
+ALGORITHM = _settings.jwt_algorithm
+
+if not _settings.jwt_secret_key:
     raise ValueError("JWT_SECRET_KEY environment variable is required")
-# RFC 7518 §3.2: an HMAC key must be at least as long as the hash output.
-if len(_secret_key.encode()) < 32:
-    raise ValueError("JWT_SECRET_KEY must be at least 32 bytes long")
 
-SECRET_KEY: str = _secret_key
+SECRET_KEY: str = _settings.jwt_secret_key
 _JWT_KEY = OctKey.import_key(SECRET_KEY)
 _CLAIMS_REGISTRY = jwt.JWTClaimsRegistry()
 
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+ACCESS_TOKEN_EXPIRE_MINUTES = _settings.jwt_access_token_expire_minutes
+REFRESH_TOKEN_EXPIRE_DAYS = _settings.jwt_refresh_token_expire_days
 
 
 def hash_password(password: str) -> str:

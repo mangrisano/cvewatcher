@@ -15,8 +15,17 @@ os.environ.setdefault("LOGIN_IP_MAX_ATTEMPTS", "1000")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.config import get_settings  # noqa: E402
 from app.database import create_tables  # noqa: E402
 from app.main import app  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _fresh_settings():
+    # Settings are cached; re-read them so env set by a test (monkeypatch) applies.
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture(scope="session", autouse=True)

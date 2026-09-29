@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 from typing import Optional
-import os
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
@@ -25,12 +24,9 @@ from app.services.token_blocklist import (
     revoke_token,
 )
 from app.database import get_db, User
+from app.config import get_settings
 
 router = APIRouter()
-
-
-def _is_truthy(value: str) -> bool:
-    return value.strip().lower() in ("1", "true", "yes", "on")
 
 
 def _registration_open(db: Session) -> bool:
@@ -38,7 +34,7 @@ def _registration_open(db: Session) -> bool:
     # registration must be explicitly enabled via REGISTRATION_ENABLED.
     if db.query(User).count() == 0:
         return True
-    return _is_truthy(os.getenv("REGISTRATION_ENABLED", "false"))
+    return get_settings().registration_enabled
 
 
 @router.get("/auth/registration-status", tags=["auth"])

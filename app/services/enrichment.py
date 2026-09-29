@@ -16,11 +16,12 @@ disabled entirely with ``ENRICH_ENABLED=false``.
 """
 
 import logging
-import os
 import time
 from typing import Any, Optional
 
 import httpx
+
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,6 @@ EPSS_API_URL = "https://api.first.org/data/v1/epss"
 # FIRST.org accepts a comma-separated list; keep batches modest to stay well
 # within URL length limits.
 EPSS_BATCH_SIZE = 100
-
-
-def _is_truthy(value: str) -> bool:
-    return value.strip().lower() in ("1", "true", "yes", "on")
 
 
 async def _http_get(url: str, **kwargs: Any) -> httpx.Response:
@@ -54,7 +51,7 @@ class EnrichmentService:
 
     @property
     def enabled(self) -> bool:
-        return _is_truthy(os.getenv("ENRICH_ENABLED", "true"))
+        return get_settings().enrich_enabled
 
     async def kev_ids(self) -> set[str]:
         """Return the set of CVE ids in the CISA KEV catalog (cached, best-effort)."""

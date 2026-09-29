@@ -6,10 +6,11 @@ restart. For multi-process / multi-instance deployments a shared store
 not to be an authoritative quota.
 """
 
-import os
 import threading
 import time
 from collections import defaultdict, deque
+
+from app.config import get_settings
 
 
 class InMemoryRateLimiter:
@@ -62,18 +63,20 @@ class InMemoryRateLimiter:
             self._attempts.pop(key, None)
 
 
+_settings = get_settings()
+
 login_rate_limiter = InMemoryRateLimiter(
-    max_attempts=int(os.getenv("LOGIN_MAX_ATTEMPTS", "5")),
-    window_seconds=int(os.getenv("LOGIN_WINDOW_SECONDS", "300")),
+    max_attempts=_settings.login_max_attempts,
+    window_seconds=_settings.login_window_seconds,
 )
 
 # Per source IP across all accounts, against password spraying.
 login_ip_rate_limiter = InMemoryRateLimiter(
-    max_attempts=int(os.getenv("LOGIN_IP_MAX_ATTEMPTS", "30")),
-    window_seconds=int(os.getenv("LOGIN_WINDOW_SECONDS", "300")),
+    max_attempts=_settings.login_ip_max_attempts,
+    window_seconds=_settings.login_window_seconds,
 )
 
 registration_rate_limiter = InMemoryRateLimiter(
-    max_attempts=int(os.getenv("REGISTER_MAX_ATTEMPTS", "5")),
-    window_seconds=int(os.getenv("REGISTER_WINDOW_SECONDS", "3600")),
+    max_attempts=_settings.register_max_attempts,
+    window_seconds=_settings.register_window_seconds,
 )

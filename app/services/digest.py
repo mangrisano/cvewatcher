@@ -6,9 +6,9 @@ their active (non-suppressed) findings. Opt-in via ``DIGEST_ENABLED``.
 """
 
 import logging
-import os
 
 from app.database.connection import SessionLocal
+from app.config import get_settings
 from app.database.models import Asset, AssetCVE, CVE
 from app.models import SUPPRESSED_STATUSES
 from app.services.notifications import send_email
@@ -17,12 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def digest_enabled() -> bool:
-    return os.getenv("DIGEST_ENABLED", "false").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    return get_settings().digest_enabled
 
 
 def _format_digest(rows) -> str:

@@ -14,7 +14,6 @@ Backends:
 """
 
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -22,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.models import RevokedToken
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class BlocklistUnavailableError(Exception):
 
 def _get_redis() -> Optional[Any]:
     global _redis_client
-    redis_url = os.getenv("REDIS_URL")
+    redis_url = get_settings().redis_url
     if not redis_url:
         return None
     if _redis_client is None:

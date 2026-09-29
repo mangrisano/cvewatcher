@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
@@ -9,6 +8,7 @@ from typing import Optional, Any
 import httpx
 from dataclasses import dataclass
 
+from app.config import get_settings
 from app.services.severity import band_from_score
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class NistNvdClient:
     KEYLESS_PAGE_DELAY_SECONDS = 6
     # Short-lived cache so repeated identical queries (e.g. re-opening an asset
     # or toggling the dashboard severity filter) do not re-hit the NVD API.
-    CACHE_TTL_SECONDS = int(os.getenv("NVD_CACHE_TTL_SECONDS", "600"))
+    CACHE_TTL_SECONDS = get_settings().nvd_cache_ttl_seconds
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
@@ -412,4 +412,4 @@ class NistNvdClient:
             return None
 
 
-nist_client = NistNvdClient(api_key=os.getenv("NVD_API_KEY"))
+nist_client = NistNvdClient(api_key=get_settings().nvd_api_key)

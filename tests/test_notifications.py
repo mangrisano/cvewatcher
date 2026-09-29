@@ -2,6 +2,7 @@
 
 import asyncio
 
+from app.config import get_settings
 from app.services import notifications
 from app.services.notifications import (
     ConsoleNotifier,
@@ -107,6 +108,7 @@ def test_build_notifiers_from_env(monkeypatch):
 
     monkeypatch.setenv("NOTIFY_CONSOLE", "false")
     monkeypatch.setenv("NOTIFY_WEBHOOK_URL", "https://hook.example.com")
+    get_settings.cache_clear()
     notifiers = build_notifiers_from_env()
     assert not any(isinstance(n, ConsoleNotifier) for n in notifiers)
     assert any(isinstance(n, WebhookNotifier) for n in notifiers)

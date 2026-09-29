@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Configuration is validated at startup**: every environment variable is now
+  declared once, with its type and default, in `app/config.py`
+  (`pydantic-settings`, new dependency). A malformed value such as
+  `MONITOR_ENABLED=maybe`, `NVD_MAX_CONCURRENCY=0` or a non-numeric interval
+  now stops the app with a clear error instead of being silently read as
+  `false`/ignored. Empty variables still mean "use the default".
+
 ### Fixed
 
 - **`GET /assets/monitoring/report` listed unrelated CVEs**: it ran its own

@@ -1,11 +1,11 @@
 import logging
-import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.concurrency import asynccontextmanager
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from app.config import get_settings
 from app.routes.landing import router as landing_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.auth import router as auth_router
@@ -20,7 +20,7 @@ from app.services.scheduler import start_scheduler, shutdown_scheduler
 from app.services.token_blocklist import BlocklistUnavailableError
 
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    level=get_settings().log_level.upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)

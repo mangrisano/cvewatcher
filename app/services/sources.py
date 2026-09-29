@@ -8,11 +8,11 @@ service.
 
 import asyncio
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional, Protocol
 
+from app.config import get_settings
 from app.services import matching
 from app.services.nist_nvd import NistNvdClient, NvdUnavailableError, nist_client
 from app.services.osv import OsvClient, osv_client
@@ -43,10 +43,9 @@ def nvd_concurrency_limit(client: NistNvdClient) -> int:
     """Max concurrent NVD requests. Without an API key NVD allows only 5 req/30s,
     so keep the fan-out small; an API key (50 req/30s) allows much more.
     """
-    override = os.getenv("NVD_MAX_CONCURRENCY", "")
-    if override.isdigit() and int(override) > 0:
-        return int(override)
-    return 10 if getattr(client, "api_key", None) else 3
+    return get_settings().nvd_max_concurrency or (
+        10 if getattr(client, "api_key", None) else 3
+    )
 
 
 class NvdSource:

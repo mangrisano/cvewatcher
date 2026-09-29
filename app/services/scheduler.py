@@ -6,13 +6,13 @@ explicitly configured to do so.
 """
 
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.database.connection import SessionLocal
+from app.config import get_settings
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.digest import digest_enabled, run_digest_cycle
 from app.services.notifications import Notifier, build_notifiers_from_env, dispatch
@@ -68,12 +68,8 @@ async def run_monitoring_cycle(
 def start_scheduler() -> Optional[AsyncIOScheduler]:
     global _scheduler
 
-    monitor = os.getenv("MONITOR_ENABLED", "false").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    settings = get_settings()
+    monitor = settings.monitor_enabled
     digest = digest_enabled()
     if not monitor and not digest:
         logger.info("Periodic monitoring disabled (set MONITOR_ENABLED=true to enable)")
@@ -81,7 +77,7 @@ def start_scheduler() -> Optional[AsyncIOScheduler]:
 
     _scheduler = AsyncIOScheduler()
     if monitor:
-        interval_minutes = int(os.getenv("MONITOR_INTERVAL_MINUTES", "360"))
+        interval_minutes = settings.monitor_interval_minutes
         _scheduler.add_job(
             run_monitoring_cycle,
             trigger="interval",
@@ -95,7 +91,7 @@ def start_scheduler() -> Optional[AsyncIOScheduler]:
             "Periodic monitoring started (every %d minute(s))", interval_minutes
         )
     if digest:
-        digest_interval = int(os.getenv("DIGEST_INTERVAL_MINUTES", "1440"))
+        digest_interval = settings.digest_interval_minutes
         _scheduler.add_job(
             run_digest_cycle,
             trigger="interval",

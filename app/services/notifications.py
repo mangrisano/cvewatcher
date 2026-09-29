@@ -7,12 +7,13 @@ list of "finding" dicts and is responsible for delivering them.
 
 import asyncio
 import logging
-import os
 import smtplib
 from email.message import EmailMessage
 from typing import Any, Protocol
 
 import httpx
+
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -152,22 +153,17 @@ class EmailNotifier:
             logger.error("Email notification failed: %s", e)
 
 
-def _is_truthy(value: str) -> bool:
-    return value.strip().lower() in ("1", "true", "yes", "on")
-
-
 def _email_config_from_env() -> dict[str, Any] | None:
-    host = os.getenv("NOTIFY_EMAIL_HOST")
-    sender = os.getenv("NOTIFY_EMAIL_FROM")
-    if not host or not sender:
+    settings = get_settings()
+    if not settings.notify_email_host or not settings.notify_email_from:
         return None
     return {
-        "host": host,
-        "port": int(os.getenv("NOTIFY_EMAIL_PORT", "587")),
-        "sender": sender,
-        "username": os.getenv("NOTIFY_EMAIL_USERNAME") or None,
-        "password": os.getenv("NOTIFY_EMAIL_PASSWORD") or None,
-        "use_tls": _is_truthy(os.getenv("NOTIFY_EMAIL_USE_TLS", "true")),
+        "host": settings.notify_email_host,
+        "port": settings.notify_email_port,
+        "sender": settings.notify_email_from,
+        "username": settings.notify_email_username,
+        "password": settings.notify_email_password,
+        "use_tls": settings.notify_email_use_tls,
     }
 
 
@@ -202,35 +198,22 @@ def send_email(
 
 
 def build_notifiers_from_env() -> list[Notifier]:
+    settings = get_settings()
     notifiers: list[Notifier] = []
 
-    if _is_truthy(os.getenv("NOTIFY_CONSOLE", "true")):
+    if settings.notify_console:
         notifiers.append(ConsoleNotifier())
 
-    webhook_url = os.getenv("NOTIFY_WEBHOOK_URL")
-    if webhook_url:
-        notifiers.append(WebhookNotifier(webhook_url))
+    if settings.notify_webhook_url:
+        notifiers.append(WebhookNotifier(settings.notify_webhook_url))
 
-    slack_url = os.getenv("NOTIFY_SLACK_WEBHOOK_URL")
-    if slack_url:
-        notifiers.append(SlackNotifier(slack_url))
+    if settings.notify_slack_webhook_url:
+        notifiers.append(SlackNotifier(settings.notify_slack_webhook_url))
 
-    email_host = os.getenv("NOTIFY_EMAIL_HOST")
-    email_from = os.getenv("NOTIFY_EMAIL_FROM")
-    email_to = os.getenv("NOTIFY_EMAIL_TO", "")
-    recipients = [addr.strip() for addr in email_to.split(",") if addr.strip()]
-    if email_host and email_from and recipients:
-        notifiers.append(
-            EmailNotifier(
-                host=email_host,
-                port=int(os.getenv("NOTIFY_EMAIL_PORT", "587")),
-                sender=email_from,
-                recipients=recipients,
-                username=os.getenv("NOTIFY_EMAIL_USERNAME") or None,
-                password=os.getenv("NOTIFY_EMAIL_PASSWORD") or None,
-                use_tls=_is_truthy(os.getenv("NOTIFY_EMAIL_USE_TLS", "true")),
-            )
-        )
+    email = _email_config_from_env()
+    recipients = settings.notify_email_recipients
+    if email and recipients:
+        notifiers.append(EmailNotifier(recipients=recipients, **email))
 
     return notifiers
 
