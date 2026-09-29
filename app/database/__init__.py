@@ -1,7 +1,6 @@
-import os
 from pathlib import Path
 
-from app.database.connection import engine, Base, get_db
+from app.database.connection import DATABASE_URL, engine, Base, get_db
 from app.database.models import User, Asset, CVE, RevokedToken, AssetCVE
 
 
@@ -18,8 +17,7 @@ def init_schema():
     Alembic so an existing deployment picks up schema changes on upgrade,
     not just brand-new databases.
     """
-    database_url = os.getenv("DATABASE_URL", "")
-    if database_url.startswith("sqlite"):
+    if engine.dialect.name == "sqlite":
         create_tables()
         return
 
@@ -34,6 +32,8 @@ def init_schema():
     repo_root = Path(__file__).resolve().parent.parent.parent
     alembic_cfg = Config()
     alembic_cfg.set_main_option("script_location", str(repo_root / "alembic"))
+    # Escape "%" (e.g. URL-encoded passwords): Alembic options go through configparser.
+    alembic_cfg.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
     command.upgrade(alembic_cfg, "head")
 
 

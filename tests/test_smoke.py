@@ -191,3 +191,14 @@ def test_asset_list_pagination(client):
     # invalid pagination params are rejected
     assert client.get("/assets/?limit=0", headers=headers).status_code == 422
     assert client.get("/assets/?offset=-1", headers=headers).status_code == 422
+
+
+def test_init_schema_follows_the_engine_when_database_url_is_unset(monkeypatch):
+    import app.database as database
+
+    called = []
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "create_tables", lambda: called.append(True))
+
+    database.init_schema()
+    assert called == [True]
