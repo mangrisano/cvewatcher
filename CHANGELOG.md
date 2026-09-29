@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wider date windows with a 404, which was read as "no results". `days` is now
   capped at 120 (422 above) on `/findings`, `/findings/export`,
   `/assets/{id}/vulnerabilities` and `/assets/monitoring/report`.
+- **`PATCH /assets/{id}` cleared every field not sent** and allowed
+  duplicates. It is now a partial update (`null`/empty clears an optional
+  field) and rejects a name/version already used by another asset.
 - **Auto-running Alembic migrations was silently killing app logging**:
   `alembic/env.py` calls `fileConfig()` when the Alembic `Config` has a config
   file attached, and `fileConfig()` defaults to `disable_existing_loggers=True`

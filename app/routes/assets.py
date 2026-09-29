@@ -7,6 +7,7 @@ from enum import StrEnum
 from app.models import (
     AssetCreate,
     AssetResponse,
+    AssetUpdate,
     AssetVulnerabilitiesResponse,
     FindingStatusResponse,
     FindingStatusUpdate,
@@ -192,20 +193,43 @@ async def set_vulnerability_status(
 @router.patch("/{asset_id}", response_model=AssetResponse)
 async def update_asset(
     asset_id: UUID,
-    asset_data: AssetCreate,
+    asset_data: AssetUpdate,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    user_email = current_user.get("sub")
     asset = (
         db.query(Asset)
-        .filter(Asset.id == asset_id, Asset.user_email == current_user.get("sub"))
+        .filter(Asset.id == asset_id, Asset.user_email == user_email)
         .first()
     )
 
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    for key, value in asset_data.model_dump().items():
+    changes = {
+        key: value or None
+        for key, value in asset_data.model_dump(exclude_unset=True).items()
+    }
+    name = changes.get("name", asset.name)
+    version = changes.get("version", asset.version)
+    duplicate = (
+        db.query(Asset)
+        .filter(
+            Asset.id != asset.id,
+            Asset.user_email == user_email,
+            Asset.name == name,
+            Asset.version == version,
+        )
+        .first()
+    )
+    if duplicate:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Asset '{name}' version '{version}' already exists",
+        )
+
+    for key, value in changes.items():
         setattr(asset, key, value)
 
     db.commit()

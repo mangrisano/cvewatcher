@@ -57,6 +57,23 @@ class AssetCreate(BaseModel):
     description: Optional[str] = None
 
 
+class AssetUpdate(BaseModel):
+    """Partial update: only the fields sent are changed; null clears an optional one."""
+
+    name: Optional[str] = None
+    version: Optional[str] = None
+    cpe: Optional[str] = None
+    ecosystem: Optional[str] = None
+    description: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, name: Optional[str]) -> str:
+        if name is None or not name.strip():
+            raise ValueError("name cannot be empty")
+        return name
+
+
 class AssetResponse(BaseModel):
     id: UUID
     name: str

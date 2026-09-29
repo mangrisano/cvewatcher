@@ -241,3 +241,34 @@ def test_finding_status_rejects_malformed_ids(client):
         assert (
             client.patch(f"{url}/{good}", headers=headers, json=body).status_code == 200
         )
+
+
+def test_asset_patch_is_partial(client):
+    headers = _login(client, "ivan", "ivan@example.com")
+    asset = client.post(
+        "/assets/",
+        headers=headers,
+        json={
+            "name": "nginx",
+            "version": "1.24.0",
+            "cpe": "cpe:2.3:a:f5:nginx:1.24.0",
+            "description": "edge proxy",
+        },
+    ).json()
+    client.post(
+        "/assets/", headers=headers, json={"name": "nginx", "version": "1.25.0"}
+    )
+    url = f"/assets/{asset['id']}"
+
+    updated = client.patch(url, headers=headers, json={"description": "gateway"}).json()
+    assert updated["description"] == "gateway"
+    assert updated["version"] == "1.24.0"
+    assert updated["cpe"] == "cpe:2.3:a:f5:nginx:1.24.0"
+
+    cleared = client.patch(url, headers=headers, json={"cpe": ""}).json()
+    assert cleared["cpe"] is None
+
+    assert client.patch(url, headers=headers, json={"name": None}).status_code == 422
+    assert client.patch(url, headers=headers, json={"name": " "}).status_code == 422
+    duplicate = client.patch(url, headers=headers, json={"version": "1.25.0"})
+    assert duplicate.status_code == 400
