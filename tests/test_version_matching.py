@@ -194,7 +194,7 @@ def test_asset_with_cpe_uses_precise_nvd_lookup(monkeypatch):
         version="1.24.0",
         cpe="cpe:2.3:a:f5:nginx:1.24.0",
     )
-    result = asyncio.run(svc._get_asset_vulnerabilities(asset))
+    result = asyncio.run(svc.find_vulnerabilities(asset))
 
     assert calls["cpe_name"] == "cpe:2.3:a:f5:nginx:1.24.0:*:*:*:*:*:*:*"
     assert calls["keyword"] is None
@@ -330,7 +330,7 @@ def test_multiple_cpes_are_searched_concurrently_and_merged():
 
     svc.sources = [NvdSource(_Client())]
     asset = SimpleNamespace(name="openssl", version="3.0.0", cpe=None)
-    result = asyncio.run(svc._get_asset_vulnerabilities(asset))
+    result = asyncio.run(svc.find_vulnerabilities(asset))
 
     assert {v["cve_id"] for v in result} == {"CVE-A", "CVE-B", "CVE-SHARED"}
     assert len(result) == 3

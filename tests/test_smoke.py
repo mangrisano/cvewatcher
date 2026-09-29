@@ -126,7 +126,7 @@ def test_assets_require_authentication(client):
 
 
 def test_vulnerabilities_returns_503_when_nvd_unavailable(client, monkeypatch):
-    from app.services import cve_monitoring
+    from app.services import nist_nvd
     from app.services.nist_nvd import NvdUnavailableError
 
     client.post(
@@ -150,7 +150,7 @@ def test_vulnerabilities_returns_503_when_nvd_unavailable(client, monkeypatch):
     def boom(*args, **kwargs):
         raise NvdUnavailableError("NVD down")
 
-    monkeypatch.setattr(cve_monitoring.nist_client, "search_cves", boom)
+    monkeypatch.setattr(nist_nvd.nist_client, "search_cves", boom)
 
     response = client.get(f"/assets/{asset_id}/vulnerabilities", headers=headers)
     assert response.status_code == 503
@@ -356,7 +356,7 @@ def test_waiting_on_nvd_does_not_block_other_requests(monkeypatch):
 
 
 def test_findings_return_503_when_nvd_is_unavailable(client, monkeypatch):
-    from app.services import cve_monitoring
+    from app.services import nist_nvd
     from app.services.nist_nvd import NvdUnavailableError
 
     headers = _login(client, "kate", "kate@example.com")
@@ -365,8 +365,8 @@ def test_findings_return_503_when_nvd_is_unavailable(client, monkeypatch):
     async def boom(*args, **kwargs):
         raise NvdUnavailableError("NVD down")
 
-    monkeypatch.setattr(cve_monitoring.nist_client, "search_cves", boom)
-    monkeypatch.setattr(cve_monitoring.nist_client, "find_cpe_names", boom)
+    monkeypatch.setattr(nist_nvd.nist_client, "search_cves", boom)
+    monkeypatch.setattr(nist_nvd.nist_client, "find_cpe_names", boom)
 
     for url in ("/findings", "/findings/export"):
         response = client.get(url, headers=headers)
@@ -394,3 +394,32 @@ def test_assets_of_other_users_are_not_reachable(client):
     )
     assert client.delete(url, headers=intruder).status_code == 404
     assert client.get(url, headers=owner).json()["name"] == "redis"
+
+
+def test_routes_take_the_monitoring_service_from_dependencies(client):
+    from fastapi import Depends
+
+    from app.database import get_db
+    from app.dependencies import get_monitoring_service
+    from app.main import app
+    from app.services.cve_monitoring import CVEMonitoringService
+    from app.services.sources import SourceResult
+
+    class FixedSource:
+        async def search(self, asset, start, end, use_cache):
+            return SourceResult([{"cve_id": "CVE-2099-4242", "severity": "HIGH"}])
+
+    headers = _login(client, "nina", "nina@example.com")
+    client.post("/assets/", headers=headers, json={"name": "anything"})
+
+    def fake_service(db=Depends(get_db)):
+        return CVEMonitoringService(db, sources=[FixedSource()])
+
+    app.dependency_overrides[get_monitoring_service] = fake_service
+    try:
+        response = client.get("/findings", headers=headers)
+    finally:
+        app.dependency_overrides.pop(get_monitoring_service)
+
+    assert response.status_code == 200
+    assert [f["cve_id"] for f in response.json()["findings"]] == ["CVE-2099-4242"]

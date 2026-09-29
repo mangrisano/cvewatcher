@@ -5,7 +5,7 @@ import asyncio
 from app.database.connection import SessionLocal
 from app.database.models import Asset, AssetCVE, CVE
 from app.models import AssetResponse
-from app.services import cve_monitoring, sources
+from app.services import nist_nvd, sources
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.findings_repository import FindingRepository
 
@@ -96,9 +96,9 @@ def test_existing_ids_are_scoped_per_asset():
 def test_nvd_concurrency_limit(monkeypatch):
     monkeypatch.delenv("NVD_MAX_CONCURRENCY", raising=False)
     # No API key in the test env -> small default fan-out.
-    assert sources.nvd_concurrency_limit(cve_monitoring.nist_client) == 3
+    assert sources.nvd_concurrency_limit(nist_nvd.nist_client) == 3
     monkeypatch.setenv("NVD_MAX_CONCURRENCY", "7")
-    assert sources.nvd_concurrency_limit(cve_monitoring.nist_client) == 7
+    assert sources.nvd_concurrency_limit(nist_nvd.nist_client) == 7
 
 
 def test_get_user_vulnerabilities_aggregates_across_assets(monkeypatch):
@@ -120,7 +120,7 @@ def test_get_user_vulnerabilities_aggregates_across_assets(monkeypatch):
         ):
             return [{"cve_id": f"CVE-{asset_response.name}", "severity": "HIGH"}]
 
-        monkeypatch.setattr(svc, "_get_asset_vulnerabilities", fake_get)
+        monkeypatch.setattr(svc, "find_vulnerabilities", fake_get)
 
         out = asyncio.run(svc.get_user_vulnerabilities(_EMAIL))
 
@@ -200,7 +200,7 @@ def test_severity_filter_tolerates_findings_without_severity():
         svc = CVEMonitoringService(db, sources=[FixedSource()])
 
         out = asyncio.run(
-            svc._get_asset_vulnerabilities(_asset_response(), severity_filter="HIGH")
+            svc.find_vulnerabilities(_asset_response(), severity_filter="HIGH")
         )
         assert [v["cve_id"] for v in out] == ["CVE-2099-0002"]
     finally:
@@ -217,7 +217,7 @@ def test_monitor_all_assets_survives_findings_without_severity(monkeypatch):
     async def monitor(a):
         return {"new_vulnerabilities": [{"cve_id": "GHSA-x", "severity": None}]}
 
-    monkeypatch.setattr(svc, "_monitor_single_asset", monitor)
+    monkeypatch.setattr(svc, "monitor_asset", monitor)
 
     results = asyncio.run(svc.monitor_all_assets())
     assert "error" not in results
@@ -244,7 +244,7 @@ def test_findings_from_all_sources_are_merged():
             ),
         ],
     )
-    out = asyncio.run(svc._get_asset_vulnerabilities(_asset_response()))
+    out = asyncio.run(svc.find_vulnerabilities(_asset_response()))
 
     # One entry per id; the scored duplicate wins the merge.
     assert {v["cve_id"]: v["severity"] for v in out} == {
@@ -264,7 +264,7 @@ def test_unavailable_source_with_no_findings_raises():
 
     svc = CVEMonitoringService(None, sources=[DownSource()])
     with pytest.raises(NvdUnavailableError):
-        asyncio.run(svc._get_asset_vulnerabilities(_asset_response()))
+        asyncio.run(svc.find_vulnerabilities(_asset_response()))
 
 
 def test_monitoring_report_uses_the_matching_engine():

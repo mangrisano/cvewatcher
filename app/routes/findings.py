@@ -12,10 +12,8 @@ import logging
 from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy.orm import Session
 
-from app.database.connection import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_monitoring_service
 from app.models import SUPPRESSED_STATUSES, FindingsSummary, VulnerabilityResponse
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS
@@ -40,13 +38,12 @@ _EXPORT_COLUMNS = [
 
 
 async def _collect_findings(
-    db: Session,
+    service: CVEMonitoringService,
     user_email: str,
     days: int,
     include_suppressed: bool,
     use_cache: bool = True,
 ) -> list[dict]:
-    service = CVEMonitoringService(db)
     findings = await service.get_user_vulnerabilities(
         user_email, days=days, use_cache=use_cache
     )
@@ -65,14 +62,14 @@ async def findings_summary(
         default=False, description="Bypass caches for a live re-check"
     ),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     user_email = current_user.get("sub")
     if not user_email:
         raise HTTPException(status_code=401, detail="Invalid user token")
 
     findings = await _collect_findings(
-        db, user_email, days, include_suppressed, use_cache=not refresh
+        service, user_email, days, include_suppressed, use_cache=not refresh
     )
 
     by_severity = Counter((f.get("severity") or "UNKNOWN") for f in findings)
@@ -92,13 +89,13 @@ async def export_findings(
     days: int = Query(default=0, ge=0, le=MAX_DATE_RANGE_DAYS),
     include_suppressed: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     user_email = current_user.get("sub")
     if not user_email:
         raise HTTPException(status_code=401, detail="Invalid user token")
 
-    findings = await _collect_findings(db, user_email, days, include_suppressed)
+    findings = await _collect_findings(service, user_email, days, include_suppressed)
 
     if format == "csv":
         buffer = io.StringIO()

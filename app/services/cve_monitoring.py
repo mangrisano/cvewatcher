@@ -8,10 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.database.models import Asset
 from app.services.findings_repository import FindingRepository
-from app.services.nist_nvd import nist_client, NvdUnavailableError
-from app.services.enrichment import enrichment_service
-from app.services.osv import osv_client
-from app.services.sources import NvdSource, OsvSource, VulnerabilitySource
+from app.services.nist_nvd import NvdUnavailableError
+from app.services.enrichment import EnrichmentService, enrichment_service
+from app.services.sources import VulnerabilitySource, default_sources
 from app.services import matching
 from app.services.severity import severity_rank
 from app.models import AssetResponse
@@ -21,15 +20,15 @@ logger = logging.getLogger(__name__)
 
 class CVEMonitoringService:
     def __init__(
-        self, db: Session, sources: Optional[list[VulnerabilitySource]] = None
+        self,
+        db: Session,
+        sources: Optional[list[VulnerabilitySource]] = None,
+        enricher: Optional[EnrichmentService] = None,
     ):
         self.db = db
         self.findings = FindingRepository(db)
-        self.sources = (
-            sources
-            if sources is not None
-            else [NvdSource(nist_client), OsvSource(osv_client)]
-        )
+        self.sources = sources if sources is not None else default_sources()
+        self.enricher = enricher if enricher is not None else enrichment_service
 
     async def monitor_all_assets(self) -> dict[str, Any]:
         try:
@@ -50,7 +49,7 @@ class CVEMonitoringService:
 
             for asset in assets:
                 logger.info(f"Monitoring asset: {asset.name} v{asset.version}")
-                asset_result = await self._monitor_single_asset(asset)
+                asset_result = await self.monitor_asset(asset)
                 monitoring_results["asset_results"].append(asset_result)
 
                 monitoring_results["summary"]["new_vulnerabilities"] += len(
@@ -84,13 +83,13 @@ class CVEMonitoringService:
             logger.error(f"Error in monitor_all_assets: {e}")
             return {"error": str(e), "timestamp": datetime.now(timezone.utc)}
 
-    async def _monitor_single_asset(self, asset: Asset) -> dict[str, Any]:
+    async def monitor_asset(self, asset: Asset) -> dict[str, Any]:
         try:
             asset_response = AssetResponse.model_validate(asset)
 
             # Monitoring must never miss a freshly published CVE, so it bypasses
             # the read cache (the fetched result still refreshes it for readers).
-            current_vulnerabilities = await self._get_asset_vulnerabilities(
+            current_vulnerabilities = await self.find_vulnerabilities(
                 asset_response, use_cache=False
             )
 
@@ -143,7 +142,7 @@ class CVEMonitoringService:
 
         async def for_asset(asset: Asset) -> list[dict[str, Any]]:
             asset_response = AssetResponse.model_validate(asset)
-            vulns = await self._get_asset_vulnerabilities(
+            vulns = await self.find_vulnerabilities(
                 asset_response,
                 days=days,
                 severity_filter=severity_filter,
@@ -164,13 +163,14 @@ class CVEMonitoringService:
         per_asset = await asyncio.gather(*(for_asset(asset) for asset in assets))
         return [vuln for asset_vulns in per_asset for vuln in asset_vulns]
 
-    async def _get_asset_vulnerabilities(
+    async def find_vulnerabilities(
         self,
         asset: AssetResponse,
         days: int = 0,
         severity_filter: str | None = None,
         use_cache: bool = True,
     ) -> list[dict[str, Any]]:
+        """Findings for one asset from every source: merged, enriched, sorted."""
         pub_start_date = None
         pub_end_date = None
         if days > 0:
@@ -206,7 +206,7 @@ class CVEMonitoringService:
                 if (vuln.get("severity") or "").upper() == severity_filter_upper
             ]
 
-        await enrichment_service.enrich(vulnerabilities_list)
+        await self.enricher.enrich(vulnerabilities_list)
 
         # Actively-exploited (KEV) findings sort first, then by severity, then by
         # exploit probability (EPSS), then recency.
@@ -215,24 +215,8 @@ class CVEMonitoringService:
                 -int(bool(x.get("kev"))),
                 -severity_rank(x.get("severity")),
                 -(x.get("epss") or 0.0),
-                -(
-                    datetime.fromisoformat(
-                        x.get("publish_date", "1900-01-01T00:00:00").replace(
-                            "Z", "+00:00"
-                        )
-                    ).timestamp()
-                    if x.get("publish_date")
-                    else 0
-                ),
-                -(
-                    datetime.fromisoformat(
-                        x.get("modified_date", "1900-01-01T00:00:00").replace(
-                            "Z", "+00:00"
-                        )
-                    ).timestamp()
-                    if x.get("modified_date")
-                    else 0
-                ),
+                -_timestamp(x.get("publish_date")),
+                -_timestamp(x.get("modified_date")),
             )
         )
 

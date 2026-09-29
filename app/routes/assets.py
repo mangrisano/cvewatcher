@@ -14,7 +14,12 @@ from app.models import (
 )
 from app.database.connection import get_db
 from app.database.models import Asset
-from app.dependencies import get_current_user, get_owned_asset
+from app.dependencies import (
+    get_current_user,
+    get_findings_repository,
+    get_monitoring_service,
+    get_owned_asset,
+)
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
@@ -116,13 +121,12 @@ async def get_asset_vulnerabilities(
     ),
     severity: SeverityLevel | None = None,
     asset: Asset = Depends(get_owned_asset),
-    db: Session = Depends(get_db),
+    monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     try:
-        monitoring_service = CVEMonitoringService(db)
         asset_response = AssetResponse.model_validate(asset)
 
-        vulnerabilities = await monitoring_service._get_asset_vulnerabilities(
+        vulnerabilities = await monitoring_service.find_vulnerabilities(
             asset_response,
             days=days,
             severity_filter=severity.value if severity else None,
@@ -149,11 +153,9 @@ async def set_vulnerability_status(
     update: FindingStatusUpdate,
     cve_id: str = Path(max_length=20, pattern=_FINDING_ID_PATTERN),
     asset: Asset = Depends(get_owned_asset),
-    db: Session = Depends(get_db),
+    findings: FindingRepository = Depends(get_findings_repository),
 ):
-    return FindingRepository(db).set_status(
-        asset.id, cve_id, update.status.value, update.notes
-    )
+    return findings.set_status(asset.id, cve_id, update.status.value, update.notes)
 
 
 @router.patch("/{asset_id}", response_model=AssetResponse)
@@ -161,6 +163,7 @@ async def update_asset(
     asset_data: AssetUpdate,
     asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
+    findings: FindingRepository = Depends(get_findings_repository),
 ):
     changes = {
         key: value or None
@@ -194,7 +197,7 @@ async def update_asset(
     if identity_changed:
         # Untriaged findings belonged to the old identity; the next monitoring
         # cycle re-links those that still apply. Triaged ones keep their status.
-        FindingRepository(db).drop_untriaged(asset.id)
+        findings.drop_untriaged(asset.id)
 
     db.commit()
     db.refresh(asset)
@@ -213,11 +216,10 @@ async def delete_asset(
 @router.get("/{asset_id}/monitor")
 async def monitor_asset_cves(
     asset: Asset = Depends(get_owned_asset),
-    db: Session = Depends(get_db),
+    monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     try:
-        monitoring_service = CVEMonitoringService(db)
-        result = await monitoring_service._monitor_single_asset(asset)
+        result = await monitoring_service.monitor_asset(asset)
 
         return {
             "message": f"Monitoring completed for asset '{asset.name}'",
@@ -233,10 +235,9 @@ async def monitor_asset_cves(
 async def get_monitoring_report(
     days: int = Query(default=7, ge=1, le=MAX_DATE_RANGE_DAYS),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     try:
-        monitoring_service = CVEMonitoringService(db)
         user_email = current_user.get("sub") or ""
         report = await monitoring_service.get_monitoring_report(
             user_email=user_email, days=days
@@ -254,10 +255,9 @@ async def get_monitoring_report(
 async def scan_all_assets(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
+    monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     try:
-        monitoring_service = CVEMonitoringService(db)
-
         user_assets = (
             db.query(Asset).filter(Asset.user_email == current_user.get("sub")).all()
         )
@@ -273,7 +273,7 @@ async def scan_all_assets(
         }
 
         for asset in user_assets:
-            result = await monitoring_service._monitor_single_asset(asset)
+            result = await monitoring_service.monitor_asset(asset)
             scan_results["asset_results"].append(result)
 
         return scan_results

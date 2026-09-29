@@ -2,12 +2,10 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy.orm import Session
 
-from app.database.connection import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_cve_service, get_monitoring_service
 from app.models import VulnerabilityResponse
-from app.services.cve_service import cve_service
+from app.services.cve_service import CVEService
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.nist_nvd import NvdUnavailableError
 
@@ -48,6 +46,7 @@ class CVEResponse(BaseModel):
 async def fetch_recent_cves(
     days: int = Query(default=7, ge=1, le=30, description="Days back to search"),
     current_user: dict = Depends(get_current_user),
+    cve_service: CVEService = Depends(get_cve_service),
 ):
     try:
         stored_count = await cve_service.fetch_and_store_recent_cves(days=days)
@@ -66,6 +65,7 @@ def get_recent_cves(
     limit: int = Query(default=20, ge=1, le=100, description="Number of CVE to return"),
     offset: int = Query(default=0, ge=0, description="Number of CVE to skip"),
     current_user: dict = Depends(get_current_user),
+    cve_service: CVEService = Depends(get_cve_service),
 ):
     try:
         cves = cve_service.get_stored_cves(limit=limit, offset=offset)
@@ -94,14 +94,13 @@ def get_recent_cves(
 @router.get("/vulnerabilities", response_model=list[VulnerabilityResponse])
 async def check_my_vulnerabilities(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     user_email = current_user.get("sub")
     if not user_email:
         raise HTTPException(status_code=401, detail="Invalid user token")
 
     try:
-        service = CVEMonitoringService(db)
         vulnerabilities = await service.get_user_vulnerabilities(user_email)
 
         return [VulnerabilityResponse(**vuln) for vuln in vulnerabilities]
@@ -119,6 +118,7 @@ async def search_cves(
         default=None, description="Product version (optional)"
     ),
     current_user: dict = Depends(get_current_user),
+    cve_service: CVEService = Depends(get_cve_service),
 ):
     try:
         cves = await cve_service.search_cves_for_asset(product, version)

@@ -14,8 +14,8 @@ from datetime import datetime
 from typing import Any, Optional, Protocol
 
 from app.services import matching
-from app.services.nist_nvd import NistNvdClient, NvdUnavailableError
-from app.services.osv import OsvClient
+from app.services.nist_nvd import NistNvdClient, NvdUnavailableError, nist_client
+from app.services.osv import OsvClient, osv_client
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +201,11 @@ class OsvSource:
         return SourceResult(
             await self.client.search(ecosystem, asset.name, asset.version)
         )
+
+
+def default_sources() -> list[VulnerabilitySource]:
+    """NVD first, then OSV; fresh instances so each caller gets its own NVD limit."""
+    return [NvdSource(nist_client), OsvSource(osv_client)]
 
 
 def _finding(cve, reason: str) -> Finding:

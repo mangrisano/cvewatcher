@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.database.models import Asset
+from app.services.cve_monitoring import CVEMonitoringService
+from app.services.cve_service import CVEService, cve_service
+from app.services.findings_repository import FindingRepository
 from app.services.token_blocklist import is_token_revoked
 from app.utils.auth import verify_access_token
 
@@ -37,3 +40,15 @@ def get_owned_asset(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     return asset
+
+
+def get_monitoring_service(db: Session = Depends(get_db)) -> CVEMonitoringService:
+    return CVEMonitoringService(db)
+
+
+def get_findings_repository(db: Session = Depends(get_db)) -> FindingRepository:
+    return FindingRepository(db)
+
+
+def get_cve_service() -> CVEService:
+    return cve_service
