@@ -155,6 +155,7 @@ def test_vulnerabilities_returns_503_when_nvd_unavailable(client, monkeypatch):
         raise NvdUnavailableError("NVD down")
 
     monkeypatch.setattr(nist_nvd.nist_client, "search_cves", boom)
+    monkeypatch.setattr(nist_nvd.nist_client, "find_cpe_names", boom)
 
     response = client.get(f"/assets/{asset_id}/vulnerabilities", headers=headers)
     assert response.status_code == 503
