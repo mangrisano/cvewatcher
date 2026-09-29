@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   7-day lifetime, even if stolen. API clients must store the new token; the
   dashboard does, and a tab that loses the race with another tab reuses the
   pair that tab stored instead of logging out.
+- **`/cves/recent` exposed other users' findings**: it listed the shared
+  `cves` table, which the monitoring of every user's assets fills, so anyone
+  could infer which CVEs affect other tenants. It now returns only CVEs linked
+  to the caller's own assets.
+- **Any user could trigger `/cves/fetch-recent`**, a bulk NVD download (up to
+  30 days, thousands of CVEs) written to the shared table. It is now limited
+  to the emails listed in the new `ADMIN_EMAILS` setting (empty by default,
+  i.e. nobody).
 
 ## [2.5.0] - 2026-09-29
 

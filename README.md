@@ -219,8 +219,8 @@ flag and EPSS score so the most urgent findings stand out. Independently,
 
 ### CVE Data
 
-- `GET /cves/fetch-recent` - Fetch and store recent CVEs from NIST NVD
-- `GET /cves/recent` - List recently stored CVEs
+- `GET /cves/fetch-recent` - Fetch and store recent CVEs from NIST NVD (admin only: `ADMIN_EMAILS`)
+- `GET /cves/recent` - List stored CVEs that affect your assets
 - `GET /cves/search` - Search CVEs by product (and optional version)
 - `GET /cves/vulnerabilities` - Check vulnerabilities across all your assets
 

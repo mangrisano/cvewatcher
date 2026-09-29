@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.database.models import Asset
 from app.services.cve_monitoring import CVEMonitoringService
@@ -24,6 +25,13 @@ def get_current_user(
     if is_token_revoked(db, payload.get("jti")):
         raise HTTPException(status_code=401, detail="Token has been revoked")
     return payload
+
+
+def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    """The current user, if listed in ADMIN_EMAILS; 403 otherwise."""
+    if (current_user.get("sub") or "").lower() not in get_settings().admin_email_set:
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return current_user
 
 
 def get_owned_asset(

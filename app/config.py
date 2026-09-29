@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     login_ip_max_attempts: int = 30
     login_window_seconds: int = 300
     redis_url: Optional[str] = None
+    # Comma-separated emails allowed to run admin-only operations.
+    admin_emails: str = ""
 
     nvd_api_key: Optional[str] = None
     nvd_cache_ttl_seconds: int = 600
@@ -72,6 +74,10 @@ class Settings(BaseSettings):
         return [
             addr.strip() for addr in self.notify_email_to.split(",") if addr.strip()
         ]
+
+    @property
+    def admin_email_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
 
 @lru_cache

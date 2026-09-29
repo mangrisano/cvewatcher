@@ -428,3 +428,62 @@ def test_routes_take_the_monitoring_service_from_dependencies(client):
 
     assert response.status_code == 200
     assert [f["cve_id"] for f in response.json()["findings"]] == ["CVE-2099-4242"]
+
+
+def test_recent_cves_only_show_the_callers_findings(client):
+    from uuid import UUID
+
+    from app.database.connection import SessionLocal
+    from app.database.models import AssetCVE, CVE
+
+    mine = _login(client, "olga", "olga@example.com")
+    theirs = _login(client, "pete", "pete@example.com")
+    ids = {}
+    for headers, cve_id in ((mine, "CVE-2099-7001"), (theirs, "CVE-2099-7002")):
+        ids[cve_id] = client.post(
+            "/assets/", headers=headers, json={"name": f"pkg-{cve_id}"}
+        ).json()["id"]
+
+    db = SessionLocal()
+    try:
+        for cve_id, asset_id in ids.items():
+            db.add(CVE(id=cve_id))
+            db.add(AssetCVE(asset_id=UUID(asset_id), cve_id=cve_id))
+        db.commit()
+
+        seen = [c["cve_id"] for c in client.get("/cves/recent", headers=mine).json()]
+        assert "CVE-2099-7001" in seen
+        assert "CVE-2099-7002" not in seen
+    finally:
+        db.query(AssetCVE).filter(AssetCVE.cve_id.in_(ids)).delete(
+            synchronize_session=False
+        )
+        db.query(CVE).filter(CVE.id.in_(ids)).delete(synchronize_session=False)
+        db.commit()
+        db.close()
+
+
+def test_fetch_recent_is_admin_only(client, monkeypatch):
+    from app.dependencies import get_cve_service
+    from app.main import app
+
+    class FakeCveService:
+        async def fetch_and_store_recent_cves(self, days):
+            return 3
+
+    headers = _login(client, "quinn", "quinn@example.com")
+    app.dependency_overrides[get_cve_service] = FakeCveService
+    try:
+        monkeypatch.setenv("ADMIN_EMAILS", "root@example.com")
+        get_settings.cache_clear()
+        denied = client.get("/cves/fetch-recent", headers=headers)
+
+        monkeypatch.setenv("ADMIN_EMAILS", "root@example.com, Quinn@Example.com")
+        get_settings.cache_clear()
+        allowed = client.get("/cves/fetch-recent", headers=headers)
+    finally:
+        app.dependency_overrides.pop(get_cve_service)
+
+    assert denied.status_code == 403
+    assert allowed.status_code == 200
+    assert allowed.json()["stored_count"] == 3

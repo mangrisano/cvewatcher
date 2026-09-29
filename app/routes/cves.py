@@ -2,8 +2,15 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 
-from app.dependencies import get_current_user, get_cve_service, get_monitoring_service
+from app.database.connection import get_db
+from app.dependencies import (
+    get_current_user,
+    get_cve_service,
+    get_monitoring_service,
+    require_admin,
+)
 from app.models import VulnerabilityResponse
 from app.services.cve_service import CVEService
 from app.services.cve_monitoring import CVEMonitoringService
@@ -45,7 +52,7 @@ class CVEResponse(BaseModel):
 @router.get("/fetch-recent")
 async def fetch_recent_cves(
     days: int = Query(default=7, ge=1, le=30, description="Days back to search"),
-    current_user: dict = Depends(get_current_user),
+    admin: dict = Depends(require_admin),
     cve_service: CVEService = Depends(get_cve_service),
 ):
     try:
@@ -66,9 +73,12 @@ def get_recent_cves(
     offset: int = Query(default=0, ge=0, description="Number of CVE to skip"),
     current_user: dict = Depends(get_current_user),
     cve_service: CVEService = Depends(get_cve_service),
+    db: Session = Depends(get_db),
 ):
     try:
-        cves = cve_service.get_stored_cves(limit=limit, offset=offset)
+        cves = cve_service.get_stored_cves(
+            db, current_user.get("sub") or "", limit=limit, offset=offset
+        )
 
         response = []
         for cve in cves:

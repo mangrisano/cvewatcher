@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.services.nist_nvd import nist_client, CVEData
-from app.database.models import CVE
+from app.database.models import CVE, Asset, AssetCVE
 from app.database.connection import get_db
 
 logger = logging.getLogger(__name__)
@@ -81,20 +81,23 @@ class CVEService:
         logger.debug(f"Salvato nuovo CVE: {cve_data.cve_id}")
         return True
 
-    def get_stored_cves(self, limit: int = 50, offset: int = 0) -> list[CVE]:
-        try:
-            with next(get_db()) as db:
-                cves = (
-                    db.query(CVE)
-                    .order_by(CVE.publish_date.desc())
-                    .offset(offset)
-                    .limit(limit)
-                    .all()
-                )
-                return cves
-        except Exception as e:
-            logger.error(f"Error in CVE retrieval dal database: {e}")
-            raise
+    def get_stored_cves(
+        self, db: Session, user_email: str, limit: int = 50, offset: int = 0
+    ) -> list[CVE]:
+        """Stored CVEs linked to the user's assets, newest first."""
+        user_cve_ids = (
+            db.query(AssetCVE.cve_id)
+            .join(Asset, Asset.id == AssetCVE.asset_id)
+            .filter(Asset.user_email == user_email)
+        )
+        return (
+            db.query(CVE)
+            .filter(CVE.id.in_(user_cve_ids))
+            .order_by(CVE.publish_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 cve_service = CVEService()
