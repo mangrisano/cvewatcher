@@ -14,6 +14,8 @@
 
 [Quick start](#quick-start) · [Features](#features) · [How matching works](#how-vulnerability-matching-works) · [Dashboard](#web-dashboard) · [Auth](#authentication--access-control) · [API](#api-endpoints) · [Deployment](#deployment) · [Issues](https://github.com/mangrisano/cvewatcher/issues)
 
+<img src="https://raw.githubusercontent.com/mangrisano/cvewatcher/main/docs/demo.gif" alt="CVE Watcher demo: single sign-on, SBOM import, findings with KEV and EPSS, triage, light and dark themes" width="820">
+
 </div>
 
 > **Tell it what software you run. Learn which CVEs actually affect it.**
