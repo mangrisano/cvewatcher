@@ -59,3 +59,16 @@ def test_email_recipients_are_split_and_trimmed(monkeypatch):
         "ops@example.com",
         "sec@example.com",
     ]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("postgresql+psycopg2://u:p@db/cvw", "postgresql+psycopg://u:p@db/cvw"),
+        ("postgresql://u:p@db/cvw", "postgresql://u:p@db/cvw"),
+        ("sqlite:///./cvewatcher.db", "sqlite:///./cvewatcher.db"),
+    ],
+)
+def test_psycopg2_urls_move_to_psycopg3(raw, expected):
+    # Only psycopg 3 is installed, so an old explicit psycopg2 URL must still work.
+    assert Settings(jwt_secret_key=_SECRET, database_url=raw).database_url == expected

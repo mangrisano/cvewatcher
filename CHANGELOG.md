@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **SQLAlchemy 2.1 and psycopg 3**: the database layer moves to SQLAlchemy
+  2.1, and the PostgreSQL driver from `psycopg2` to `psycopg` (version 3),
+  which SQLAlchemy 2.1 uses by default. Existing `postgresql://` URLs keep
+  working; an explicit `postgresql+psycopg2://` URL is switched to psycopg 3
+  automatically.
+- Dependency updates: FastAPI 0.142, Uvicorn 0.54, Alembic 1.20,
+  pydantic-settings 2.15.
+
 ### Fixed
 
 - **Database work no longer holds up other requests**: 17 endpoints (assets,

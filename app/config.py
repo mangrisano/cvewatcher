@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     notify_email_password: Optional[str] = None
     notify_email_use_tls: bool = True
 
+    @field_validator("database_url")
+    @classmethod
+    def _psycopg3(cls, value: str) -> str:
+        # psycopg2 is no longer installed; psycopg 3 takes the same URLs.
+        return value.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
+
     @field_validator("jwt_secret_key")
     @classmethod
     def _strong_secret(cls, value: Optional[str]) -> Optional[str]:
