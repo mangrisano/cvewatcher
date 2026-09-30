@@ -25,6 +25,14 @@ def test_dashboard_has_no_inline_event_handlers(client):
     assert not re.search(r"\son[a-z]+\s*=", html)
 
 
+def test_html_pages_are_always_revalidated(client):
+    for path in ("/", "/dashboard", "/static/index.html"):
+        assert client.get(path).headers["Cache-Control"] == "no-cache"
+    # Versioned assets and API responses keep their normal caching.
+    assert "Cache-Control" not in client.get("/static/js/app.js").headers
+    assert "Cache-Control" not in client.get("/health").headers
+
+
 def test_register_login_and_profile(client):
     response = client.post(
         "/auth/register",

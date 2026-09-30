@@ -69,6 +69,10 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     if request.url.path not in _CSP_EXEMPT:
         response.headers.setdefault("Content-Security-Policy", _CSP)
+    # A cached page from an older release can load against a newer server and
+    # break silently (e.g. inline handlers the CSP now blocks): always revalidate.
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers.setdefault("Cache-Control", "no-cache")
     return response
 
 

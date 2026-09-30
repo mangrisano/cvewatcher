@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Login no longer reveals which emails are registered**: an unknown email
   now takes as long as a wrong password, since it runs the same password hash.
 
+### Fixed
+
+- **Login did nothing after an upgrade**: the browser could reuse a cached
+  dashboard page from an older release, whose buttons the new security policy
+  blocks. HTML pages are now sent with `Cache-Control: no-cache`, so the
+  browser always checks for the current version.
+
 ## [2.7.1] - 2026-09-30
 
 ### Security
