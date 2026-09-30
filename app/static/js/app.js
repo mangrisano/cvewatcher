@@ -51,6 +51,14 @@
         );
     }
 
+    function errorText(data, fallback) {
+        // FastAPI validation errors carry a list of {msg} objects.
+        if (Array.isArray(data.detail)) {
+            return data.detail.map((d) => d.msg.replace(/^Value error, /, "")).join("; ");
+        }
+        return data.detail || fallback;
+    }
+
     // --- Theme -------------------------------------------------------------
     function applyTheme(theme) {
         document.documentElement.setAttribute("data-theme", theme);
@@ -144,7 +152,7 @@
         });
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
-            throw new Error(data.detail || "Login failed");
+            throw new Error(errorText(data, "Login failed"));
         }
         const data = await res.json();
         localStorage.setItem(TOKEN_KEY, data.access_token);
@@ -168,7 +176,7 @@
                 });
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
-                    throw new Error(data.detail || "Registration failed");
+                    throw new Error(errorText(data, "Registration failed"));
                 }
             }
             await doLogin(email, password);
@@ -383,7 +391,7 @@
         });
         if (!res.ok) {
             const d = await res.json().catch(() => ({}));
-            $("assetModalError").textContent = d.detail || "Could not save asset";
+            $("assetModalError").textContent = errorText(d, "Could not save asset");
             $("assetModalError").classList.remove("hidden");
             return false;
         }
@@ -601,14 +609,6 @@
         const box = $("notifMsg");
         box.className = ok ? "alert--ok" : "alert--error";
         box.textContent = text;
-    }
-
-    function errorText(data, fallback) {
-        // FastAPI validation errors carry a list of {msg} objects.
-        if (Array.isArray(data.detail)) {
-            return data.detail.map((d) => d.msg.replace(/^Value error, /, "")).join("; ");
-        }
-        return data.detail || fallback;
     }
 
     function renderChannel(channel, configured) {

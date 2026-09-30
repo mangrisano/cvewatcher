@@ -48,15 +48,10 @@ class UserRegistrationRequest(BaseModel):
 
 
 class UserLoginRequest(BaseModel):
+    # No password rules here: a password that breaks them is just a wrong one
+    # (401, counted by the rate limiter), and rules would reveal the policy.
     email: EmailStr
-    password: str
-
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, password: str) -> str:
-        if len(password) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        return password
+    password: str = Field(max_length=1024)
 
 
 class RefreshTokenRequest(BaseModel):

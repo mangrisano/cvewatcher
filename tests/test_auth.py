@@ -63,6 +63,22 @@ def test_refresh_token_cannot_call_the_api(client):
     assert response.status_code == 401
 
 
+def test_login_treats_a_policy_breaking_password_as_wrong(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "shortpw",
+            "email": "shortpw@example.com",
+            "password": "Password123",
+        },
+    )
+    response = client.post(
+        "/auth/login", json={"email": "shortpw@example.com", "password": "abcd"}
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid credentials"}
+
+
 def test_short_jwt_secret_is_rejected_at_startup():
     import os
     import subprocess

@@ -35,6 +35,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   HTTP error is logged as a failure. Webhook URLs are no longer written to the
   logs.
 
+### Fixed
+
+- **Unreadable form errors in the dashboard**: a rejected login, registration
+  or asset form showed "[object Object]" when the server listed validation
+  errors (e.g. a password without an uppercase letter). The messages are now
+  shown.
+- **Login applied the password rules**: a password shorter than 8 characters
+  got "Password must be at least 8 characters long" instead of "Invalid
+  credentials", which revealed the policy and skipped the failed-login counter.
+  It is now an ordinary wrong password (401, rate-limited).
+
 ## [2.6.2] - 2026-09-30
 
 ### Security
