@@ -108,6 +108,16 @@ def send_verification_email(email: str, token: str) -> None:
     )
 
 
+def send_account_deleted_notice(email: str) -> None:
+    send_email(
+        [email],
+        "[CVE Watcher] Your account was deleted",
+        f"Your CVE Watcher account ({email}) and all of its assets and findings "
+        "have been deleted, as requested. If you did not do this, tell your "
+        "administrator.",
+    )
+
+
 def send_password_changed_notice(email: str) -> None:
     when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     send_email(

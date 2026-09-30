@@ -402,6 +402,9 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-we
 }
 .icon-btn:hover { color: var(--text); border-color: var(--accent); }
 .icon-btn--danger:hover { color: var(--sev-critical); border-color: var(--sev-critical); }
+.btn--danger { background: var(--sev-critical); border-color: var(--sev-critical); color: #fff; }
+.btn--danger:hover { filter: brightness(1.1); }
+.menu-item--danger { color: var(--sev-critical); }
 
 /* Modal */
 .modal-overlay { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.55); display: grid; place-items: center; padding: 20px; z-index: 50; }

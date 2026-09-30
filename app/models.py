@@ -72,6 +72,10 @@ class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
 
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(max_length=1024)
+
+
 class VerifyEmailRequest(BaseModel):
     token: str = Field(max_length=256)
 

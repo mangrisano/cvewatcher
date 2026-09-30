@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=17">
+    <link rel="stylesheet" href="/static/css/app.css?v=18">
 </head>
 
 <body>
@@ -158,6 +158,15 @@
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                             </svg>
                             Change password
+                        </button>
+                        <button type="button" class="menu-item menu-item--danger" id="deleteAccountBtn">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6h18" />
+                                <path d="M8 6V4h8v2" />
+                                <path d="M19 6l-1 14H6L5 6" />
+                            </svg>
+                            Delete account
                         </button>
                         <button type="button" class="menu-item" id="logoutBtn">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
@@ -459,9 +468,32 @@
                 </form>
             </div>
         </div>
+
+        <div id="deleteModal" class="modal-overlay hidden">
+            <div class="modal">
+                <div class="modal__head">
+                    <span class="modal__title">Delete account</span>
+                    <button id="deleteClose" class="modal__close" aria-label="Close">&times;</button>
+                </div>
+                <form id="deleteForm" class="form">
+                    <p class="hint">This permanently deletes your account, your assets, their findings and
+                        your notification settings. It cannot be undone.</p>
+                    <label>Password
+                        <input id="deletePassword" type="password" autocomplete="current-password" required>
+                    </label>
+                    <label class="check"><input type="checkbox" id="deleteConfirm" required> I understand that
+                        everything will be deleted</label>
+                    <div id="deleteMsg" class="hidden"></div>
+                    <div class="form__actions">
+                        <button type="button" id="deleteCancel" class="btn">Cancel</button>
+                        <button type="submit" id="deleteSubmit" class="btn btn--danger">Delete account</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/js/app.js?v=26"></script>
+    <script src="/static/js/app.js?v=27"></script>
 </body>
 
 </html>

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Delete your account**: a *Delete account* item in the user menu
+  (`DELETE /user` with the current password) removes the account with its
+  assets, findings, notification settings and pending links, and ends every
+  session. The shared CVE catalogue and other users' data are untouched.
 - **Email confirmation for new accounts**: with SMTP and `PUBLIC_URL` set, a
   sign-up stays inactive until the emailed link is opened (valid 24 hours);
   the login page explains why and can send a new link

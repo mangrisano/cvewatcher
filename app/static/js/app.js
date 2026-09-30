@@ -896,6 +896,51 @@
         }
     }
 
+    // --- Delete account ----------------------------------------------------
+    function openDeleteAccount() {
+        $("userMenu").classList.add("hidden");
+        $("deleteForm").reset();
+        $("deleteMsg").className = "hidden";
+        $("deleteSubmit").disabled = false;
+        $("deleteModal").classList.remove("hidden");
+        $("deletePassword").focus();
+    }
+
+    function closeDeleteAccount() {
+        $("deleteForm").reset();
+        $("deleteModal").classList.add("hidden");
+    }
+
+    async function deleteAccount(event) {
+        event.preventDefault();
+        $("deleteSubmit").disabled = true;
+        try {
+            const res = await apiFetch("/user", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ password: $("deletePassword").value }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                const box = $("deleteMsg");
+                box.className = "alert--error";
+                box.textContent = errorText(data, "Could not delete the account");
+                return;
+            }
+            closeDeleteAccount();
+            // The tokens died with the account: just drop them locally.
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(REFRESH_KEY);
+            localStorage.removeItem(EMAIL_KEY);
+            setAuthMode("login");
+            $("appView").classList.add("hidden");
+            $("loginView").classList.remove("hidden");
+            showCardMessage("loginNotice", "Your account has been deleted.", true);
+        } finally {
+            $("deleteSubmit").disabled = false;
+        }
+    }
+
     // --- Forgot / reset password -------------------------------------------
     let resetToken = null;
 
@@ -1071,6 +1116,10 @@
     on("resetBack", "click", backToLogin);
     on("resetForm", "submit", submitReset);
     on("resendVerifyLink", "click", resendVerification);
+    on("deleteAccountBtn", "click", openDeleteAccount);
+    on("deleteClose", "click", closeDeleteAccount);
+    on("deleteCancel", "click", closeDeleteAccount);
+    on("deleteForm", "submit", deleteAccount);
 
     if (!openResetLink()) {
         openVerifyLink().then((opened) => {

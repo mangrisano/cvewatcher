@@ -4,15 +4,27 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user
-from app.database import NotificationPreference, User, get_db
+from app.database import (
+    Asset,
+    AssetCVE,
+    EmailVerificationToken,
+    NotificationPreference,
+    PasswordResetToken,
+    User,
+    get_db,
+)
 from app.models import (
+    DeleteAccountRequest,
     NotificationSettings,
     NotificationSettingsUpdate,
     PasswordChangeRequest,
 )
 from app.services.alerts import AlertPreferences, personal_notifiers
 from app.services.notifications import smtp_config
-from app.services.account_emails import send_password_changed_notice
+from app.services.account_emails import (
+    send_account_deleted_notice,
+    send_password_changed_notice,
+)
 from app.utils.auth import hash_password, issue_tokens, verify_password
 from app.utils.rate_limit import InMemoryRateLimiter
 
@@ -76,15 +88,8 @@ def get_user_profile(
     }
 
 
-# A plain def: hashing 600k PBKDF2 rounds runs in the threadpool, off the loop.
-@router.post("/user/password", tags=["user"])
-def change_password(
-    body: PasswordChangeRequest,
-    background: BackgroundTasks,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    user = _account(current_user, db)
+def _confirm_password(user: User, password: str) -> None:
+    """400 unless ``password`` is the user's; failures are rate-limited."""
     key = str(user.email).lower()
     retry_after = _password_rate_limiter.retry_after(key)
     if retry_after:
@@ -94,10 +99,22 @@ def change_password(
             headers={"Retry-After": str(retry_after)},
         )
     # 400, not 401: the session is fine, and 401 would sign the client out.
-    if not verify_password(body.current_password, str(user.password_hash)):
+    if not verify_password(password, str(user.password_hash)):
         _password_rate_limiter.record_failure(key)
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     _password_rate_limiter.reset(key)
+
+
+# Plain defs: hashing 600k PBKDF2 rounds runs in the threadpool, off the loop.
+@router.post("/user/password", tags=["user"])
+def change_password(
+    body: PasswordChangeRequest,
+    background: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = _account(current_user, db)
+    _confirm_password(user, body.current_password)
     if body.new_password == body.current_password:
         raise HTTPException(
             status_code=400,
@@ -112,6 +129,37 @@ def change_password(
     if smtp_config() is not None:
         background.add_task(send_password_changed_notice, str(user.email))
     return {"message": "Password changed", **issue_tokens(user)}
+
+
+@router.delete("/user", tags=["user"])
+def delete_account(
+    body: DeleteAccountRequest,
+    background: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = _account(current_user, db)
+    _confirm_password(user, body.password)
+    email = str(user.email)
+
+    # Explicit deletes: assets are linked by email (no foreign key), and SQLite
+    # only honours ON DELETE CASCADE when foreign keys are switched on.
+    asset_ids = db.query(Asset.id).filter(Asset.user_email == email)
+    db.query(AssetCVE).filter(AssetCVE.asset_id.in_(asset_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(Asset).filter(Asset.user_email == email).delete(synchronize_session=False)
+    for model in (NotificationPreference, PasswordResetToken, EmailVerificationToken):
+        db.query(model).filter(model.user_id == user.id).delete(
+            synchronize_session=False
+        )
+    db.delete(user)
+    db.commit()
+
+    if smtp_config() is not None:
+        background.add_task(send_account_deleted_notice, email)
+    # Every token of this account now fails: its user no longer exists.
+    return {"message": "Account deleted"}
 
 
 @router.get("/user/notifications", response_model=NotificationSettings, tags=["user"])
