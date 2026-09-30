@@ -116,22 +116,31 @@ user refreshes.
 
 ## Authentication & Access Control
 
-| Variable                          | Default | Description                                                              |
-| --------------------------------- | ------- | ------------------------------------------------------------------------ |
-| `REGISTRATION_ENABLED`            | `false` | Allow new sign-ups after the first (bootstrap) account is created        |
-| `REGISTER_MAX_ATTEMPTS`           | `5`     | Max `/auth/register` attempts per IP within the window                   |
-| `REGISTER_WINDOW_SECONDS`         | `3600`  | Rate-limit window (seconds) for registration attempts                    |
-| `LOGIN_MAX_ATTEMPTS`              | `5`     | Max failed `/auth/login` attempts per email+IP within the window         |
-| `LOGIN_IP_MAX_ATTEMPTS`           | `30`    | Max failed `/auth/login` attempts per IP (any account) within the window |
-| `LOGIN_WINDOW_SECONDS`            | `300`   | Rate-limit window (seconds) for failed login attempts                    |
-| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30`    | Access token lifetime; the dashboard refreshes it silently on expiry     |
-| `JWT_REFRESH_TOKEN_EXPIRE_DAYS`   | `7`     | Refresh token lifetime; expiry forces a real re-login                    |
+| Variable                          | Default   | Description                                                                                              |
+| --------------------------------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| `REGISTRATION_ENABLED`            | `false`   | Allow new sign-ups after the first (bootstrap) account is created                                        |
+| `REGISTER_MAX_ATTEMPTS`           | `5`       | Max `/auth/register` attempts per IP within the window                                                   |
+| `REGISTER_WINDOW_SECONDS`         | `3600`    | Rate-limit window (seconds) for registration attempts                                                    |
+| `LOGIN_MAX_ATTEMPTS`              | `5`       | Max failed `/auth/login` attempts per email+IP within the window                                         |
+| `LOGIN_IP_MAX_ATTEMPTS`           | `30`      | Max failed `/auth/login` attempts per IP (any account) within the window                                 |
+| `LOGIN_WINDOW_SECONDS`            | `300`     | Rate-limit window (seconds) for failed login attempts                                                    |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30`      | Access token lifetime; the dashboard refreshes it silently on expiry                                     |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS`   | `7`       | Refresh token lifetime; expiry forces a real re-login                                                    |
+| `PUBLIC_URL`                      | _(unset)_ | Base URL users reach the app at (e.g. `https://cvewatcher.example.com`); enables password reset by email |
 
 The very first account created on a fresh install always succeeds — this
 bootstrap exception lets you stand up an admin user without pre-configuring
 anything. Once at least one user exists, further registration is gated by
 `REGISTRATION_ENABLED`. Check `GET /auth/registration-status` to see whether
 sign-up is currently open.
+
+**Forgot password**: when SMTP (`NOTIFY_EMAIL_HOST` …) and `PUBLIC_URL` are
+both set, the login card shows _Forgot password?_. The user gets an email with
+a link valid for 30 minutes; it works once, a newer request voids it, and only
+a hash of it is stored. Setting a new password signs out every session. The
+link is built from `PUBLIC_URL`, never from the request's `Host` header, so a
+forged request cannot point it at another site. Without email, an admin resets
+a password with `utils/reset_password.py`.
 
 **Behind a reverse proxy** (nginx, traefik, …) rate limits are keyed on the
 client IP, so uvicorn must trust the proxy's `X-Forwarded-For`: set
@@ -222,11 +231,13 @@ active findings.
 
 ### Authentication
 
-- `GET /auth/registration-status` - Check whether public sign-up is currently open
+- `GET /auth/registration-status` - Check whether public sign-up is currently open (`open`) and whether password reset by email is available (`password_reset`)
 - `POST /auth/register` - Register new user (subject to registration gating and rate limiting)
 - `POST /auth/login` - User login (rate-limited per email+IP)
 - `POST /auth/refresh` - Exchange a refresh token for a new access token **and a new refresh token** (the one sent is revoked: store the new one)
 - `POST /auth/logout` - Logout user (revokes access and refresh tokens)
+- `POST /auth/forgot-password` - Email a reset link to `email`; the answer is the same whether or not the account exists (3 per address and 10 per IP per hour)
+- `POST /auth/reset-password` - Set `new_password` with the `token` from the link; signs out every session
 
 ### Asset Management
 

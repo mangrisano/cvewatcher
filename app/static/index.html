@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=16">
+    <link rel="stylesheet" href="/static/css/app.css?v=17">
 </head>
 
 <body>
@@ -15,6 +15,7 @@
             <img class="login-logo" src="/static/logo.svg" alt="CVE Watcher" width="300">
             <p id="authSubtitle" class="muted" style="text-align:center;margin:0">Sign in to your security dashboard</p>
             <div id="loginError" class="alert alert--error hidden"></div>
+            <div id="loginNotice" class="alert--ok hidden"></div>
             <label id="usernameField" class="hidden">Username
                 <input id="regUsername" type="text" autocomplete="username">
             </label>
@@ -24,11 +25,40 @@
             <label>Password
                 <input id="loginPassword" type="password" autocomplete="current-password" required>
             </label>
+            <a href="#" id="forgotLink" class="forgot-link hidden">Forgot password?</a>
             <button id="authSubmit" class="btn btn--primary btn--block" type="submit">Sign in</button>
             <p class="auth-toggle muted">
                 <span id="authToggleText">Don't have an account?</span>
                 <a href="#" id="authToggleLink">Create one</a>
             </p>
+        </form>
+
+        <form id="forgotForm" class="login-card hidden">
+            <img class="login-logo" src="/static/logo.svg" alt="CVE Watcher" width="300">
+            <p class="muted" style="text-align:center;margin:0">Enter your email and we'll send you a link to
+                reset your password.</p>
+            <div id="forgotMsg" class="hidden"></div>
+            <label>Email
+                <input id="forgotEmail" type="email" autocomplete="email" required>
+            </label>
+            <button id="forgotSubmit" class="btn btn--primary btn--block" type="submit">Send reset link</button>
+            <p class="auth-toggle muted"><a href="#" id="forgotBack">Back to sign in</a></p>
+        </form>
+
+        <form id="resetForm" class="login-card hidden">
+            <img class="login-logo" src="/static/logo.svg" alt="CVE Watcher" width="300">
+            <p class="muted" style="text-align:center;margin:0">Choose a new password</p>
+            <div id="resetMsg" class="hidden"></div>
+            <label>New password
+                <input id="resetPassword" type="password" autocomplete="new-password" required>
+            </label>
+            <label>Confirm new password
+                <input id="resetConfirm" type="password" autocomplete="new-password" required>
+            </label>
+            <p class="hint">At least 8 characters, with a lowercase letter, an uppercase letter and a digit.
+                Every session will be signed out.</p>
+            <button id="resetSubmit" class="btn btn--primary btn--block" type="submit">Set new password</button>
+            <p class="auth-toggle muted"><a href="#" id="resetBack">Back to sign in</a></p>
         </form>
     </div>
 
@@ -430,7 +460,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=24"></script>
+    <script src="/static/js/app.js?v=25"></script>
 </body>
 
 </html>

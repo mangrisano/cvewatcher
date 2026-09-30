@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   user menu (`POST /user/password`). It asks for the current password, signs
   out every other session, keeps the current one signed in, and emails the
   owner when SMTP is configured. Wrong current passwords are rate-limited.
+- **Forgot password**: with SMTP and the new `PUBLIC_URL` setting, the login
+  page offers _Forgot password?_ (`POST /auth/forgot-password`,
+  `POST /auth/reset-password`). The emailed link is valid for 30 minutes and
+  works once; only its hash is stored, the answer never reveals whether an
+  account exists, and a reset signs out every session.
 
 ### Security
 

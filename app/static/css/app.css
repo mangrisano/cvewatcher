@@ -179,6 +179,8 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-we
 .auth-toggle { text-align: center; margin: 0; font-size: 13px; }
 .login-card a { color: var(--accent); text-decoration: none; }
 .login-card a:hover { text-decoration: underline; }
+.login-card .forgot-link { align-self: flex-end; font-size: 12px; margin-top: -6px; }
+.login-card .hint { font-size: 12px; color: var(--text-muted); margin: 0; }
 
 /* Logo */
 .logo { display: flex; align-items: center; gap: 9px; }

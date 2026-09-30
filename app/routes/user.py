@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -12,7 +11,8 @@ from app.models import (
     PasswordChangeRequest,
 )
 from app.services.alerts import AlertPreferences, personal_notifiers
-from app.services.notifications import send_email, smtp_config
+from app.services.notifications import smtp_config
+from app.services.password_reset import send_password_changed_notice
 from app.utils.auth import hash_password, issue_tokens, verify_password
 from app.utils.rate_limit import InMemoryRateLimiter
 
@@ -76,18 +76,6 @@ async def get_user_profile(
     }
 
 
-def _password_changed_notice(email: str) -> None:
-    when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    send_email(
-        [email],
-        "[CVE Watcher] Your password was changed",
-        f"The password of your CVE Watcher account ({email}) was changed on "
-        f"{when}.\nEvery other session has been signed out.\n\n"
-        "If you did not do this, reset your password now and tell your "
-        "administrator.",
-    )
-
-
 # A plain def: hashing 600k PBKDF2 rounds runs in the threadpool, off the loop.
 @router.post("/user/password", tags=["user"])
 def change_password(
@@ -122,7 +110,7 @@ def change_password(
     db.commit()
 
     if smtp_config() is not None:
-        background.add_task(_password_changed_notice, str(user.email))
+        background.add_task(send_password_changed_notice, str(user.email))
     return {"message": "Password changed", **issue_tokens(user)}
 
 

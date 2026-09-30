@@ -163,6 +163,7 @@
     async function submitAuth(event) {
         event.preventDefault();
         $("loginError").classList.add("hidden");
+        $("loginNotice").classList.add("hidden");
         const email = $("loginEmail").value;
         const password = $("loginPassword").value;
         try {
@@ -836,14 +837,113 @@
         }
     }
 
+    // --- Forgot / reset password -------------------------------------------
+    let resetToken = null;
+
+    function showAuthCard(id) {
+        ["loginForm", "forgotForm", "resetForm"].forEach((f) =>
+            $(f).classList.toggle("hidden", f !== id)
+        );
+    }
+
+    function showCardMessage(id, text, ok) {
+        const box = $(id);
+        box.className = ok ? "alert--ok" : "alert--error";
+        box.textContent = text;
+    }
+
+    function openForgot(event) {
+        event.preventDefault();
+        $("forgotForm").reset();
+        $("forgotMsg").className = "hidden";
+        $("forgotEmail").value = $("loginEmail").value;
+        showAuthCard("forgotForm");
+        $("forgotEmail").focus();
+    }
+
+    function backToLogin(event) {
+        event.preventDefault();
+        resetToken = null;
+        showAuthCard("loginForm");
+    }
+
+    async function submitForgot(event) {
+        event.preventDefault();
+        $("forgotSubmit").disabled = true;
+        try {
+            const res = await fetch("/auth/forgot-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: $("forgotEmail").value }),
+            });
+            const data = await res.json().catch(() => ({}));
+            showCardMessage(
+                "forgotMsg",
+                res.ok ? data.message : errorText(data, "Could not send the reset link"),
+                res.ok
+            );
+        } catch (_) {
+            showCardMessage("forgotMsg", "Could not send the reset link", false);
+        } finally {
+            $("forgotSubmit").disabled = false;
+        }
+    }
+
+    async function submitReset(event) {
+        event.preventDefault();
+        if ($("resetPassword").value !== $("resetConfirm").value) {
+            showCardMessage("resetMsg", "The passwords do not match.", false);
+            return;
+        }
+        $("resetSubmit").disabled = true;
+        try {
+            const res = await fetch("/auth/reset-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    token: resetToken,
+                    new_password: $("resetPassword").value,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showCardMessage("resetMsg", errorText(data, "Could not reset the password"), false);
+                return;
+            }
+            resetToken = null;
+            $("resetForm").reset();
+            setAuthMode("login");
+            showAuthCard("loginForm");
+            showCardMessage("loginNotice", data.message, true);
+        } catch (_) {
+            showCardMessage("resetMsg", "Could not reset the password", false);
+        } finally {
+            $("resetSubmit").disabled = false;
+        }
+    }
+
+    // A reset link opens the dashboard with #reset=<token>.
+    function openResetLink() {
+        const match = location.hash.match(/^#reset=([A-Za-z0-9_-]+)$/);
+        if (!match) return false;
+        resetToken = match[1];
+        history.replaceState(null, "", location.pathname + location.search);
+        $("resetMsg").className = "hidden";
+        showAuthCard("resetForm");
+        return true;
+    }
+
     // --- Registration availability -----------------------------------------
     async function checkRegistration() {
         try {
             const res = await fetch("/auth/registration-status");
-            if (res.ok && !(await res.json()).open) {
+            if (!res.ok) return;
+            const status = await res.json();
+            if (!status.open) {
                 const toggle = document.querySelector(".auth-toggle");
                 if (toggle) toggle.classList.add("hidden");
             }
+            $("forgotLink").classList.toggle("hidden", !status.password_reset);
         } catch (_) {
             /* leave the toggle visible on error */
         }
@@ -906,6 +1006,11 @@
     on("pwdClose", "click", closePassword);
     on("pwdCancel", "click", closePassword);
     on("pwdForm", "submit", changePassword);
+    on("forgotLink", "click", openForgot);
+    on("forgotBack", "click", backToLogin);
+    on("forgotForm", "submit", submitForgot);
+    on("resetBack", "click", backToLogin);
+    on("resetForm", "submit", submitReset);
 
-    if (token()) enterApp();
+    if (!openResetLink() && token()) enterApp();
 })();

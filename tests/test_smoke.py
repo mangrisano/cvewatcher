@@ -79,7 +79,7 @@ def test_registration_gating(client, monkeypatch):
     )
     monkeypatch.setenv("REGISTRATION_ENABLED", "false")
     get_settings.cache_clear()
-    assert client.get("/auth/registration-status").json() == {"open": False}
+    assert client.get("/auth/registration-status").json()["open"] is False
     response = client.post(
         "/auth/register",
         json={

@@ -94,6 +94,21 @@ class RevokedToken(Base):
         return f"<RevokedToken(jti='{self.jti}')>"
 
 
+class PasswordResetToken(Base):
+    """A pending password reset; only the SHA-256 of the emailed token is kept."""
+
+    __tablename__ = "password_reset_tokens"
+
+    token_hash = Column(String(64), primary_key=True)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class AssetCVE(Base):
     """Association of an asset with a CVE that affects it.
 

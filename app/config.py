@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     secrets_encryption_key: Optional[str] = None
 
     registration_enabled: bool = False
+    # Base URL users reach the app at, used in emailed links (password reset).
+    public_url: Optional[str] = None
     register_max_attempts: int = 5
     register_window_seconds: int = 3600
     login_max_attempts: int = 5
@@ -87,6 +89,16 @@ class Settings(BaseSettings):
     def _positive(cls, value: Optional[int]) -> Optional[int]:
         if value is not None and value < 1:
             raise ValueError("NVD_MAX_CONCURRENCY must be a positive integer")
+        return value
+
+    @field_validator("public_url")
+    @classmethod
+    def _http_url(cls, value: Optional[str]) -> Optional[str]:
+        if not value or not value.strip():
+            return None
+        value = value.strip().rstrip("/")
+        if not value.startswith(("https://", "http://")):
+            raise ValueError("PUBLIC_URL must start with https:// or http://")
         return value
 
     @property

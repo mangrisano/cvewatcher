@@ -6,6 +6,7 @@ from app.database.models import (
     Asset,
     AssetCVE,
     NotificationPreference,
+    PasswordResetToken,
     RevokedToken,
     User,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "RevokedToken",
     "AssetCVE",
     "NotificationPreference",
+    "PasswordResetToken",
     "get_db",
     "create_tables",
     "init_schema",

@@ -85,3 +85,7 @@ registration_rate_limiter = InMemoryRateLimiter(
 live_lookup_rate_limiter = InMemoryRateLimiter(
     max_attempts=_settings.live_lookups_per_hour, window_seconds=3600
 )
+
+# Reset emails: per address so nobody is flooded, per IP against enumeration.
+reset_email_rate_limiter = InMemoryRateLimiter(max_attempts=3, window_seconds=3600)
+reset_ip_rate_limiter = InMemoryRateLimiter(max_attempts=10, window_seconds=3600)

@@ -1,10 +1,23 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.models import UserRegistrationRequest, UserLoginRequest, RefreshTokenRequest
+from app.models import (
+    ForgotPasswordRequest,
+    PasswordResetRequest,
+    RefreshTokenRequest,
+    UserLoginRequest,
+    UserRegistrationRequest,
+)
+from app.services.password_reset import (
+    consume_reset_token,
+    issue_reset_token,
+    reset_available,
+    send_password_changed_notice,
+    send_reset_email,
+)
 from app.utils.auth import (
     hash_password,
     issue_tokens,
@@ -18,6 +31,8 @@ from app.utils.rate_limit import (
     login_ip_rate_limiter,
     login_rate_limiter,
     registration_rate_limiter,
+    reset_email_rate_limiter,
+    reset_ip_rate_limiter,
 )
 from app.dependencies import get_current_user
 from app.services.token_blocklist import (
@@ -55,7 +70,7 @@ def _registration_open(db: Session) -> bool:
 
 @router.get("/auth/registration-status", tags=["auth"])
 async def registration_status(db: Session = Depends(get_db)):
-    return {"open": _registration_open(db)}
+    return {"open": _registration_open(db), "password_reset": reset_available()}
 
 
 @router.post("/auth/register", tags=["auth"])
@@ -196,3 +211,66 @@ async def logout_user(
             pass
 
     return {"message": "Logout successful. Tokens revoked."}
+
+
+_RESET_SENT = {
+    "message": "If an account exists for that email, a reset link is on its way."
+}
+
+
+@router.post("/auth/forgot-password", tags=["auth"])
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    request: Request,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    if not reset_available():
+        raise HTTPException(status_code=503, detail="Password reset is not available")
+
+    client_ip = request.client.host if request.client else "unknown"
+    email = body.email.lower()
+    retry_after = max(
+        reset_ip_rate_limiter.retry_after(client_ip),
+        reset_email_rate_limiter.retry_after(email),
+    )
+    if retry_after > 0:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many reset requests. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    reset_ip_rate_limiter.record_failure(client_ip)
+    reset_email_rate_limiter.record_failure(email)
+
+    # Same answer whether or not the account exists; the email goes out after
+    # the response, so the SMTP round-trip doesn't give it away either.
+    db_user = db.query(User).filter(_email_matches(email)).first()
+    if db_user is not None:
+        token = issue_reset_token(db, db_user)
+        background.add_task(send_reset_email, str(db_user.email), token)
+    return _RESET_SENT
+
+
+# A plain def: hashing 600k PBKDF2 rounds runs in the threadpool, off the loop.
+@router.post("/auth/reset-password", tags=["auth"])
+def reset_password(
+    body: PasswordResetRequest,
+    request: Request,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    db_user = consume_reset_token(db, body.token)
+    if db_user is None:
+        raise HTTPException(
+            status_code=400, detail="This reset link is invalid or has expired"
+        )
+
+    db_user.password_hash = hash_password(body.new_password)  # type: ignore[assignment]
+    db_user.session_version = (db_user.session_version or 0) + 1  # type: ignore[assignment]
+    db.commit()
+
+    client_ip = request.client.host if request.client else "unknown"
+    login_rate_limiter.reset(f"{str(db_user.email).lower()}:{client_ip}")
+    background.add_task(send_password_changed_notice, str(db_user.email))
+    return {"message": "Password reset. You can now sign in."}

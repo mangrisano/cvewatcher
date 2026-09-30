@@ -104,12 +104,10 @@ def test_the_new_password_must_follow_the_rules_and_differ(client):
 def test_the_owner_is_told_by_email_when_smtp_is_configured(client, monkeypatch):
     sent = []
     monkeypatch.setattr(user_routes, "smtp_config", lambda: {"host": "smtp"})
-    monkeypatch.setattr(
-        user_routes, "send_email", lambda to, subject, body: sent.append((to, subject))
-    )
+    monkeypatch.setattr(user_routes, "send_password_changed_notice", sent.append)
     session = _register_and_login(client, "pwfive")
     assert _change(client, session["access_token"]).status_code == 200
-    assert sent == [(["pwfive@example.com"], "[CVE Watcher] Your password was changed")]
+    assert sent == ["pwfive@example.com"]
 
 
 def test_tokens_without_a_session_version_still_work_until_a_change(client):
