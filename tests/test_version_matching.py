@@ -287,6 +287,39 @@ def test_resolve_cpes_returns_empty_when_lookup_fails():
     assert asyncio.run(svc._resolve_cpes(_asset(name="nginx"))) == []
 
 
+def test_nvd_skips_ecosystem_packages_without_a_cpe():
+    class _Client:
+        async def find_cpe_names(self, *a, **k):
+            raise AssertionError("NVD must not be queried")
+
+        async def search_cves(self, *a, **k):
+            raise AssertionError("NVD must not be queried")
+
+    package = SimpleNamespace(
+        name="requests", version="2.31.0", cpe=None, ecosystem="PyPI"
+    )
+    result = asyncio.run(NvdSource(_Client()).search(package, None, None, True))
+    assert result.findings == [] and not result.unavailable
+
+
+def test_nvd_still_searches_ecosystem_packages_with_a_cpe():
+    searched = []
+
+    class _Client:
+        async def search_cves(self, *, cpe_name=None, **kwargs):
+            searched.append(cpe_name)
+            return []
+
+    package = SimpleNamespace(
+        name="django",
+        version="4.2",
+        cpe="cpe:2.3:a:djangoproject:django:4.2",
+        ecosystem="PyPI",
+    )
+    asyncio.run(NvdSource(_Client()).search(package, None, None, True))
+    assert searched == ["cpe:2.3:a:djangoproject:django:4.2:*:*:*:*:*:*:*"]
+
+
 def test_resolve_cpes_without_name_skips_lookup():
     svc = NvdSource(None)
     client = _FakeCpeClient(["cpe:2.3:a:f5:nginx:1.25.0:*:*:*:*:*:*:*"])

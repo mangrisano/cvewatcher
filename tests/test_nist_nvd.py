@@ -155,6 +155,19 @@ def test_make_request_retries_on_rate_limit(monkeypatch):
     assert result == {"vulnerabilities": []}
 
 
+@pytest.mark.parametrize(
+    "retry_after, attempt, expected",
+    [
+        ("0", 0, 6.0),  # NVD's "retry now" while still limiting
+        (None, 1, 12.0),
+        ("30", 0, 30.0),
+        ("Wed, 21 Oct 2026 07:28:00 GMT", 2, 18.0),
+    ],
+)
+def test_rate_limit_wait_never_goes_below_the_backoff(retry_after, attempt, expected):
+    assert NistNvdClient()._rate_limit_wait(retry_after, attempt) == expected
+
+
 def test_make_request_gives_up_after_max_retries(monkeypatch):
     def always_rate_limited(*args, **kwargs):
         return FakeResponse(status_code=429)

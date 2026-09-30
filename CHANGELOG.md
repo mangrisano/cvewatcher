@@ -33,6 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The dashboard showed at most 50 assets**: it now loads every page of the
   asset list, and `GET /assets/` has a stable order so paging never repeats or
   skips assets created at the same moment.
+- **NVD rate limiting was retried instantly**: NVD answers "429 Too Many
+  Requests" with `Retry-After: 0`, so all three retries failed at once and
+  assets lost their NVD results. Retries now wait at least the backoff (6 s,
+  12 s, …), and a `Retry-After` given as a date no longer breaks the request.
+
+### Changed
+
+- **Packages are matched on OSV.dev only, unless they have a CPE**: an asset
+  with an ecosystem and no CPE no longer guesses a CPE on NVD. OSV.dev already
+  covers these packages, and the extra NVD requests made a large SBOM hit NVD's
+  rate limit (5 requests every 30 s without an API key). Set a CPE on the asset
+  to query NVD as well.
 
 ## [2.7.1] - 2026-09-30
 

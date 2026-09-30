@@ -60,6 +60,14 @@ class NistNvdClient:
         self._cpe_cache: dict[str, list[str]] = {}
         self._search_cache: dict[tuple, tuple[float, list["CVEData"]]] = {}
 
+    def _rate_limit_wait(self, retry_after: Optional[str], attempt: int) -> float:
+        # NVD sends "Retry-After: 0" while still limiting: never go below the backoff.
+        backoff = float(self.BACKOFF_BASE_SECONDS * (attempt + 1))
+        try:
+            return max(float(retry_after or 0), backoff)
+        except ValueError:  # an HTTP-date instead of seconds
+            return backoff
+
     async def _make_request(
         self, params: dict[str, Any], url: Optional[str] = None
     ) -> dict[str, Any]:
@@ -73,11 +81,8 @@ class NistNvdClient:
                     timeout=30,
                 )
                 if response.status_code in (403, 429):
-                    retry_after = response.headers.get("Retry-After")
-                    wait = (
-                        float(retry_after)
-                        if retry_after
-                        else self.BACKOFF_BASE_SECONDS * (attempt + 1)
+                    wait = self._rate_limit_wait(
+                        response.headers.get("Retry-After"), attempt
                     )
                     logger.warning(
                         f"NIST API rate limited (HTTP {response.status_code}), "

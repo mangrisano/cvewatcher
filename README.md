@@ -42,7 +42,7 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities" -H "Authorization: Bearer $TOKEN" 
 - **Precise CVE matching** — NVD `cpeName` lookups evaluate version ranges server-side (no keyword 100-result cap).
 - **Automatic CPE resolution** — derive a CPE from a product name via the NVD CPE dictionary.
 - **Keyword fallback** — free-text NVD search with local product/version filtering to cut the noise.
-- **OSV.dev as a second source** — for assets that declare an ecosystem (PyPI, npm, Go, Maven, …), OSV.dev is queried alongside NVD and merged; CVSS vectors are parsed into a base score and severity band.
+- **OSV.dev for packages** — assets that declare an ecosystem (PyPI, npm, Go, Maven, …) are matched on OSV.dev, plus NVD when they also carry a CPE; CVSS vectors are parsed into a base score and severity band.
 - **Exploitation intelligence** — every finding is flagged with **CISA KEV**
   (actively exploited in the wild) and scored with **FIRST.org EPSS** (exploit
   probability), and results are ranked KEV-first.
@@ -153,10 +153,12 @@ Server` resolves to `apache:http_server` while `nginx` never pulls in
    keyword search filtered locally by product identity and version range,
    falling back to the CVE summary when a CVE carries no CPE data.
 
-> **OSV.dev is queried as a secondary source** for assets that declare an
-> `ecosystem` (PyPI, npm, Go, Maven, …) — the domain NVD/CPE matches poorly. Its
-> results are merged with NVD's and deduplicated by CVE, and CVSS vectors are
-> parsed into a base score and severity band.
+> **OSV.dev covers assets that declare an `ecosystem`** (PyPI, npm, Go, Maven,
+> …), the domain NVD/CPE matches poorly. Such an asset is looked up on OSV.dev
+> only, unless you also give it a CPE: then NVD is queried too, and the results
+> are merged and deduplicated by CVE. This keeps a large SBOM import from
+> exhausting NVD's rate limit. CVSS vectors are parsed into a base score and
+> severity band.
 
 > **You usually only need a name and a version** — a CPE is an optional
 > precision lever. Provide one when the name you track differs from the

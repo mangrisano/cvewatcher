@@ -70,6 +70,10 @@ class NvdSource:
         use_cache: bool,
     ) -> SourceResult:
         cpe_name = matching.full_cpe(asset.cpe)
+        if not cpe_name and getattr(asset, "ecosystem", None):
+            # A package with an ecosystem is covered by OSV; guessing its CPE
+            # costs NVD requests and mostly finds nothing.
+            return SourceResult()
         cpe_names = [cpe_name] if cpe_name else await self._resolve_cpes(asset)
 
         if cpe_names:
