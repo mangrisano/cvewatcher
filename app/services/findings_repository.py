@@ -1,14 +1,14 @@
 """Persistence of findings: the ``asset_cves`` links and the shared ``cves`` rows."""
 
 import logging
-from datetime import datetime
-from typing import Any, Iterable
+from datetime import datetime, timezone
+from typing import Any, Iterable, Optional
 from uuid import UUID
 
-from sqlalchemy import Column
+from sqlalchemy import Column, and_, or_
 from sqlalchemy.orm import Session
 
-from app.database.models import CVE, AssetCVE
+from app.database.models import CVE, Asset, AssetCVE
 from app.models import FindingStatus
 from app.services.severity import severity_band
 
@@ -16,6 +16,20 @@ logger = logging.getLogger(__name__)
 
 # The 1.x-style models type ``Asset.id`` as a Column for static checkers.
 AssetId = UUID | Column
+
+
+def visible_link():
+    """SQL condition for links still current: seen in the asset's last full scan.
+
+    Assets never fully scanned show every link they have. Needs ``Asset`` joined.
+    """
+    return or_(
+        Asset.last_scanned_at.is_(None),
+        and_(
+            AssetCVE.last_seen.is_not(None),
+            AssetCVE.last_seen >= Asset.last_scanned_at,
+        ),
+    )
 
 
 class FindingRepository:
@@ -51,51 +65,71 @@ class FindingRepository:
         )
         return {str(row.cve_id): row for row in rows}
 
-    def link(
-        self, asset_id: AssetId, finding: dict[str, Any], kev_known: bool = False
-    ) -> None:
-        """Persist a newly seen finding; best-effort (errors are logged).
+    def record(
+        self,
+        asset_id: AssetId,
+        finding: dict[str, Any],
+        kev_known: bool = False,
+        seen_at: Optional[datetime] = None,
+        link: Optional[AssetCVE] = None,
+    ) -> AssetCVE:
+        """Store a finding seen by a scan: refresh the CVE, create or touch the link.
 
         ``kev_known`` says whether the KEV catalog was available, so a missing
-        catalog is not recorded as "not in KEV".
+        catalog is not recorded as "not in KEV". Changes are committed by ``save``.
         """
-        cve_id = finding.get("cve_id")
-        if not cve_id:
-            return
-        try:
-            if not self.db.query(CVE).filter(CVE.id == cve_id).first():
-                # The shared CVE row holds only global metadata; the per-asset
-                # link lives in ``asset_cves`` (no tenant data here).
-                self.db.add(
-                    CVE(
-                        id=cve_id,
-                        summary=finding.get("summary", ""),
-                        severity=finding.get("severity"),
-                        score=finding.get("score"),
-                        publish_date=_parse_date(finding.get("publish_date")),
-                    )
-                )
-            if not self._get_link(asset_id, cve_id):
-                self.db.add(
-                    AssetCVE(
-                        asset_id=asset_id,
-                        cve_id=cve_id,
-                        kev=bool(finding.get("kev")) if kev_known else None,
-                        severity=severity_band(finding.get("severity")),
-                    )
-                )
-            self.db.commit()
-            logger.info("Stored new CVE %s for asset %s", cve_id, asset_id)
-        except Exception as e:
-            logger.error("Error storing CVE %s: %s", cve_id, e)
-            self.db.rollback()
+        cve_id = finding["cve_id"]
+        # The shared CVE row holds only global metadata; the per-asset link
+        # lives in ``asset_cves`` (no tenant data here).
+        cve = self.db.query(CVE).filter(CVE.id == cve_id).first()
+        if cve is None:
+            cve = CVE(id=cve_id)
+            self.db.add(cve)
+            # No ORM relationship orders the inserts: the link's FK needs this row.
+            self.db.flush()
+        for field in ("summary", "severity", "score", "epss"):
+            if finding.get(field) is not None:
+                setattr(cve, field, finding[field])
+        published = _parse_date(finding.get("publish_date"))
+        if published is not None:
+            cve.publish_date = published  # type: ignore[assignment]
+        if kev_known:
+            cve.kev = bool(finding.get("kev"))  # type: ignore[assignment]
+
+        if link is None:
+            link = self._get_link(asset_id, cve_id)
+        if link is None:
+            link = AssetCVE(
+                asset_id=asset_id,
+                cve_id=cve_id,
+                kev=bool(finding.get("kev")) if kev_known else None,
+                severity=severity_band(finding.get("severity")),
+            )
+            self.db.add(link)
+        link.last_seen = seen_at or datetime.now(timezone.utc)  # type: ignore[assignment]
+        link.relevance_reason = finding.get("relevance_reason")  # type: ignore[assignment]
+        return link
+
+    def close_scan(self, asset: Asset, scanned_at: datetime) -> None:
+        """Mark a complete scan: findings it did not see are gone.
+
+        Untriaged ones are deleted; triaged ones are kept (hidden by
+        ``visible_link``) so their status survives if they come back.
+        """
+        self.db.flush()
+        asset.last_scanned_at = scanned_at  # type: ignore[assignment]
+        self.db.query(AssetCVE).filter(
+            AssetCVE.asset_id == asset.id,
+            AssetCVE.status == FindingStatus.OPEN.value,
+            or_(AssetCVE.last_seen.is_(None), AssetCVE.last_seen < scanned_at),
+        ).delete(synchronize_session=False)
 
     def save(self) -> None:
-        """Commit changes made to loaded links; best-effort."""
+        """Commit the pending finding changes; best-effort."""
         try:
             self.db.commit()
         except Exception as e:
-            logger.error("Error saving finding state: %s", e)
+            logger.error("Error saving findings: %s", e)
             self.db.rollback()
 
     def set_status(
@@ -108,7 +142,10 @@ class FindingRepository:
             # row exists (FK) then create the link.
             if not self.db.query(CVE).filter(CVE.id == cve_id).first():
                 self.db.add(CVE(id=cve_id))
-            link = AssetCVE(asset_id=asset_id, cve_id=cve_id)
+                self.db.flush()
+            link = AssetCVE(
+                asset_id=asset_id, cve_id=cve_id, last_seen=datetime.now(timezone.utc)
+            )
             self.db.add(link)
         link.status = status  # type: ignore[assignment]
         link.notes = notes  # type: ignore[assignment]
@@ -132,9 +169,13 @@ class FindingRepository:
 
 
 def _parse_date(value: str | None) -> datetime | None:
+    """Parse an ISO timestamp as naive UTC, the form ``cves.publish_date`` holds."""
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (AttributeError, TypeError, ValueError):
         return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed

@@ -355,6 +355,8 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-we
 .input-sm:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); cursor: pointer; }
 .section-note { margin-bottom: 14px; }
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; font-size: 13px; }
+.pager .btn:disabled { opacity: 0.4; pointer-events: none; }
 
 /* Table */
 .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; box-shadow: var(--shadow); }

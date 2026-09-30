@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=15">
+    <link rel="stylesheet" href="/static/css/app.css?v=16">
 </head>
 
 <body>
@@ -247,7 +247,7 @@
                         </div>
                         <div class="section-head__actions">
                             <button id="findRefresh" class="btn btn--sm"
-                                data-tip="Re-check all sources now (bypasses cache)">
+                                data-tip="Scan all your assets now against NVD and OSV.dev">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M21 12a9 9 0 1 1-2.64-6.36" />
@@ -259,9 +259,8 @@
                             <button id="exportJson" class="btn btn--sm">JSON</button>
                         </div>
                     </div>
-                    <div id="findingsLoading" class="muted">Loading vulnerabilities&hellip; (queries live sources, may
-                        take a
-                        few seconds)</div>
+                    <div id="findScanInfo" class="section-note muted hidden"></div>
+                    <div id="findingsLoading" class="muted">Loading vulnerabilities&hellip;</div>
                     <div id="findingsEmpty" class="placeholder hidden">No vulnerabilities match the current filters.
                     </div>
                     <div id="findingsTableWrap" class="table-wrap hidden">
@@ -286,6 +285,11 @@
                             </thead>
                             <tbody id="findingsBody"></tbody>
                         </table>
+                    </div>
+                    <div id="findPager" class="pager hidden">
+                        <span id="findRange" class="muted"></span>
+                        <button id="findPrev" class="btn btn--sm">&lsaquo; Prev</button>
+                        <button id="findNext" class="btn btn--sm">Next &rsaquo;</button>
                     </div>
                 </section>
             </div>
@@ -390,7 +394,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=21"></script>
+    <script src="/static/js/app.js?v=22"></script>
 </body>
 
 </html>

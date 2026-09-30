@@ -54,6 +54,8 @@ class Asset(Base):
     user_email = Column(String(100), nullable=False, index=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Last scan in which every source answered; findings not seen then are gone.
+    last_scanned_at = Column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self):
         return f"<Asset(name='{self.name}', cpe='{self.cpe}')>"
@@ -69,6 +71,8 @@ class CVE(Base):
     publish_date = Column(DateTime, index=True)
     modified_date = Column(DateTime, server_default=func.now(), onupdate=func.now())
     affected_products = Column(JSON)
+    kev = Column(Boolean, nullable=True)
+    epss = Column(Float, nullable=True)
 
     def __repr__(self):
         return (
@@ -116,6 +120,8 @@ class AssetCVE(Base):
     # first observed, so existing findings get a silent baseline.
     kev = Column(Boolean, nullable=True)
     severity = Column(String(20), nullable=True)
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+    relevance_reason = Column(Text, nullable=True)
 
     def __repr__(self):
         return f"<AssetCVE(asset_id='{self.asset_id}', cve_id='{self.cve_id}')>"

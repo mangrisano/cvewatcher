@@ -152,10 +152,18 @@ SUPPRESSED_STATUSES = frozenset(
 
 
 class FindingsSummary(BaseModel):
+    """Counts cover every active finding; ``findings`` is one page of those
+    matching the filters, ``matched`` how many match in total."""
+
     total: int
     kev: int
     by_severity: dict[str, int]
     by_status: dict[str, int]
+    matched: int
+    limit: int
+    offset: int
+    last_scan: Optional[datetime.datetime] = None
+    unscanned_assets: int = 0
     findings: list[VulnerabilityResponse]
 
 

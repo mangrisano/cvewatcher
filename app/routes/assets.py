@@ -1,6 +1,15 @@
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    status,
+)
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -22,12 +31,15 @@ from app.dependencies import (
     get_monitoring_service,
     get_owned_asset,
 )
-from app.services.alerts import deliver_alerts, extract_alerts
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
-from app.services.notifications import build_notifiers_from_env
 from app.services.sbom import SbomError, parse_sbom
+from app.services.scanning import (
+    scan_and_alert,
+    scan_in_background,
+    scan_new_assets_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +67,7 @@ class SeverityLevel(StrEnum):
 @router.post("/", response_model=AssetResponse)
 async def create_asset(
     asset_data: AssetCreate,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AssetResponse:
@@ -88,6 +101,7 @@ async def create_asset(
         db.add(new_asset)
         db.commit()
         db.refresh(new_asset)
+        _scan_later(background_tasks, [new_asset])
 
         return AssetResponse.model_validate(new_asset)
 
@@ -111,10 +125,11 @@ async def create_asset(
 )
 async def import_sbom(
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SbomImportResponse:
-    """Create one asset per package listed in the SBOM. It does not start a scan."""
+    """Create one asset per package listed in the SBOM, then scan them."""
     body = bytearray()
     async for chunk in request.stream():
         body.extend(chunk)
@@ -143,6 +158,7 @@ async def import_sbom(
         skipped_invalid=[],
         unsupported=sbom.unsupported,
     )
+    created: list[Asset] = []
     for package in sbom.packages:
         label = f"{package.name}@{package.version}" if package.version else package.name
         if (package.name, package.version) in existing:
@@ -152,7 +168,7 @@ async def import_sbom(
         ):
             response.skipped_invalid.append(label)
         else:
-            db.add(
+            created.append(
                 Asset(
                     name=package.name,
                     version=package.version,
@@ -162,8 +178,10 @@ async def import_sbom(
                 )
             )
             existing.add((package.name, package.version))
-            response.created += 1
+    db.add_all(created)
     db.commit()
+    response.created = len(created)
+    _scan_later(background_tasks, created)
     return response
 
 
@@ -240,6 +258,7 @@ async def set_vulnerability_status(
 @router.patch("/{asset_id}", response_model=AssetResponse)
 async def update_asset(
     asset_data: AssetUpdate,
+    background_tasks: BackgroundTasks,
     asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
     findings: FindingRepository = Depends(get_findings_repository),
@@ -274,12 +293,14 @@ async def update_asset(
         setattr(asset, key, value)
 
     if identity_changed:
-        # Untriaged findings belonged to the old identity; the next monitoring
-        # cycle re-links those that still apply. Triaged ones keep their status.
+        # Untriaged findings belonged to the old identity; the rescan re-links
+        # those that still apply. Triaged ones keep their status.
         findings.drop_untriaged(asset.id)
 
     db.commit()
     db.refresh(asset)
+    if identity_changed:
+        _scan_later(background_tasks, [asset])
     return AssetResponse.model_validate(asset)
 
 
@@ -299,8 +320,7 @@ async def monitor_asset_cves(
     monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     try:
-        result = await monitoring_service.monitor_asset(asset)
-        await _send_alerts(db, [result])
+        (result,) = await scan_and_alert(db, monitoring_service, [asset])
 
         return {
             "message": f"Monitoring completed for asset '{asset.name}'",
@@ -350,14 +370,8 @@ async def scan_all_assets(
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "user_email": current_user.get("sub"),
             "total_assets_scanned": len(user_assets),
-            "asset_results": [],
+            "asset_results": await scan_and_alert(db, monitoring_service, user_assets),
         }
-
-        for asset in user_assets:
-            result = await monitoring_service.monitor_asset(asset)
-            scan_results["asset_results"].append(result)
-        await _send_alerts(db, scan_results["asset_results"])
-
         return scan_results
 
     except Exception:
@@ -365,10 +379,6 @@ async def scan_all_assets(
         raise HTTPException(status_code=500, detail="Error scanning assets")
 
 
-async def _send_alerts(db: Session, asset_results: list[dict]) -> None:
-    # A scan records new findings as seen: alert now or the scheduler never will.
-    await deliver_alerts(
-        db,
-        extract_alerts({"asset_results": asset_results}),
-        build_notifiers_from_env(),
-    )
+def _scan_later(background_tasks: BackgroundTasks, assets: list[Asset]) -> None:
+    if assets and scan_new_assets_enabled():
+        background_tasks.add_task(scan_in_background, [a.id for a in assets])

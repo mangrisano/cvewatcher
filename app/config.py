@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
     monitor_enabled: bool = False
     monitor_interval_minutes: int = 360
+    # Scan an asset right after it is created, imported or re-identified.
+    scan_new_assets: bool = True
     digest_enabled: bool = False
     digest_interval_minutes: int = 1440
 

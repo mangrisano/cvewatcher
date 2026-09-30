@@ -11,6 +11,7 @@ from app.database.connection import SessionLocal
 from app.config import get_settings
 from app.database.models import Asset, AssetCVE, CVE
 from app.models import SUPPRESSED_STATUSES
+from app.services.findings_repository import visible_link
 from app.services.notifications import send_email
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ def run_digest_cycle() -> int:
                 .filter(
                     Asset.user_email == email,
                     AssetCVE.status.notin_(SUPPRESSED_STATUSES),
+                    visible_link(),
                 )
                 .all()
             )

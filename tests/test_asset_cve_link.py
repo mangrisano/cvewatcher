@@ -38,7 +38,8 @@ def test_store_cve_links_asset_without_tenant_data():
             "score": 7.5,
             "publish_date": None,
         }
-        repo.link(asset.id, vuln)
+        repo.record(asset.id, vuln)
+        repo.save()
 
         # The shared CVE row carries no tenant data.
         cve = db.query(CVE).filter(CVE.id == _CVE).first()
@@ -58,7 +59,8 @@ def test_store_cve_links_asset_without_tenant_data():
         assert found == {_CVE}
 
         # Storing the same finding again is idempotent (no duplicate link).
-        repo.link(asset.id, vuln)
+        repo.record(asset.id, vuln)
+        repo.save()
         links = db.query(AssetCVE).filter(AssetCVE.cve_id == _CVE).all()
         assert len(links) == 1
     finally:
@@ -79,7 +81,8 @@ def test_existing_ids_are_scoped_per_asset():
 
         repo = FindingRepository(db)
         vuln = {"cve_id": _CVE, "summary": "t", "severity": "LOW", "score": 1.0}
-        repo.link(mine.id, vuln)
+        repo.record(mine.id, vuln)
+        repo.save()
 
         # The other asset is not linked, even for the same shared CVE.
         assert set(repo.links(other.id, [_CVE])) == set()
@@ -216,10 +219,10 @@ def test_monitor_all_assets_survives_findings_without_severity(monkeypatch):
     db = SimpleNamespace(query=lambda model: SimpleNamespace(all=lambda: [asset]))
     svc = CVEMonitoringService(db)
 
-    async def monitor(a):
-        return {"new_vulnerabilities": [{"cve_id": "GHSA-x", "severity": None}]}
+    async def monitor(assets):
+        return [{"new_vulnerabilities": [{"cve_id": "GHSA-x", "severity": None}]}]
 
-    monkeypatch.setattr(svc, "monitor_asset", monitor)
+    monkeypatch.setattr(svc, "monitor_assets", monitor)
 
     results = asyncio.run(svc.monitor_all_assets())
     assert "error" not in results

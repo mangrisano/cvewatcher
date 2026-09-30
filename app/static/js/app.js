@@ -32,7 +32,6 @@
         accepted_risk: "Accepted risk",
     };
     const SUPPRESSED = new Set(["fixed", "false_positive", "accepted_risk"]);
-    const SEV_RANK = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1, UNKNOWN: 0 };
     const SECTION_TITLES = {
         overview: "Overview",
         assets: "Assets",
@@ -251,7 +250,8 @@
         try {
             const [sRes, allAssets] = await Promise.all([
                 apiFetch(
-                    "/findings?include_suppressed=false" + (force ? "&refresh=true" : "")
+                    "/findings?include_suppressed=false&limit=0" +
+                    (force ? "&refresh=true" : "")
                 ),
                 fetchAllAssets(),
             ]);
@@ -468,66 +468,81 @@
     }
 
     // --- Findings ----------------------------------------------------------
-    let findings = [];
+    // The server filters, sorts and pages: the browser holds one page only.
+    const FIND_PAGE = 50;
+    const findState = { offset: 0, matched: 0, sort: null, order: "desc" };
+    let findSearchTimer = null;
 
-    async function loadFindings(force = false) {
+    function findingsQuery(refresh) {
+        const params = new URLSearchParams({
+            include_suppressed: $("findSuppressed").checked,
+            limit: FIND_PAGE,
+            offset: findState.offset,
+        });
+        const q = ($("findSearch").value || "").trim();
+        if (q) params.set("q", q);
+        if ($("findSeverity").value) params.set("severity", $("findSeverity").value);
+        if ($("findStatus").value) params.set("status", $("findStatus").value);
+        if (findState.sort) {
+            params.set("sort", findState.sort);
+            params.set("order", findState.order);
+        }
+        if (refresh) params.set("refresh", "true");
+        return "/findings?" + params;
+    }
+
+    async function loadFindings(refresh = false) {
         const btn = $("findRefresh");
-        if (btn) btn.classList.add("is-busy");
+        if (refresh && btn) btn.classList.add("is-busy");
+        $("findingsLoading").textContent = refresh
+            ? "Scanning your assets\u2026 this can take a while."
+            : "Loading vulnerabilities\u2026";
         $("findingsLoading").classList.remove("hidden");
-        $("findingsTableWrap").classList.add("hidden");
-        $("findingsEmpty").classList.add("hidden");
-        const inc = $("findSuppressed").checked;
-        const url =
-            "/findings?include_suppressed=" + inc + (force ? "&refresh=true" : "");
-        let res;
+        let data = { findings: [], matched: 0 };
         try {
-            res = await apiFetch(url);
+            const res = await apiFetch(findingsQuery(refresh));
+            if (res.ok) data = await res.json();
         } finally {
             if (btn) btn.classList.remove("is-busy");
         }
-        const data = res.ok ? await res.json() : { findings: [] };
-        findings = data.findings || [];
         $("findingsLoading").classList.add("hidden");
-        renderFindings();
+        findState.matched = data.matched || 0;
+        renderScanInfo(data);
+        renderFindings(data.findings || []);
     }
 
     function refreshFindings() {
         loadFindings(true);
     }
 
-    const findSort = { key: null, dir: "desc" };
+    // Filters change what matches: start again from the first page.
+    function reloadFindings() {
+        findState.offset = 0;
+        loadFindings();
+    }
 
-    function findSortValue(f, key) {
-        switch (key) {
-            case "severity":
-                return SEV_RANK[(f.severity || "UNKNOWN").toUpperCase()] ?? -1;
-            case "score":
-                return f.score ?? -1;
-            case "epss":
-                return f.epss ?? -1;
-            case "kev":
-                return f.kev ? 1 : 0;
-            case "cve_id":
-                return (f.cve_id || "").toLowerCase();
-            case "asset_name":
-                return (f.asset_name || "").toLowerCase();
-            case "status":
-                return f.status || "open";
-            default:
-                return 0;
-        }
+    function searchFindings() {
+        clearTimeout(findSearchTimer);
+        findSearchTimer = setTimeout(reloadFindings, 300);
+    }
+
+    function pageFindings(step) {
+        const next = findState.offset + step * FIND_PAGE;
+        if (next < 0 || next >= findState.matched) return;
+        findState.offset = next;
+        loadFindings();
     }
 
     function sortFindingsBy(key) {
-        if (findSort.key === key) {
-            findSort.dir = findSort.dir === "asc" ? "desc" : "asc";
+        if (findState.sort === key) {
+            findState.order = findState.order === "asc" ? "desc" : "asc";
         } else {
-            findSort.key = key;
-            findSort.dir = ["cve_id", "asset_name", "status"].includes(key)
+            findState.sort = key;
+            findState.order = ["cve_id", "asset_name", "status"].includes(key)
                 ? "asc"
                 : "desc";
         }
-        renderFindings();
+        reloadFindings();
     }
 
     function updateSortIndicators() {
@@ -535,42 +550,40 @@
             const arrow = th.querySelector(".th-arrow");
             if (!arrow) return;
             arrow.textContent =
-                th.dataset.sort === findSort.key
-                    ? findSort.dir === "asc"
+                th.dataset.sort === findState.sort
+                    ? findState.order === "asc"
                         ? " \u2191"
                         : " \u2193"
                     : "";
         });
     }
 
-    function renderFindings() {
-        const sev = $("findSeverity").value;
-        const st = $("findStatus").value;
-        const q = ($("findSearch").value || "").trim().toLowerCase();
-        const incSup = $("findSuppressed").checked;
-        let list = findings.filter((f) => {
-            const status = f.status || "open";
-            if (!incSup && SUPPRESSED.has(status)) return false;
-            if (sev && (f.severity || "UNKNOWN").toUpperCase() !== sev) return false;
-            if (st && status !== st) return false;
-            if (
-                q &&
-                !((f.cve_id || "") + " " + (f.asset_name || "")).toLowerCase().includes(q)
-            )
-                return false;
-            return true;
-        });
-        if (findSort.key) {
-            const dir = findSort.dir === "asc" ? 1 : -1;
-            list = list.slice().sort((a, b) => {
-                const va = findSortValue(a, findSort.key);
-                const vb = findSortValue(b, findSort.key);
-                if (va < vb) return -dir;
-                if (va > vb) return dir;
-                return 0;
-            });
+    function renderScanInfo(data) {
+        const parts = [];
+        if (data.last_scan) {
+            parts.push("Last scan: " + new Date(data.last_scan).toLocaleString());
         }
+        if (data.unscanned_assets) {
+            parts.push(
+                `${data.unscanned_assets} asset(s) not scanned yet \u2014 use Rescan to check them.`
+            );
+        }
+        $("findScanInfo").textContent = parts.join(" \u00b7 ");
+        $("findScanInfo").classList.toggle("hidden", !parts.length);
+    }
+
+    function renderPager(shown) {
+        const pager = $("findPager");
+        pager.classList.toggle("hidden", findState.matched <= FIND_PAGE);
+        const from = shown ? findState.offset + 1 : 0;
+        $("findRange").textContent = `${from}\u2013${findState.offset + shown} of ${findState.matched}`;
+        $("findPrev").disabled = findState.offset === 0;
+        $("findNext").disabled = findState.offset + FIND_PAGE >= findState.matched;
+    }
+
+    function renderFindings(list) {
         updateSortIndicators();
+        renderPager(list.length);
         const body = $("findingsBody");
         if (!list.length) {
             $("findingsEmpty").classList.remove("hidden");
@@ -629,11 +642,8 @@
         );
         sel.disabled = false;
         if (!res.ok) return;
-        const f = findings.find(
-            (x) => String(x.asset_id) === String(assetId) && x.cve_id === cveId
-        );
-        if (f) f.status = status;
-        renderFindings();
+        // The new status may move the row out of the current filters.
+        loadFindings();
     }
 
     function epssText(epss) {
@@ -820,11 +830,13 @@
     on("assetAddBtn", "click", () => openAssetModal());
     on("sbomImportBtn", "click", () => $("sbomFile").click());
     on("sbomFile", "change", importSbom);
-    on("findSearch", "input", renderFindings);
-    on("findSeverity", "change", renderFindings);
-    on("findStatus", "change", renderFindings);
-    on("findSuppressed", "change", () => loadFindings());
+    on("findSearch", "input", searchFindings);
+    on("findSeverity", "change", reloadFindings);
+    on("findStatus", "change", reloadFindings);
+    on("findSuppressed", "change", reloadFindings);
     on("findRefresh", "click", refreshFindings);
+    on("findPrev", "click", () => pageFindings(-1));
+    on("findNext", "click", () => pageFindings(1));
     on("exportCsv", "click", () => exportFindings("csv"));
     on("exportJson", "click", () => exportFindings("json"));
     on("assetModalClose", "click", closeAssetModal);

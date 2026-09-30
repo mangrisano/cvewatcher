@@ -17,6 +17,9 @@ from app.models import AssetResponse
 
 logger = logging.getLogger(__name__)
 
+# Assets scanned at once; each source also bounds its own requests.
+_SCAN_CONCURRENCY = 8
+
 
 class CVEMonitoringService:
     def __init__(
@@ -47,9 +50,7 @@ class CVEMonitoringService:
                 },
             }
 
-            for asset in assets:
-                logger.info(f"Monitoring asset: {asset.name} v{asset.version}")
-                asset_result = await self.monitor_asset(asset)
+            for asset_result in await self.monitor_assets(assets):
                 monitoring_results["asset_results"].append(asset_result)
 
                 monitoring_results["summary"]["new_vulnerabilities"] += len(
@@ -84,57 +85,86 @@ class CVEMonitoringService:
             return {"error": str(e), "timestamp": datetime.now(timezone.utc)}
 
     async def monitor_asset(self, asset: Asset) -> dict[str, Any]:
-        try:
-            asset_response = AssetResponse.model_validate(asset)
+        return (await self.monitor_assets([asset]))[0]
 
-            # Monitoring must never miss a freshly published CVE, so it bypasses
-            # the read cache (the fetched result still refreshes it for readers).
-            current_vulnerabilities = await self.find_vulnerabilities(
-                asset_response, use_cache=False
-            )
+    async def monitor_assets(self, assets: list[Asset]) -> list[dict[str, Any]]:
+        """Scan the assets and store what each scan found, one result per asset.
 
-            candidate_cve_ids = [
-                vuln["cve_id"] for vuln in current_vulnerabilities if vuln.get("cve_id")
-            ]
-            existing = self.findings.links(asset.id, candidate_cve_ids)
-            kev_known = self.enricher.kev_catalog_loaded
+        The source lookups run concurrently; the database writes then run one
+        asset at a time, so they never interleave on the shared session.
+        """
+        semaphore = asyncio.Semaphore(_SCAN_CONCURRENCY)
 
-            new_vulnerabilities = []
-            escalations = []
-            for vuln in current_vulnerabilities:
-                cve_id = vuln.get("cve_id")
-                if not cve_id:
-                    continue
-                link = existing.get(cve_id)
-                if link is None:
-                    new_vulnerabilities.append(vuln)
-                    self.findings.link(asset.id, vuln, kev_known=kev_known)
-                else:
-                    escalations.extend(alerts.observe(link, vuln, kev_known))
-            if existing:
-                self.findings.save()
+        async def collect(asset: Asset):
+            async with semaphore:
+                try:
+                    # Monitoring must never miss a freshly published CVE, so it
+                    # bypasses the read cache (the result still refreshes it).
+                    return await self._collect(
+                        AssetResponse.model_validate(asset), use_cache=False
+                    )
+                except Exception as e:
+                    return e
 
-            return {
-                "asset_id": asset.id,
-                "asset_name": asset.name,
-                "asset_version": asset.version,
-                "user_email": asset.user_email,
-                "total_vulnerabilities": len(current_vulnerabilities),
-                "new_vulnerabilities": new_vulnerabilities,
-                "escalations": escalations,
-                "existing_vulnerabilities": len(existing),
-                "last_monitored": datetime.now(timezone.utc),
-                "status": "success",
-            }
+        collected = await asyncio.gather(*(collect(asset) for asset in assets))
+        results = []
+        for asset, outcome in zip(assets, collected):
+            if isinstance(outcome, Exception):
+                logger.error(f"Error monitoring asset {asset.name}: {outcome}")
+                results.append(
+                    {
+                        "asset_id": asset.id,
+                        "asset_name": asset.name,
+                        "error": str(outcome),
+                        "status": "error",
+                    }
+                )
+            else:
+                results.append(self._record_scan(asset, *outcome))
+        return results
 
-        except Exception as e:
-            logger.error(f"Error monitoring asset {asset.name}: {e}")
-            return {
-                "asset_id": asset.id,
-                "asset_name": asset.name,
-                "error": str(e),
-                "status": "error",
-            }
+    def _record_scan(
+        self,
+        asset: Asset,
+        current_vulnerabilities: list[dict[str, Any]],
+        complete: bool,
+    ) -> dict[str, Any]:
+        scanned_at = datetime.now(timezone.utc)
+        candidate_cve_ids = [
+            vuln["cve_id"] for vuln in current_vulnerabilities if vuln.get("cve_id")
+        ]
+        existing = self.findings.links(asset.id, candidate_cve_ids)
+        kev_known = self.enricher.kev_catalog_loaded
+
+        new_vulnerabilities = []
+        escalations = []
+        for vuln in current_vulnerabilities:
+            cve_id = vuln.get("cve_id")
+            if not cve_id:
+                continue
+            link = existing.get(cve_id)
+            if link is None:
+                new_vulnerabilities.append(vuln)
+            else:
+                escalations.extend(alerts.observe(link, vuln, kev_known))
+            self.findings.record(asset.id, vuln, kev_known, scanned_at, link)
+        # A source that did not answer may have hidden findings: keep them all.
+        if complete:
+            self.findings.close_scan(asset, scanned_at)
+        self.findings.save()
+
+        return {
+            "asset_id": asset.id,
+            "asset_name": asset.name,
+            "asset_version": asset.version,
+            "user_email": asset.user_email,
+            "total_vulnerabilities": len(current_vulnerabilities),
+            "new_vulnerabilities": new_vulnerabilities,
+            "escalations": escalations,
+            "existing_vulnerabilities": len(existing),
+            "last_monitored": scanned_at,
+            "status": "success",
+        }
 
     async def get_user_vulnerabilities(
         self,
@@ -181,6 +211,17 @@ class CVEMonitoringService:
         use_cache: bool = True,
     ) -> list[dict[str, Any]]:
         """Findings for one asset from every source: merged, enriched, sorted."""
+        findings, _ = await self._collect(asset, days, severity_filter, use_cache)
+        return findings
+
+    async def _collect(
+        self,
+        asset: AssetResponse,
+        days: int = 0,
+        severity_filter: str | None = None,
+        use_cache: bool = True,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Findings for one asset, and whether every source answered."""
         pub_start_date = None
         pub_end_date = None
         if days > 0:
@@ -194,8 +235,9 @@ class CVEMonitoringService:
             )
         )
         vulnerabilities = [f for result in results for f in result.findings]
+        complete = not any(result.unavailable for result in results)
 
-        if not vulnerabilities and any(result.unavailable for result in results):
+        if not vulnerabilities and not complete:
             raise NvdUnavailableError(
                 "Could not retrieve vulnerabilities: the NVD service is unavailable."
             )
@@ -231,7 +273,7 @@ class CVEMonitoringService:
         )
 
         self._attach_triage_status(asset, vulnerabilities_list)
-        return vulnerabilities_list
+        return vulnerabilities_list, complete
 
     def _attach_triage_status(
         self, asset: AssetResponse, findings: list[dict[str, Any]]

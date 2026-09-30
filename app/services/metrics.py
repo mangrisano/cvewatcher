@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database.models import Asset, AssetCVE, CVE
+from app.services.findings_repository import visible_link
 
 
 def _gauge(name: str, help_text: str, samples: list[tuple[dict, int]]) -> list[str]:
@@ -23,16 +24,21 @@ def _gauge(name: str, help_text: str, samples: list[tuple[dict, int]]) -> list[s
 
 def render_metrics(db: Session) -> str:
     assets_total = db.query(func.count(Asset.id)).scalar() or 0
-    findings_total = db.query(func.count(AssetCVE.cve_id)).scalar() or 0
+    current = (
+        db.query(AssetCVE)
+        .join(Asset, Asset.id == AssetCVE.asset_id)
+        .filter(visible_link())
+    )
+    findings_total = current.count()
 
     severity_rows = (
-        db.query(CVE.severity, func.count(AssetCVE.cve_id))
-        .join(AssetCVE, AssetCVE.cve_id == CVE.id)
+        current.join(CVE, AssetCVE.cve_id == CVE.id)
+        .with_entities(CVE.severity, func.count(AssetCVE.cve_id))
         .group_by(CVE.severity)
         .all()
     )
     status_rows = (
-        db.query(AssetCVE.status, func.count(AssetCVE.cve_id))
+        current.with_entities(AssetCVE.status, func.count(AssetCVE.cve_id))
         .group_by(AssetCVE.status)
         .all()
     )

@@ -1,26 +1,47 @@
 """User-scoped vulnerability findings: global summary and export.
 
-A "finding" is a CVE that affects one of the user's assets. These endpoints
-aggregate findings across all of the user's assets and, by default, hide
-suppressed ones (status fixed / false_positive / accepted_risk).
+A "finding" is a CVE that affects one of the user's assets. Findings are read
+from the database, as stored by the last scan; ``refresh=true`` scans first.
+Suppressed ones (status fixed / false_positive / accepted_risk) are hidden by
+default.
 """
 
 import csv
 import io
 import json
 import logging
-from collections import Counter
+from enum import StrEnum
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy.orm import Session
 
+from app.database.connection import get_db
+from app.database.models import Asset
 from app.dependencies import get_current_user, get_monitoring_service
-from app.models import SUPPRESSED_STATUSES, FindingsSummary, VulnerabilityResponse
+from app.models import FindingsSummary, FindingStatus, VulnerabilityResponse
 from app.services.cve_monitoring import CVEMonitoringService
+from app.services.findings_query import (
+    FindingFilters,
+    SortKey,
+    query_findings,
+    scan_state,
+)
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS
+from app.services.scanning import scan_and_alert
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/findings", tags=["Findings"])
+
+
+class SeverityFilter(StrEnum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    UNKNOWN = "UNKNOWN"
+
 
 _EXPORT_COLUMNS = [
     "cve_id",
@@ -37,19 +58,11 @@ _EXPORT_COLUMNS = [
 ]
 
 
-async def _collect_findings(
-    service: CVEMonitoringService,
-    user_email: str,
-    days: int,
-    include_suppressed: bool,
-    use_cache: bool = True,
-) -> list[dict]:
-    findings = await service.get_user_vulnerabilities(
-        user_email, days=days, use_cache=use_cache
-    )
-    if not include_suppressed:
-        findings = [f for f in findings if f.get("status") not in SUPPRESSED_STATUSES]
-    return findings
+def _user_email(current_user: dict) -> str:
+    user_email = current_user.get("sub")
+    if not user_email:
+        raise HTTPException(status_code=401, detail="Invalid user token")
+    return user_email
 
 
 @router.get("", response_model=FindingsSummary)
@@ -58,28 +71,51 @@ async def findings_summary(
         default=0, ge=0, le=MAX_DATE_RANGE_DAYS, description="0 = all time"
     ),
     include_suppressed: bool = Query(default=False),
+    severity: Optional[SeverityFilter] = Query(default=None),
+    status: Optional[FindingStatus] = Query(default=None),
+    q: Optional[str] = Query(
+        default=None, max_length=100, description="Search CVE id or asset name"
+    ),
+    sort: Optional[SortKey] = Query(
+        default=None, description="Default: KEV, severity, EPSS, then newest"
+    ),
+    order: Literal["asc", "desc"] = Query(default="desc"),
+    limit: int = Query(default=100, ge=0, le=500, description="0 = counts only"),
+    offset: int = Query(default=0, ge=0),
     refresh: bool = Query(
-        default=False, description="Bypass caches for a live re-check"
+        default=False, description="Scan all your assets before reading"
     ),
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
     service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
-    user_email = current_user.get("sub")
-    if not user_email:
-        raise HTTPException(status_code=401, detail="Invalid user token")
+    user_email = _user_email(current_user)
+    if refresh:
+        assets = db.query(Asset).filter(Asset.user_email == user_email).all()
+        await scan_and_alert(db, service, assets)
 
-    findings = await _collect_findings(
-        service, user_email, days, include_suppressed, use_cache=not refresh
+    filters = FindingFilters(
+        days=days,
+        include_suppressed=include_suppressed,
+        severity=severity.value if severity else None,
+        status=status.value if status else None,
+        search=q.strip() if q and q.strip() else None,
+        sort=sort,
+        descending=order == "desc",
     )
-
-    by_severity = Counter((f.get("severity") or "UNKNOWN") for f in findings)
-    by_status = Counter((f.get("status") or "open") for f in findings)
+    page = query_findings(db, user_email, filters, limit=limit, offset=offset)
+    last_scan, unscanned = scan_state(db, user_email)
     return FindingsSummary(
-        total=len(findings),
-        kev=sum(1 for f in findings if f.get("kev")),
-        by_severity=dict(by_severity),
-        by_status=dict(by_status),
-        findings=[VulnerabilityResponse(**f) for f in findings],
+        total=page.total,
+        kev=page.kev,
+        by_severity=page.by_severity,
+        by_status=page.by_status,
+        matched=page.matched,
+        limit=limit,
+        offset=offset,
+        last_scan=last_scan,
+        unscanned_assets=unscanned,
+        findings=[VulnerabilityResponse(**f) for f in page.findings],
     )
 
 
@@ -89,13 +125,14 @@ async def export_findings(
     days: int = Query(default=0, ge=0, le=MAX_DATE_RANGE_DAYS),
     include_suppressed: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
-    service: CVEMonitoringService = Depends(get_monitoring_service),
+    db: Session = Depends(get_db),
 ):
-    user_email = current_user.get("sub")
-    if not user_email:
-        raise HTTPException(status_code=401, detail="Invalid user token")
-
-    findings = await _collect_findings(service, user_email, days, include_suppressed)
+    user_email = _user_email(current_user)
+    findings = query_findings(
+        db,
+        user_email,
+        FindingFilters(days=days, include_suppressed=include_suppressed),
+    ).findings
 
     if format == "csv":
         buffer = io.StringIO()

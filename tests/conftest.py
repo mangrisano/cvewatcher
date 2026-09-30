@@ -8,16 +8,26 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-at-least-32-byt
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_db_path}")
 # Keep the suite offline: enrichment (CISA KEV / FIRST.org EPSS) is opt-in here.
 os.environ.setdefault("ENRICH_ENABLED", "false")
+# Creating assets must not start real scans against NVD / OSV.dev.
+os.environ.setdefault("SCAN_NEW_ASSETS", "false")
 # Tests share one database and register many users, so keep registration open.
 os.environ.setdefault("REGISTRATION_ENABLED", "true")
 os.environ.setdefault("REGISTER_MAX_ATTEMPTS", "1000")
 os.environ.setdefault("LOGIN_IP_MAX_ATTEMPTS", "1000")
 
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
 from app.database import create_tables  # noqa: E402
+from app.database.connection import engine  # noqa: E402
 from app.main import app  # noqa: E402
+
+
+@event.listens_for(engine, "connect")
+def _enforce_foreign_keys(dbapi_connection, _record):
+    # SQLite ignores foreign keys unless asked; Postgres always checks them.
+    dbapi_connection.execute("PRAGMA foreign_keys=ON")
 
 
 @pytest.fixture(autouse=True)

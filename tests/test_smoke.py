@@ -322,6 +322,7 @@ def test_changing_asset_identity_drops_only_untriaged_findings(client):
         for cve_id in ids:
             if not db.get(CVE, cve_id):
                 db.add(CVE(id=cve_id))
+        db.flush()
         db.add_all(
             AssetCVE(asset_id=UUID(asset_id), cve_id=cve_id, status=status)
             for cve_id, status in ids.items()
@@ -386,7 +387,7 @@ def test_waiting_on_nvd_does_not_block_other_requests(monkeypatch):
     assert asyncio.run(scenario()) == (200, 200)
 
 
-def test_findings_return_503_when_nvd_is_unavailable(client, monkeypatch):
+def test_findings_are_served_while_nvd_is_down(client, monkeypatch):
     from app.services import nist_nvd
     from app.services.nist_nvd import NvdUnavailableError
 
@@ -399,10 +400,9 @@ def test_findings_return_503_when_nvd_is_unavailable(client, monkeypatch):
     monkeypatch.setattr(nist_nvd.nist_client, "search_cves", boom)
     monkeypatch.setattr(nist_nvd.nist_client, "find_cpe_names", boom)
 
-    for url in ("/findings", "/findings/export"):
-        response = client.get(url, headers=headers)
-        assert response.status_code == 503
-        assert "NVD service is currently unavailable" in response.json()["detail"]
+    # Findings come from the database: a failed rescan still returns them.
+    for url in ("/findings", "/findings?refresh=true", "/findings/export"):
+        assert client.get(url, headers=headers).status_code == 200
 
 
 def test_assets_of_other_users_are_not_reachable(client):
@@ -448,7 +448,7 @@ def test_routes_take_the_monitoring_service_from_dependencies(client):
 
     app.dependency_overrides[get_monitoring_service] = fake_service
     try:
-        response = client.get("/findings", headers=headers)
+        response = client.get("/findings?refresh=true", headers=headers)
     finally:
         app.dependency_overrides.pop(get_monitoring_service)
 
@@ -474,6 +474,7 @@ def test_recent_cves_only_show_the_callers_findings(client):
     try:
         for cve_id, asset_id in ids.items():
             db.add(CVE(id=cve_id))
+            db.flush()
             db.add(AssetCVE(asset_id=UUID(asset_id), cve_id=cve_id))
         db.commit()
 

@@ -92,8 +92,13 @@ three sections:
   CVE id, colour-coded **severity** badge, CVSS **score**, **KEV** badge, **EPSS**
   probability and an inline **triage status** selector. You can search by CVE or
   asset, filter by severity/status, toggle suppressed findings, sort any column,
-  **export** to CSV/JSON, and **Rescan** to force a live re-check (bypassing
-  caches).
+  page through the results (50 per page), **export** to CSV/JSON, and **Rescan**
+  to scan all your assets now.
+
+The dashboard reads findings **from the database**, as stored by the last scan,
+so it stays fast with thousands of findings and keeps working when NVD or
+OSV.dev are down. A new, imported or re-identified asset is scanned in the
+background right away; the Vulnerabilities page shows when the last scan ran.
 
 If the NIST NVD service cannot be reached, the dashboard surfaces the error
 rather than an empty list — an empty result only means NVD reported no matching
@@ -176,6 +181,7 @@ environment variables (see `.env.example`):
 | -------------------------- | --------- | ---------------------------------------------- |
 | `MONITOR_ENABLED`          | `false`   | Enable the background scheduler                |
 | `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                          |
+| `SCAN_NEW_ASSETS`          | `true`    | Scan an asset as soon as it is added or changed |
 | `ENRICH_ENABLED`           | `true`    | Add CISA KEV flag + FIRST.org EPSS score       |
 | `DIGEST_ENABLED`           | `false`   | Email each user a periodic digest of findings  |
 | `DIGEST_INTERVAL_MINUTES`  | `1440`    | Minutes between digest emails                  |
@@ -236,7 +242,7 @@ active findings.
 
 ### Findings
 
-- `GET /findings` - Cross-asset findings summary (`?refresh=true` bypasses caches)
+- `GET /findings` - Cross-asset findings from the last scan: counts plus one page (`limit` ≤ 500, `offset`), filtered by `severity`, `status`, `q`, `days`, sorted by `sort`/`order`; `?refresh=true` scans first
 - `GET /findings/export` - Export findings as CSV or JSON (`?format=csv|json`)
 
 ### CVE Data

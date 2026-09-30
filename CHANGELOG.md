@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Findings are read from the database**: scans store every finding with its
+  score, KEV and EPSS, and the dashboard, `/findings` and the export read them
+  back instead of querying NVD and OSV.dev on every page load. Pages load fast
+  with thousands of findings and keep working while NVD is down. A full scan
+  removes findings that no longer apply (triaged ones keep their status in case
+  they return); a scan where a source did not answer removes nothing.
+- **`GET /findings` is paginated**: it returns the counts plus one page
+  (`limit`, default 100, max 500; `offset`), with `severity`, `status`, `q`,
+  `sort` and `order` parameters, `matched`, `last_scan` and
+  `unscanned_assets`. `refresh=true` now scans your assets before reading.
+  API clients that expected every finding in one response must page.
+
+### Added
+
+- **Assets are scanned as soon as they are added**, imported from an SBOM or
+  change name, version, CPE or ecosystem, in the background
+  (`SCAN_NEW_ASSETS`, default on).
+- **Paged vulnerability table**: 50 rows per page, with filters, search and
+  sorting done by the server, and the time of the last scan.
+
 ## [2.8.0] - 2026-09-30
 
 ### Added
