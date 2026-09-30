@@ -11,7 +11,7 @@ from typing import Any, Optional
 import httpx
 from cvss import CVSS2, CVSS3, CVSS4
 
-from app.services.severity import band_from_score
+from app.services.severity import KNOWN_SEVERITIES, band_from_score
 
 logger = logging.getLogger(__name__)
 
@@ -94,10 +94,10 @@ class OsvClient:
         # present, otherwise derived from the computed score.
         vector = _best_cvss_vector(vuln.get("severity"))
         score = _cvss_base_score(vector) if vector else None
-        raw_severity = (vuln.get("database_specific") or {}).get("severity")
-        if raw_severity:
-            severity = _SEVERITY_MAP.get(raw_severity.upper(), raw_severity.upper())
-        else:
+        raw_severity = str((vuln.get("database_specific") or {}).get("severity") or "")
+        severity = _SEVERITY_MAP.get(raw_severity.upper(), raw_severity.upper())
+        if severity not in KNOWN_SEVERITIES:
+            # Third-party text: never store a value outside the known bands.
             severity = _band_from_score(score)
 
         is_cve = cve_id.startswith("CVE-")

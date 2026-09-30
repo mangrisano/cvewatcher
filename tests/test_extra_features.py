@@ -69,6 +69,20 @@ def test_osv_to_finding_keeps_ghsa_band_but_scores_from_vector():
     assert finding["score"] == 7.5
 
 
+def test_osv_to_finding_rejects_unknown_severity_text():
+    vuln = {
+        "id": "GHSA-bbbb",
+        "aliases": [],
+        "database_specific": {"severity": "<img src=x onerror=alert(1)>"},
+        "severity": [
+            {"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"}
+        ],
+    }
+    assert OsvClient._to_finding(vuln)["severity"] == "HIGH"  # band from score
+    del vuln["severity"]
+    assert OsvClient._to_finding(vuln)["severity"] is None
+
+
 def test_finding_richness_lets_scored_duplicate_win_merge():
     poor = {"cve_id": "CVE-1", "severity": None, "score": None}
     rich = {"cve_id": "CVE-1", "severity": "HIGH", "score": 7.5}

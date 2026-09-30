@@ -286,7 +286,7 @@
 
         $("statusChips").innerHTML =
             Object.entries(byStatus)
-                .map(([k, v]) => `<span class="chip">${k}: ${v}</span>`)
+                .map(([k, v]) => `<span class="chip">${esc(k)}: ${esc(v)}</span>`)
                 .join("") || '<span class="muted">No vulnerabilities</span>';
     }
 
@@ -522,7 +522,7 @@
                 return `<tr>
                     <td class="mono">${cve}</td>
                     <td>${asset}</td>
-                    <td><span class="badge-sev ${SEV_CLASS[sevU] || "sev-unknown"}">${sevU}</span></td>
+                    <td><span class="badge-sev ${SEV_CLASS[sevU] || "sev-unknown"}">${esc(sevU)}</span></td>
                     <td>${f.score != null ? esc(f.score) : '<span class="dash">\u2014</span>'}</td>
                     <td>${f.kev ? '<span class="kev-badge">KEV</span>' : '<span class="dash">\u2014</span>'}</td>
                     <td>${f.epss != null ? epssText(f.epss) : '<span class="dash">\u2014</span>'}</td>

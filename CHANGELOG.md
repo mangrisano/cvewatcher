@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Possible stored XSS in the dashboard**: the severity of a finding and the
+  triage-status chips were inserted into the page without escaping, and OSV
+  severities outside the known bands were stored as-is. A crafted advisory
+  could run script in the dashboard and read the tokens kept in the browser.
+  The dashboard now escapes these values, and OSV severities other than
+  CRITICAL/HIGH/MEDIUM/LOW fall back to the band of the CVSS score.
+
 ## [2.6.1] - 2026-09-29
 
 ### Security

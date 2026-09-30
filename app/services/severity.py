@@ -3,6 +3,7 @@
 from typing import Optional
 
 _RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+KNOWN_SEVERITIES = frozenset(_RANK)
 
 
 def band_from_score(score: Optional[float]) -> Optional[str]:
