@@ -11,7 +11,7 @@
 <body>
     <!-- Login -->
     <div id="loginView" class="login">
-        <form class="login-card" onsubmit="return app.submitAuth(event)">
+        <form id="loginForm" class="login-card">
             <img class="login-logo" src="/static/logo.svg" alt="CVE Watcher" width="300">
             <p id="authSubtitle" class="muted" style="text-align:center;margin:0">Sign in to your security dashboard</p>
             <div id="loginError" class="alert alert--error hidden"></div>
@@ -27,7 +27,7 @@
             <button id="authSubmit" class="btn btn--primary btn--block" type="submit">Sign in</button>
             <p class="auth-toggle muted">
                 <span id="authToggleText">Don't have an account?</span>
-                <a href="#" id="authToggleLink" onclick="return app.toggleAuthMode(event)">Create one</a>
+                <a href="#" id="authToggleLink">Create one</a>
             </p>
         </form>
     </div>
@@ -90,7 +90,7 @@
             <header class="topbar">
                 <h1 id="sectionTitle">Overview</h1>
                 <div class="usermenu">
-                    <button class="usermenu__trigger" id="userMenuBtn" onclick="app.toggleUserMenu(event)">
+                    <button class="usermenu__trigger" id="userMenuBtn">
                         <span class="avatar" id="userAvatar">?</span>
                         <span class="usermenu__name" id="userEmail"></span>
                         <svg class="usermenu__chevron" viewBox="0 0 24 24" width="16" height="16" fill="none"
@@ -112,7 +112,7 @@
                             </div>
                         </div>
                         <div class="menu-sep"></div>
-                        <button type="button" class="menu-item" onclick="app.logout()">
+                        <button type="button" class="menu-item" id="logoutBtn">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -131,7 +131,7 @@
                     <div class="section-head">
                         <div class="section-head__filters"></div>
                         <div class="section-head__actions">
-                            <button id="overviewRefresh" class="btn btn--sm" onclick="app.refreshOverview()"
+                            <button id="overviewRefresh" class="btn btn--sm"
                                 data-tip="Re-check all sources now (bypasses cache)">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -180,10 +180,9 @@
                 <section id="section-assets" class="section hidden">
                     <div class="section-head">
                         <div class="section-head__filters">
-                            <input id="assetFilter" class="input-sm" placeholder="Filter assets…"
-                                oninput="app.renderAssets()">
+                            <input id="assetFilter" class="input-sm" placeholder="Filter assets…">
                         </div>
-                        <button class="btn btn--primary" onclick="app.openAssetModal()">+ Add asset</button>
+                        <button id="assetAddBtn" class="btn btn--primary">+ Add asset</button>
                     </div>
                     <div id="assetsLoading" class="muted">Loading assets&hellip;</div>
                     <div id="assetsEmpty" class="placeholder hidden">No assets yet. Add your first asset to start
@@ -210,9 +209,8 @@
                 <section id="section-findings" class="section hidden">
                     <div class="section-head">
                         <div class="section-head__filters">
-                            <input id="findSearch" class="input-sm" placeholder="Search CVE or asset…"
-                                oninput="app.renderFindings()">
-                            <select id="findSeverity" class="input-sm" onchange="app.renderFindings()">
+                            <input id="findSearch" class="input-sm" placeholder="Search CVE or asset…">
+                            <select id="findSeverity" class="input-sm">
                                 <option value="">All severities</option>
                                 <option>CRITICAL</option>
                                 <option>HIGH</option>
@@ -220,7 +218,7 @@
                                 <option>LOW</option>
                                 <option>UNKNOWN</option>
                             </select>
-                            <select id="findStatus" class="input-sm" onchange="app.renderFindings()">
+                            <select id="findStatus" class="input-sm">
                                 <option value="">All statuses</option>
                                 <option value="open">Open</option>
                                 <option value="acknowledged">Acknowledged</option>
@@ -230,11 +228,11 @@
                             </select>
                             <label class="check"
                                 data-tip="Show findings marked fixed, false positive or accepted risk"><input
-                                    type="checkbox" id="findSuppressed" onchange="app.loadFindings()"> include
+                                    type="checkbox" id="findSuppressed"> include
                                 suppressed</label>
                         </div>
                         <div class="section-head__actions">
-                            <button id="findRefresh" class="btn btn--sm" onclick="app.refreshFindings()"
+                            <button id="findRefresh" class="btn btn--sm"
                                 data-tip="Re-check all sources now (bypasses cache)">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -243,8 +241,8 @@
                                 </svg>
                                 Rescan
                             </button>
-                            <button class="btn btn--sm" onclick="app.exportFindings('csv')">CSV</button>
-                            <button class="btn btn--sm" onclick="app.exportFindings('json')">JSON</button>
+                            <button id="exportCsv" class="btn btn--sm">CSV</button>
+                            <button id="exportJson" class="btn btn--sm">JSON</button>
                         </div>
                     </div>
                     <div id="findingsLoading" class="muted">Loading vulnerabilities&hellip; (queries live sources, may
@@ -283,10 +281,10 @@
             <div class="modal">
                 <div class="modal__head">
                     <span class="modal__title" id="assetModalTitle">Add asset</span>
-                    <button class="modal__close" onclick="app.closeAssetModal()" aria-label="Close">&times;</button>
+                    <button id="assetModalClose" class="modal__close" aria-label="Close">&times;</button>
                 </div>
                 <div id="assetModalError" class="alert alert--error hidden"></div>
-                <form class="form" onsubmit="return app.submitAsset(event)">
+                <form id="assetForm" class="form">
                     <input type="hidden" id="assetId">
                     <label>Name <input id="assetName" placeholder="e.g. nginx" required></label>
                     <label>Version <input id="assetVersion" placeholder="e.g. 1.24.0"></label>
@@ -310,7 +308,7 @@
                             improves matching.</span></label>
                     <label>Description <input id="assetDescription" placeholder="(optional)"></label>
                     <div class="form__actions">
-                        <button type="button" class="btn" onclick="app.closeAssetModal()">Cancel</button>
+                        <button type="button" id="assetCancel" class="btn">Cancel</button>
                         <button type="submit" class="btn btn--primary">Save</button>
                     </div>
                 </form>
@@ -318,7 +316,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=16"></script>
+    <script src="/static/js/app.js?v=17"></script>
 </body>
 
 </html>

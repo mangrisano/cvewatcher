@@ -1,3 +1,5 @@
+import re
+
 from app.config import get_settings
 
 
@@ -5,6 +7,22 @@ def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_security_headers(client):
+    for path in ("/dashboard", "/static/index.html", "/health"):
+        headers = client.get(path).headers
+        assert headers["X-Content-Type-Options"] == "nosniff"
+        assert headers["X-Frame-Options"] == "DENY"
+        assert "script-src 'self';" in headers["Content-Security-Policy"]
+    # The landing page loads CDN assets, so it is exempt from the CSP.
+    assert "Content-Security-Policy" not in client.get("/").headers
+
+
+def test_dashboard_has_no_inline_event_handlers(client):
+    # The CSP blocks inline handlers, so they would silently stop working.
+    html = client.get("/dashboard").text
+    assert not re.search(r"\son[a-z]+\s*=", html)
 
 
 def test_register_login_and_profile(client):

@@ -628,22 +628,26 @@
             menu.classList.add("hidden");
         }
     });
-    if (token()) enterApp();
 
-    window.app = {
-        submitAuth,
-        toggleAuthMode,
-        logout,
-        toggleUserMenu,
-        showSection,
-        renderAssets,
-        openAssetModal,
-        closeAssetModal,
-        submitAsset,
-        renderFindings,
-        loadFindings,
-        refreshFindings,
-        refreshOverview,
-        exportFindings,
-    };
+    // Bound here, not inline in the HTML, so the CSP can forbid inline scripts.
+    const on = (id, type, handler) => $(id).addEventListener(type, handler);
+    on("loginForm", "submit", submitAuth);
+    on("authToggleLink", "click", toggleAuthMode);
+    on("userMenuBtn", "click", toggleUserMenu);
+    on("logoutBtn", "click", () => logout());
+    on("overviewRefresh", "click", refreshOverview);
+    on("assetFilter", "input", renderAssets);
+    on("assetAddBtn", "click", () => openAssetModal());
+    on("findSearch", "input", renderFindings);
+    on("findSeverity", "change", renderFindings);
+    on("findStatus", "change", renderFindings);
+    on("findSuppressed", "change", () => loadFindings());
+    on("findRefresh", "click", refreshFindings);
+    on("exportCsv", "click", () => exportFindings("csv"));
+    on("exportJson", "click", () => exportFindings("json"));
+    on("assetModalClose", "click", closeAssetModal);
+    on("assetCancel", "click", closeAssetModal);
+    on("assetForm", "submit", submitAsset);
+
+    if (token()) enterApp();
 })();

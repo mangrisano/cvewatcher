@@ -42,6 +42,33 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]
+)
+# These pages load CDN assets and inline scripts, and show no user data.
+_CSP_EXEMPT = {"/", "/docs", "/docs/oauth2-redirect", "/redoc"}
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    if request.url.path not in _CSP_EXEMPT:
+        response.headers.setdefault("Content-Security-Policy", _CSP)
+    return response
+
 
 @app.exception_handler(BlocklistUnavailableError)
 async def blocklist_unavailable(request: Request, exc: BlocklistUnavailableError):

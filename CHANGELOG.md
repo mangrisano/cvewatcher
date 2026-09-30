@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could run script in the dashboard and read the tokens kept in the browser.
   The dashboard now escapes these values, and OSV severities other than
   CRITICAL/HIGH/MEDIUM/LOW fall back to the band of the CVSS score.
+- **Security headers**: every response now carries `X-Content-Type-Options`,
+  `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`. Every response
+  except the landing page and the API docs also carries a
+  `Content-Security-Policy` that allows scripts only from the app itself. The
+  dashboard's inline event handlers moved into `app.js` so they still work
+  under it.
 
 ## [2.6.1] - 2026-09-29
 
