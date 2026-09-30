@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-09-30
+
 ### Added
 
 - **Per-user alerts**: each user now gets the alerts on their own assets, by
