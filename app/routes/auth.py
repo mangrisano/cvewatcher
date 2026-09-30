@@ -6,14 +6,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models import UserRegistrationRequest, UserLoginRequest, RefreshTokenRequest
 from app.utils.auth import (
-    create_access_token,
-    create_refresh_token,
     hash_password,
+    issue_tokens,
     password_needs_rehash,
     spend_password_check,
+    token_matches_session,
     verify_password,
     verify_refresh_token,
-    ACCESS_TOKEN_EXPIRE_MINUTES,
 )
 from app.utils.rate_limit import (
     login_ip_rate_limiter,
@@ -133,16 +132,9 @@ async def login_user(
         db_user.password_hash = hash_password(user.password)  # type: ignore[assignment]
         db.commit()
 
-    # Tokens carry the stored email: assets are owned by that exact string.
-    access_token = create_access_token(data={"sub": db_user.email})
-    refresh_token = create_refresh_token(data={"sub": db_user.email})
-
     return {
         "message": "Login successful",
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
+        **issue_tokens(db_user),
         "user": {
             "id": db_user.id,
             "username": db_user.username,
@@ -170,16 +162,15 @@ async def refresh_access_token(
         db_user = db.query(User).filter(User.email == user_email).first()
         if not db_user:
             raise HTTPException(status_code=401, detail="User not found")
+        if not token_matches_session(payload, db_user):
+            raise HTTPException(
+                status_code=401, detail="Session expired, please sign in again"
+            )
 
         # Rotation: the presented refresh token is single-use.
         revoke_token(db, payload.get("jti"), _expiry(payload))
 
-        return {
-            "access_token": create_access_token(data={"sub": user_email}),
-            "refresh_token": create_refresh_token(data={"sub": user_email}),
-            "token_type": "bearer",
-            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
-        }
+        return issue_tokens(db_user)
 
     except (HTTPException, BlocklistUnavailableError):
         raise

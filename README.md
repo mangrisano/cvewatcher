@@ -260,6 +260,7 @@ active findings.
 ### User & Health
 
 - `GET /user` - Get the current user's profile
+- `POST /user/password` - Change your password: `current_password` + `new_password`. Signs out every other session and returns a fresh token pair for this one; the owner gets an email when SMTP is configured. Wrong current passwords are rate-limited (5 per 15 minutes)
 - `GET /user/notifications` - Your alert settings (webhook URLs and bot tokens are never returned, only whether they are set)
 - `PUT /user/notifications` - Update them: `min_severity`, `always_kev`, `escalations`, `slack_webhook_url`, `teams_webhook_url`, `discord_webhook_url`, `telegram_bot_token` + `telegram_chat_id` (only the fields sent change; `""` removes a channel; each URL must be an HTTPS webhook of that service)
 - `POST /user/notifications/test` - Send a test alert to your channels (5 per hour)

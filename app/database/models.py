@@ -5,6 +5,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Integer,
     String,
     Text,
     TypeDecorator,
@@ -38,6 +39,9 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Carried in every token as "ver"; bumping it (password change or reset)
+    # invalidates all the sessions issued before.
+    session_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"

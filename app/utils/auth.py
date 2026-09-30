@@ -111,6 +111,24 @@ def create_refresh_token(data: dict) -> str:
     return jwt.encode({"alg": ALGORITHM}, to_encode, _JWT_KEY)
 
 
+def issue_tokens(user) -> dict:
+    """A fresh access/refresh pair bound to the user's current session version."""
+    # Tokens carry the stored email: assets are owned by that exact string.
+    claims = {"sub": user.email, "ver": user.session_version or 0}
+    return {
+        "access_token": create_access_token(data=claims),
+        "refresh_token": create_refresh_token(data=claims),
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
+    }
+
+
+def token_matches_session(claims: dict, user) -> bool:
+    """False once the user's sessions were invalidated (password change/reset)."""
+    # Tokens issued before the "ver" claim existed belong to version 0.
+    return claims.get("ver", 0) == (user.session_version or 0)
+
+
 def verify_access_token(token: str) -> dict:
     try:
         decoded = jwt.decode(token, _JWT_KEY, algorithms=[ALGORITHM])

@@ -146,6 +146,7 @@ def test_redis_outage_fails_closed(monkeypatch):
 def test_redis_outage_returns_503_on_protected_endpoints(client, monkeypatch):
     from app.utils.auth import create_access_token
 
+    # Any token: the blocklist is consulted before the user is looked up.
     monkeypatch.setattr(token_blocklist, "_get_redis", lambda: DownRedis())
     headers = {"Authorization": f"Bearer {create_access_token({'sub': 'r@x.it'})}"}
 

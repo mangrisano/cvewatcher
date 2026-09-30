@@ -352,14 +352,13 @@ def test_changing_asset_identity_drops_only_untriaged_findings(client):
         db.close()
 
 
-def test_waiting_on_nvd_does_not_block_other_requests(monkeypatch):
+def test_waiting_on_nvd_does_not_block_other_requests(client, monkeypatch):
     import asyncio
 
     import httpx
 
     from app.main import app
     from app.services import cve_service as cve_service_module
-    from app.utils.auth import create_access_token
 
     nvd_released = None
 
@@ -370,7 +369,7 @@ def test_waiting_on_nvd_does_not_block_other_requests(monkeypatch):
     monkeypatch.setattr(
         cve_service_module.nist_client, "search_cves_for_product", slow_nvd
     )
-    headers = {"Authorization": f"Bearer {create_access_token({'sub': 'k@x.it'})}"}
+    headers = _login(client, "kappa", "k@x.it")
 
     async def scenario():
         nonlocal nvd_released

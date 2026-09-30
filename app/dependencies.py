@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.database.models import Asset
+from app.database.models import Asset, User
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.cve_service import CVEService, cve_service
 from app.services.findings_repository import FindingRepository
 from app.services.token_blocklist import is_token_revoked
 from app.utils import rate_limit
-from app.utils.auth import verify_access_token
+from app.utils.auth import token_matches_session, verify_access_token
 
 
 def get_current_user(
@@ -25,6 +25,12 @@ def get_current_user(
     payload = verify_access_token(token)
     if is_token_revoked(db, payload.get("jti")):
         raise HTTPException(status_code=401, detail="Token has been revoked")
+    user = db.query(User).filter(User.email == payload.get("sub")).first()
+    # A deleted account, or sessions invalidated by a password change/reset.
+    if user is None or not token_matches_session(payload, user):
+        raise HTTPException(
+            status_code=401, detail="Session expired, please sign in again"
+        )
     return payload
 
 

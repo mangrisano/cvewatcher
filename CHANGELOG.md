@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Change your password from the app**: a new _Change password_ item in the
+  user menu (`POST /user/password`). It asks for the current password, signs
+  out every other session, keeps the current one signed in, and emails the
+  owner when SMTP is configured. Wrong current passwords are rate-limited.
+
+### Security
+
+- **Sessions end when the password changes**: tokens now carry a session
+  version, so a password change (or a reset with `utils/reset_password.py`)
+  invalidates every token issued before it. Tokens of a deleted account are
+  rejected at once instead of working until they expire.
+
 ## [2.9.1] - 2026-09-30
 
 ### Fixed

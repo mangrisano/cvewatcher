@@ -120,6 +120,14 @@
                             </svg>
                             Notifications
                         </button>
+                        <button type="button" class="menu-item" id="pwdBtn">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            Change password
+                        </button>
                         <button type="button" class="menu-item" id="logoutBtn">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -392,9 +400,37 @@
                 </form>
             </div>
         </div>
+
+        <div id="pwdModal" class="modal-overlay hidden">
+            <div class="modal">
+                <div class="modal__head">
+                    <span class="modal__title">Change password</span>
+                    <button id="pwdClose" class="modal__close" aria-label="Close">&times;</button>
+                </div>
+                <form id="pwdForm" class="form">
+                    <input id="pwdUsername" type="email" autocomplete="username" class="hidden" tabindex="-1">
+                    <label>Current password
+                        <input id="pwdCurrent" type="password" autocomplete="current-password" required>
+                    </label>
+                    <label>New password
+                        <input id="pwdNew" type="password" autocomplete="new-password" required>
+                    </label>
+                    <label>Confirm new password
+                        <input id="pwdConfirm" type="password" autocomplete="new-password" required>
+                    </label>
+                    <p class="hint">At least 8 characters, with a lowercase letter, an uppercase letter and
+                        a digit. Every other session will be signed out.</p>
+                    <div id="pwdMsg" class="hidden"></div>
+                    <div class="form__actions">
+                        <button type="button" id="pwdCancel" class="btn">Cancel</button>
+                        <button type="submit" id="pwdSubmit" class="btn btn--primary">Change password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/js/app.js?v=23"></script>
+    <script src="/static/js/app.js?v=24"></script>
 </body>
 
 </html>

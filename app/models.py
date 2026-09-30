@@ -58,6 +58,16 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(max_length=1024)
+    new_password: str = Field(max_length=1024)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, password: str) -> str:
+        return validate_password_strength(password)
+
+
 class AssetCreate(BaseModel):
     name: str
     version: Optional[str] = None

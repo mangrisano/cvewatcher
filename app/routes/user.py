@@ -1,19 +1,27 @@
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user
 from app.database import NotificationPreference, User, get_db
-from app.models import NotificationSettings, NotificationSettingsUpdate
+from app.models import (
+    NotificationSettings,
+    NotificationSettingsUpdate,
+    PasswordChangeRequest,
+)
 from app.services.alerts import AlertPreferences, personal_notifiers
-from app.services.notifications import smtp_config
+from app.services.notifications import send_email, smtp_config
+from app.utils.auth import hash_password, issue_tokens, verify_password
 from app.utils.rate_limit import InMemoryRateLimiter
 
 router = APIRouter()
 
 # Test messages hit external services: a few per user per hour is plenty.
 _test_rate_limiter = InMemoryRateLimiter(max_attempts=5, window_seconds=3600)
+# A stolen session must not be able to brute-force the current password.
+_password_rate_limiter = InMemoryRateLimiter(max_attempts=5, window_seconds=900)
 
 _SAMPLE_ALERT = {
     "alert": "test",
@@ -66,6 +74,56 @@ async def get_user_profile(
         "email": db_user.email,
         "created_at": db_user.created_at,
     }
+
+
+def _password_changed_notice(email: str) -> None:
+    when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    send_email(
+        [email],
+        "[CVE Watcher] Your password was changed",
+        f"The password of your CVE Watcher account ({email}) was changed on "
+        f"{when}.\nEvery other session has been signed out.\n\n"
+        "If you did not do this, reset your password now and tell your "
+        "administrator.",
+    )
+
+
+# A plain def: hashing 600k PBKDF2 rounds runs in the threadpool, off the loop.
+@router.post("/user/password", tags=["user"])
+def change_password(
+    body: PasswordChangeRequest,
+    background: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = _account(current_user, db)
+    key = str(user.email).lower()
+    retry_after = _password_rate_limiter.retry_after(key)
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    # 400, not 401: the session is fine, and 401 would sign the client out.
+    if not verify_password(body.current_password, str(user.password_hash)):
+        _password_rate_limiter.record_failure(key)
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    _password_rate_limiter.reset(key)
+    if body.new_password == body.current_password:
+        raise HTTPException(
+            status_code=400,
+            detail="The new password must differ from the current one",
+        )
+
+    user.password_hash = hash_password(body.new_password)  # type: ignore[assignment]
+    # Signs out every session, this one included: it gets a fresh pair below.
+    user.session_version = (user.session_version or 0) + 1  # type: ignore[assignment]
+    db.commit()
+
+    if smtp_config() is not None:
+        background.add_task(_password_changed_notice, str(user.email))
+    return {"message": "Password changed", **issue_tokens(user)}
 
 
 @router.get("/user/notifications", response_model=NotificationSettings, tags=["user"])

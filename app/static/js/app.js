@@ -783,6 +783,59 @@
         );
     }
 
+    // --- Change password ---------------------------------------------------
+    function showPwdMessage(text, ok) {
+        const box = $("pwdMsg");
+        box.className = ok ? "alert--ok" : "alert--error";
+        box.textContent = text;
+    }
+
+    function openPassword() {
+        $("userMenu").classList.add("hidden");
+        $("pwdForm").reset();
+        $("pwdUsername").value = $("userEmailFull").textContent;
+        $("pwdMsg").className = "hidden";
+        $("pwdSubmit").disabled = false;
+        $("pwdModal").classList.remove("hidden");
+        $("pwdCurrent").focus();
+    }
+
+    function closePassword() {
+        $("pwdForm").reset();
+        $("pwdModal").classList.add("hidden");
+    }
+
+    async function changePassword(event) {
+        event.preventDefault();
+        if ($("pwdNew").value !== $("pwdConfirm").value) {
+            showPwdMessage("The new passwords do not match.", false);
+            return;
+        }
+        $("pwdSubmit").disabled = true;
+        try {
+            const res = await apiFetch("/user/password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    current_password: $("pwdCurrent").value,
+                    new_password: $("pwdNew").value,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showPwdMessage(errorText(data, "Could not change the password"), false);
+                return;
+            }
+            // The old tokens are now invalid: keep this session on the new pair.
+            localStorage.setItem(TOKEN_KEY, data.access_token);
+            localStorage.setItem(REFRESH_KEY, data.refresh_token);
+            $("pwdForm").reset();
+            showPwdMessage("Password changed. Every other session was signed out.", true);
+        } finally {
+            $("pwdSubmit").disabled = false;
+        }
+    }
+
     // --- Registration availability -----------------------------------------
     async function checkRegistration() {
         try {
@@ -849,6 +902,10 @@
     on("notifTest", "click", testNotifications);
     CHANNELS.forEach((c) => on(`notif_${c}_clear`, "click", () => clearChannel(c)));
     on("notif_telegram_clear", "click", () => clearChannel("telegram"));
+    on("pwdBtn", "click", openPassword);
+    on("pwdClose", "click", closePassword);
+    on("pwdCancel", "click", closePassword);
+    on("pwdForm", "submit", changePassword);
 
     if (token()) enterApp();
 })();
