@@ -1,9 +1,10 @@
-"""Tests for the periodic monitoring cycle and finding extraction."""
+"""Tests for the periodic monitoring cycle and alert extraction."""
 
 import asyncio
 
 from app.services import scheduler
-from app.services.scheduler import _extract_new_findings, run_monitoring_cycle
+from app.services.alerts import extract_alerts
+from app.services.scheduler import run_monitoring_cycle
 
 
 MONITORING_RESULTS = {
@@ -27,28 +28,35 @@ MONITORING_RESULTS = {
             "asset_version": "3.0",
             "user_email": "u@example.com",
             "new_vulnerabilities": [],
+            "escalations": [
+                {
+                    "cve_id": "CVE-2023-9",
+                    "severity": "CRITICAL",
+                    "alert": "severity_raised",
+                    "previous_severity": "UNKNOWN",
+                    "status": "acknowledged",
+                }
+            ],
         },
     ]
 }
 
 
-class RecordingNotifier:
-    def __init__(self):
-        self.received = None
-
-    async def notify(self, findings):
-        self.received = findings
-
-
-def test_extract_new_findings_flattens_results():
-    findings = _extract_new_findings(MONITORING_RESULTS)
-    assert len(findings) == 1
-    assert findings[0]["cve_id"] == "CVE-2024-1"
-    assert findings[0]["asset_name"] == "nginx"
-    assert findings[0]["user_email"] == "u@example.com"
+def test_extract_alerts_flattens_new_findings_and_escalations():
+    alerts = extract_alerts(MONITORING_RESULTS)
+    assert [a["cve_id"] for a in alerts] == ["CVE-2024-1", "CVE-2023-9"]
+    new, raised = alerts
+    assert new["alert"] == "new"
+    assert new["asset_name"] == "nginx"
+    assert new["user_email"] == "u@example.com"
+    assert new["status"] == "open"
+    assert raised["alert"] == "severity_raised"
+    assert raised["previous_severity"] == "UNKNOWN"
+    assert raised["status"] == "acknowledged"
+    assert raised["asset_name"] == "openssl"
 
 
-def test_run_monitoring_cycle_dispatches_findings(monkeypatch):
+def test_run_monitoring_cycle_delivers_alerts(monkeypatch):
     class FakeService:
         def __init__(self, db):
             pass
@@ -60,14 +68,21 @@ def test_run_monitoring_cycle_dispatches_findings(monkeypatch):
         def close(self):
             pass
 
+    delivered = {}
+
+    async def fake_deliver(db, alerts, notifiers):
+        delivered["alerts"] = alerts
+        delivered["notifiers"] = notifiers
+
     monkeypatch.setattr(scheduler, "CVEMonitoringService", FakeService)
     monkeypatch.setattr(scheduler, "SessionLocal", lambda: FakeSession())
+    monkeypatch.setattr(scheduler, "deliver_alerts", fake_deliver)
 
-    recorder = RecordingNotifier()
-    findings = asyncio.run(run_monitoring_cycle(notifiers=[recorder]))
+    admin = object()
+    alerts = asyncio.run(run_monitoring_cycle(notifiers=[admin]))
 
-    assert len(findings) == 1
-    assert recorder.received == findings
+    assert len(alerts) == 2
+    assert delivered == {"alerts": alerts, "notifiers": [admin]}
 
 
 def test_run_monitoring_cycle_handles_service_error(monkeypatch):

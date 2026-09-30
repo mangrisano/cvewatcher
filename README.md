@@ -169,22 +169,40 @@ The application can periodically scan every registered asset against the NIST NV
 and alert on newly discovered vulnerabilities. It is **opt-in** and configured via
 environment variables (see `.env.example`):
 
-| Variable                   | Default   | Description                                   |
-| -------------------------- | --------- | --------------------------------------------- |
-| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler               |
-| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                         |
-| `ENRICH_ENABLED`           | `true`    | Add CISA KEV flag + FIRST.org EPSS score      |
-| `DIGEST_ENABLED`           | `false`   | Email each user a periodic digest of findings |
-| `DIGEST_INTERVAL_MINUTES`  | `1440`    | Minutes between digest emails                 |
-| `NOTIFY_CONSOLE`           | `true`    | Log new findings via the application logger   |
-| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST new findings as JSON to this URL         |
-| `NOTIFY_SLACK_WEBHOOK_URL` | _(unset)_ | Post findings to a Slack incoming webhook     |
-| `NOTIFY_EMAIL_HOST` …      | _(unset)_ | Send findings over SMTP (see `.env.example`)  |
+| Variable                   | Default   | Description                                    |
+| -------------------------- | --------- | ---------------------------------------------- |
+| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler                |
+| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                          |
+| `ENRICH_ENABLED`           | `true`    | Add CISA KEV flag + FIRST.org EPSS score       |
+| `DIGEST_ENABLED`           | `false`   | Email each user a periodic digest of findings  |
+| `DIGEST_INTERVAL_MINUTES`  | `1440`    | Minutes between digest emails                  |
+| `NOTIFY_CONSOLE`           | `true`    | Log alerts via the application logger          |
+| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST every alert as JSON to this URL           |
+| `NOTIFY_SLACK_WEBHOOK_URL` | _(unset)_ | Post every alert to a Slack incoming webhook   |
+| `NOTIFY_EMAIL_HOST` …      | _(unset)_ | SMTP relay for all emails (see `.env.example`) |
 
-When enabled, a scan runs at startup and then on the configured interval; only
-newly detected CVEs trigger notifications. Each notification includes the KEV
-flag and EPSS score so the most urgent findings stand out. Independently,
-`DIGEST_ENABLED` emails each user a periodic digest of their active findings.
+When enabled, a scan runs at startup and then on the configured interval. An
+alert is raised when a CVE is first found on an asset, and when a known one
+**enters the CISA KEV catalog** or **its severity rises** (NVD often publishes
+CVEs unscored and rates them days later). Each alert includes the KEV flag and
+EPSS score. Manual scans (`/assets/{id}/monitor`, `/assets/monitoring/scan-all`)
+raise the same alerts.
+
+Alerts go to two audiences:
+
+- **Admins** receive every alert on the `NOTIFY_*` channels; the email feed goes
+  to `NOTIFY_EMAIL_TO` and to every address in `ADMIN_EMAILS`.
+- **Each user** receives the alerts on their own assets, by email to their
+  account address (always on when SMTP is configured) and optionally on their
+  own Slack, Microsoft Teams or Discord webhook, or Telegram bot. In the
+  dashboard (user menu →
+  _Notifications_) each user picks the minimum severity (default **High**),
+  whether KEV findings always alert, and whether to be told about escalations.
+  Findings marked _fixed_ or _false positive_ never alert; _accepted risk_ ones
+  only alert when they enter KEV.
+
+Independently, `DIGEST_ENABLED` emails each user a periodic digest of their
+active findings.
 
 ## API Endpoints
 
@@ -227,6 +245,9 @@ flag and EPSS score so the most urgent findings stand out. Independently,
 ### User & Health
 
 - `GET /user` - Get the current user's profile
+- `GET /user/notifications` - Your alert settings (webhook URLs and bot tokens are never returned, only whether they are set)
+- `PUT /user/notifications` - Update them: `min_severity`, `always_kev`, `escalations`, `slack_webhook_url`, `teams_webhook_url`, `discord_webhook_url`, `telegram_bot_token` + `telegram_chat_id` (only the fields sent change; `""` removes a channel; each URL must be an HTTPS webhook of that service)
+- `POST /user/notifications/test` - Send a test alert to your channels (5 per hour)
 - `GET /health` - Service health check
 - `GET /metrics` - Prometheus metrics (aggregate assets & findings)
 

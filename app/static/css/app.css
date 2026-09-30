@@ -410,3 +410,14 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-we
 .form select { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 9px 11px; font-size: 14px; outline: none; }
 .form select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
 .form__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.form__actions--split { justify-content: space-between; }
+.form label.check { flex-direction: row; align-items: flex-start; }
+.channel-row { display: flex; gap: 8px; align-items: center; }
+.channel-row input { flex: 1; min-width: 0; }
+.alert--ok {
+    background: var(--accent-weak);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 13px;
+}

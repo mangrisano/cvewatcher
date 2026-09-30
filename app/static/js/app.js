@@ -593,6 +593,125 @@
         URL.revokeObjectURL(url);
     }
 
+    // --- Notifications -----------------------------------------------------
+    const CHANNELS = ["slack", "teams", "discord"];
+    const clearedChannels = new Set();
+
+    function showNotifMessage(text, ok) {
+        const box = $("notifMsg");
+        box.className = ok ? "alert--ok" : "alert--error";
+        box.textContent = text;
+    }
+
+    function errorText(data, fallback) {
+        // FastAPI validation errors carry a list of {msg} objects.
+        if (Array.isArray(data.detail)) {
+            return data.detail.map((d) => d.msg.replace(/^Value error, /, "")).join("; ");
+        }
+        return data.detail || fallback;
+    }
+
+    function renderChannel(channel, configured) {
+        $(`notif_${channel}_state`).textContent = configured
+            ? "(configured — enter new values to replace it)"
+            : "(not set)";
+        $(`notif_${channel}_clear`).classList.toggle("hidden", !configured);
+    }
+
+    function fillNotifications(settings) {
+        $("notifMinSeverity").value = settings.min_severity;
+        $("notifAlwaysKev").checked = settings.always_kev;
+        $("notifEscalations").checked = settings.escalations;
+        $("notifEmailInfo").textContent = settings.email_available
+            ? `Alerts are always emailed to ${settings.email}.`
+            : "Email is not configured on this server: add a chat channel to get alerts.";
+        clearedChannels.clear();
+        CHANNELS.forEach((c) => {
+            $(`notif_${c}`).value = "";
+            renderChannel(c, settings[`${c}_configured`]);
+        });
+        $("notif_telegram_token").value = "";
+        $("notif_telegram_chat").value = "";
+        renderChannel("telegram", settings.telegram_configured);
+    }
+
+    async function openNotifications() {
+        $("userMenu").classList.add("hidden");
+        $("notifMsg").className = "hidden";
+        const res = await apiFetch("/user/notifications");
+        if (!res.ok) return;
+        fillNotifications(await res.json());
+        $("notifModal").classList.remove("hidden");
+    }
+
+    function closeNotifications() {
+        $("notifModal").classList.add("hidden");
+    }
+
+    function clearChannel(channel) {
+        clearedChannels.add(channel);
+        if (channel === "telegram") {
+            $("notif_telegram_token").value = "";
+            $("notif_telegram_chat").value = "";
+        } else {
+            $(`notif_${channel}`).value = "";
+        }
+        renderChannel(channel, false);
+    }
+
+    async function saveNotifications(event) {
+        event.preventDefault();
+        const payload = {
+            min_severity: $("notifMinSeverity").value,
+            always_kev: $("notifAlwaysKev").checked,
+            escalations: $("notifEscalations").checked,
+        };
+        CHANNELS.forEach((c) => {
+            const url = $(`notif_${c}`).value.trim();
+            if (url) payload[`${c}_webhook_url`] = url;
+            else if (clearedChannels.has(c)) payload[`${c}_webhook_url`] = "";
+        });
+        const token = $("notif_telegram_token").value.trim();
+        const chat = $("notif_telegram_chat").value.trim();
+        if (token || chat) {
+            payload.telegram_bot_token = token;
+            payload.telegram_chat_id = chat;
+        } else if (clearedChannels.has("telegram")) {
+            payload.telegram_bot_token = "";
+            payload.telegram_chat_id = "";
+        }
+        const res = await apiFetch("/user/notifications", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            showNotifMessage(errorText(data, "Could not save settings"), false);
+            return false;
+        }
+        fillNotifications(data);
+        showNotifMessage("Settings saved.", true);
+        return false;
+    }
+
+    async function testNotifications() {
+        const res = await apiFetch("/user/notifications/test", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            showNotifMessage(errorText(data, "Test failed"), false);
+            return;
+        }
+        const results = Object.entries(data.results || {});
+        const failed = results.filter(([, ok]) => !ok).map(([name]) => name);
+        showNotifMessage(
+            failed.length
+                ? `Test not delivered to: ${failed.join(", ")}.`
+                : `Test sent to: ${results.map(([name]) => name).join(", ")}.`,
+            !failed.length
+        );
+    }
+
     // --- Registration availability -----------------------------------------
     async function checkRegistration() {
         try {
@@ -648,6 +767,13 @@
     on("assetModalClose", "click", closeAssetModal);
     on("assetCancel", "click", closeAssetModal);
     on("assetForm", "submit", submitAsset);
+    on("notifBtn", "click", openNotifications);
+    on("notifClose", "click", closeNotifications);
+    on("notifCancel", "click", closeNotifications);
+    on("notifForm", "submit", saveNotifications);
+    on("notifTest", "click", testNotifications);
+    CHANNELS.forEach((c) => on(`notif_${c}_clear`, "click", () => clearChannel(c)));
+    on("notif_telegram_clear", "click", () => clearChannel("telegram"));
 
     if (token()) enterApp();
 })();

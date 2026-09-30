@@ -53,6 +53,11 @@ class EnrichmentService:
     def enabled(self) -> bool:
         return get_settings().enrich_enabled
 
+    @property
+    def kev_catalog_loaded(self) -> bool:
+        """Whether ``kev=False`` on a finding really means "not in KEV"."""
+        return self.enabled and self._kev_ids is not None
+
     async def kev_ids(self) -> set[str]:
         """Return the set of CVE ids in the CISA KEV catalog (cached, best-effort)."""
         now = time.monotonic()

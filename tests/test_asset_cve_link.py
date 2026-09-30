@@ -54,7 +54,7 @@ def test_store_cve_links_asset_without_tenant_data():
         assert link is not None
 
         # The existing-ids lookup finds only linked candidates.
-        found = repo.linked_cve_ids(asset.id, [_CVE, "CVE-2099-9999"])
+        found = set(repo.links(asset.id, [_CVE, "CVE-2099-9999"]))
         assert found == {_CVE}
 
         # Storing the same finding again is idempotent (no duplicate link).
@@ -82,8 +82,8 @@ def test_existing_ids_are_scoped_per_asset():
         repo.link(mine.id, vuln)
 
         # The other asset is not linked, even for the same shared CVE.
-        assert repo.linked_cve_ids(other.id, [_CVE]) == set()
-        assert repo.linked_cve_ids(mine.id, [_CVE]) == {_CVE}
+        assert set(repo.links(other.id, [_CVE])) == set()
+        assert set(repo.links(mine.id, [_CVE])) == {_CVE}
     finally:
         db.query(AssetCVE).filter(AssetCVE.cve_id == _CVE).delete()
         db.query(CVE).filter(CVE.id == _CVE).delete()

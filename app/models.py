@@ -3,7 +3,21 @@ import re
 from enum import StrEnum
 from uuid import UUID
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+
+from app.services.notifications import (
+    check_telegram_chat_id,
+    check_telegram_token,
+    check_webhook_url,
+)
 
 
 def validate_password_strength(password: str) -> str:
@@ -155,3 +169,67 @@ class FindingStatusResponse(BaseModel):
     updated_at: Optional[datetime.datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AlertSeverity(StrEnum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
+class NotificationSettings(BaseModel):
+    """A user's alert settings. Webhook URLs are secrets: only their presence."""
+
+    email: str
+    email_available: bool
+    min_severity: AlertSeverity
+    always_kev: bool
+    escalations: bool
+    slack_configured: bool
+    teams_configured: bool
+    discord_configured: bool
+    telegram_configured: bool
+
+
+class NotificationSettingsUpdate(BaseModel):
+    """Only the fields sent change; an empty webhook URL removes it.
+
+    Telegram needs both the bot token and the chat id; sending either one empty
+    removes Telegram.
+    """
+
+    min_severity: Optional[AlertSeverity] = None
+    always_kev: Optional[bool] = None
+    escalations: Optional[bool] = None
+    slack_webhook_url: Optional[str] = Field(default=None, max_length=500)
+    teams_webhook_url: Optional[str] = Field(default=None, max_length=500)
+    discord_webhook_url: Optional[str] = Field(default=None, max_length=500)
+    telegram_bot_token: Optional[str] = Field(default=None, max_length=100)
+    telegram_chat_id: Optional[str] = Field(default=None, max_length=64)
+
+    @field_validator("slack_webhook_url", "teams_webhook_url", "discord_webhook_url")
+    @classmethod
+    def _webhook(cls, value: Optional[str], info: ValidationInfo) -> Optional[str]:
+        if not value or not value.strip():
+            return value
+        channel = (info.field_name or "").removesuffix("_webhook_url")
+        return check_webhook_url(channel, value)
+
+    @field_validator("telegram_bot_token")
+    @classmethod
+    def _telegram_token(cls, value: Optional[str]) -> Optional[str]:
+        return check_telegram_token(value) if value and value.strip() else value
+
+    @field_validator("telegram_chat_id")
+    @classmethod
+    def _telegram_chat(cls, value: Optional[str]) -> Optional[str]:
+        return check_telegram_chat_id(value) if value and value.strip() else value
+
+    @model_validator(mode="after")
+    def _telegram_pair(self) -> "NotificationSettingsUpdate":
+        token_set = bool(self.telegram_bot_token and self.telegram_bot_token.strip())
+        chat_set = bool(self.telegram_chat_id and self.telegram_chat_id.strip())
+        if token_set != chat_set:
+            raise ValueError("Telegram needs both a bot token and a chat id")
+        return self

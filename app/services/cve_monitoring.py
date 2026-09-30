@@ -11,7 +11,7 @@ from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import NvdUnavailableError
 from app.services.enrichment import EnrichmentService, enrichment_service
 from app.services.sources import VulnerabilitySource, default_sources
-from app.services import matching
+from app.services import alerts, matching
 from app.services.severity import severity_rank
 from app.models import AssetResponse
 
@@ -96,14 +96,23 @@ class CVEMonitoringService:
             candidate_cve_ids = [
                 vuln["cve_id"] for vuln in current_vulnerabilities if vuln.get("cve_id")
             ]
-            existing_cve_ids = self.findings.linked_cve_ids(asset.id, candidate_cve_ids)
+            existing = self.findings.links(asset.id, candidate_cve_ids)
+            kev_known = self.enricher.kev_catalog_loaded
 
             new_vulnerabilities = []
+            escalations = []
             for vuln in current_vulnerabilities:
                 cve_id = vuln.get("cve_id")
-                if cve_id and cve_id not in existing_cve_ids:
+                if not cve_id:
+                    continue
+                link = existing.get(cve_id)
+                if link is None:
                     new_vulnerabilities.append(vuln)
-                    self.findings.link(asset.id, vuln)
+                    self.findings.link(asset.id, vuln, kev_known=kev_known)
+                else:
+                    escalations.extend(alerts.observe(link, vuln, kev_known))
+            if existing:
+                self.findings.save()
 
             return {
                 "asset_id": asset.id,
@@ -112,7 +121,8 @@ class CVEMonitoringService:
                 "user_email": asset.user_email,
                 "total_vulnerabilities": len(current_vulnerabilities),
                 "new_vulnerabilities": new_vulnerabilities,
-                "existing_vulnerabilities": len(existing_cve_ids),
+                "escalations": escalations,
+                "existing_vulnerabilities": len(existing),
                 "last_monitored": datetime.now(timezone.utc),
                 "status": "success",
             }

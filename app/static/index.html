@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=13">
+    <link rel="stylesheet" href="/static/css/app.css?v=14">
 </head>
 
 <body>
@@ -112,6 +112,14 @@
                             </div>
                         </div>
                         <div class="menu-sep"></div>
+                        <button type="button" class="menu-item" id="notifBtn">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                            </svg>
+                            Notifications
+                        </button>
                         <button type="button" class="menu-item" id="logoutBtn">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -314,9 +322,69 @@
                 </form>
             </div>
         </div>
+
+        <div id="notifModal" class="modal-overlay hidden">
+            <div class="modal">
+                <div class="modal__head">
+                    <span class="modal__title">Notifications</span>
+                    <button id="notifClose" class="modal__close" aria-label="Close">&times;</button>
+                </div>
+                <form id="notifForm" class="form">
+                    <p id="notifEmailInfo" class="hint"></p>
+                    <label>Alert me from severity
+                        <select id="notifMinSeverity">
+                            <option value="CRITICAL">Critical</option>
+                            <option value="HIGH">High and above</option>
+                            <option value="MEDIUM">Medium and above</option>
+                            <option value="LOW">Everything</option>
+                        </select>
+                    </label>
+                    <label class="check"><input type="checkbox" id="notifAlwaysKev"> Always alert on actively
+                        exploited (KEV) vulnerabilities</label>
+                    <label class="check"><input type="checkbox" id="notifEscalations"> Alert when a known
+                        vulnerability enters KEV or its severity rises</label>
+                    <label>Slack webhook <span id="notif_slack_state" class="hint"></span>
+                        <span class="channel-row">
+                            <input id="notif_slack" type="url" placeholder="https://hooks.slack.com/services/…">
+                            <button type="button" id="notif_slack_clear" class="btn btn--sm">Remove</button>
+                        </span>
+                    </label>
+                    <label>Microsoft Teams webhook <span id="notif_teams_state" class="hint"></span>
+                        <span class="channel-row">
+                            <input id="notif_teams" type="url" placeholder="Teams Workflows webhook URL">
+                            <button type="button" id="notif_teams_clear" class="btn btn--sm">Remove</button>
+                        </span>
+                    </label>
+                    <label>Discord webhook <span id="notif_discord_state" class="hint"></span>
+                        <span class="channel-row">
+                            <input id="notif_discord" type="url" placeholder="https://discord.com/api/webhooks/…">
+                            <button type="button" id="notif_discord_clear" class="btn btn--sm">Remove</button>
+                        </span>
+                    </label>
+                    <label>Telegram <span id="notif_telegram_state" class="hint"></span>
+                        <span class="channel-row">
+                            <input id="notif_telegram_token" type="password" autocomplete="off"
+                                placeholder="Bot token from @BotFather">
+                            <input id="notif_telegram_chat" placeholder="Chat id">
+                            <button type="button" id="notif_telegram_clear" class="btn btn--sm">Remove</button>
+                        </span>
+                        <span class="hint">Send your bot a message first; the chat id of a user, group or
+                            @channel.</span>
+                    </label>
+                    <div id="notifMsg" class="hidden"></div>
+                    <div class="form__actions form__actions--split">
+                        <button type="button" id="notifTest" class="btn">Send test</button>
+                        <span>
+                            <button type="button" id="notifCancel" class="btn">Cancel</button>
+                            <button type="submit" class="btn btn--primary">Save</button>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/js/app.js?v=17"></script>
+    <script src="/static/js/app.js?v=19"></script>
 </body>
 
 </html>

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database.models import CVE, AssetCVE
 from app.models import FindingStatus
+from app.services.severity import severity_band
 
 logger = logging.getLogger(__name__)
 
@@ -33,23 +34,31 @@ class FindingRepository:
         )
         return {cve_id: status for cve_id, status in rows}
 
-    def linked_cve_ids(self, asset_id: AssetId, candidates: Iterable[str]) -> set[str]:
-        """CVE ids already linked to the asset, among the given candidates.
+    def links(
+        self, asset_id: AssetId, candidates: Iterable[str]
+    ) -> dict[str, AssetCVE]:
+        """The asset's existing links among the given CVE ids, keyed by CVE id.
 
         Only the candidate ids are queried, so this never scans the whole table.
         """
         candidates = list(candidates)
         if not candidates:
-            return set()
+            return {}
         rows = (
-            self.db.query(AssetCVE.cve_id)
+            self.db.query(AssetCVE)
             .filter(AssetCVE.asset_id == asset_id, AssetCVE.cve_id.in_(candidates))
             .all()
         )
-        return {row[0] for row in rows}
+        return {str(row.cve_id): row for row in rows}
 
-    def link(self, asset_id: AssetId, finding: dict[str, Any]) -> None:
-        """Persist a newly seen finding; best-effort (errors are logged)."""
+    def link(
+        self, asset_id: AssetId, finding: dict[str, Any], kev_known: bool = False
+    ) -> None:
+        """Persist a newly seen finding; best-effort (errors are logged).
+
+        ``kev_known`` says whether the KEV catalog was available, so a missing
+        catalog is not recorded as "not in KEV".
+        """
         cve_id = finding.get("cve_id")
         if not cve_id:
             return
@@ -67,11 +76,26 @@ class FindingRepository:
                     )
                 )
             if not self._get_link(asset_id, cve_id):
-                self.db.add(AssetCVE(asset_id=asset_id, cve_id=cve_id))
+                self.db.add(
+                    AssetCVE(
+                        asset_id=asset_id,
+                        cve_id=cve_id,
+                        kev=bool(finding.get("kev")) if kev_known else None,
+                        severity=severity_band(finding.get("severity")),
+                    )
+                )
             self.db.commit()
             logger.info("Stored new CVE %s for asset %s", cve_id, asset_id)
         except Exception as e:
             logger.error("Error storing CVE %s: %s", cve_id, e)
+            self.db.rollback()
+
+    def save(self) -> None:
+        """Commit changes made to loaded links; best-effort."""
+        try:
+            self.db.commit()
+        except Exception as e:
+            logger.error("Error saving finding state: %s", e)
             self.db.rollback()
 
     def set_status(

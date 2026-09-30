@@ -1,4 +1,14 @@
-from sqlalchemy import Column, String, DateTime, Text, Float, JSON, ForeignKey
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    String,
+    Text,
+    true,
+)
 from uuid import uuid4
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
@@ -87,6 +97,35 @@ class AssetCVE(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # Last KEV/severity seen by monitoring, to detect escalations; NULL until
+    # first observed, so existing findings get a silent baseline.
+    kev = Column(Boolean, nullable=True)
+    severity = Column(String(20), nullable=True)
 
     def __repr__(self):
         return f"<AssetCVE(asset_id='{self.asset_id}', cve_id='{self.cve_id}')>"
+
+
+class NotificationPreference(Base):
+    """A user's alert settings; users without a row get the defaults."""
+
+    __tablename__ = "notification_preferences"
+
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    min_severity = Column(
+        String(10), nullable=False, default="HIGH", server_default="HIGH"
+    )
+    always_kev = Column(Boolean, nullable=False, default=True, server_default=true())
+    escalations = Column(Boolean, nullable=False, default=True, server_default=true())
+    slack_webhook_url = Column(String(500), nullable=True)
+    teams_webhook_url = Column(String(500), nullable=True)
+    discord_webhook_url = Column(String(500), nullable=True)
+    telegram_bot_token = Column(String(100), nullable=True)
+    telegram_chat_id = Column(String(64), nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

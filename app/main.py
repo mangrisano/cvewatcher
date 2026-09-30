@@ -23,6 +23,8 @@ logging.basicConfig(
     level=get_settings().log_level.upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
+# httpx logs every request URL at INFO, and webhook URLs embed their secret.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 

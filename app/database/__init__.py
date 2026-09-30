@@ -1,7 +1,14 @@
 from pathlib import Path
 
 from app.database.connection import DATABASE_URL, engine, Base, get_db
-from app.database.models import User, Asset, CVE, RevokedToken, AssetCVE
+from app.database.models import (
+    CVE,
+    Asset,
+    AssetCVE,
+    NotificationPreference,
+    RevokedToken,
+    User,
+)
 
 
 def create_tables():
@@ -43,6 +50,7 @@ __all__ = [
     "CVE",
     "RevokedToken",
     "AssetCVE",
+    "NotificationPreference",
     "get_db",
     "create_tables",
     "init_schema",

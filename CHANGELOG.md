@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Per-user alerts**: each user now gets the alerts on their own assets, by
+  email to their account address (whenever SMTP is configured) and optionally
+  on their own Slack, Microsoft Teams or Discord webhook, or Telegram bot.
+  Users choose the
+  minimum severity (default High), whether KEV findings always alert and
+  whether to hear about escalations, from _Notifications_ in the user menu or
+  via `GET/PUT /user/notifications`; `POST /user/notifications/test` sends a
+  test alert. Webhook URLs must belong to the chosen service; webhook URLs and
+  bot tokens are never returned by the API.
+- **Escalation alerts**: a known finding raises an alert when it enters the
+  CISA KEV catalog or when its severity rises (e.g. an unscored CVE rated
+  Critical days later). The first scan after upgrading records the current
+  state without alerting.
+
+### Changed
+
+- The admin email feed now also goes to every address in `ADMIN_EMAILS`, not
+  only to `NOTIFY_EMAIL_TO`. Admins still receive every alert on the
+  `NOTIFY_*` channels.
+- Manual scans (`/assets/{id}/monitor`, `/assets/monitoring/scan-all`) now
+  send alerts. They record new findings as seen, so until now the scheduler
+  never alerted on findings a manual scan found first.
+- Notifiers report whether delivery succeeded, and a webhook answering with an
+  HTTP error is logged as a failure. Webhook URLs are no longer written to the
+  logs.
+
 ## [2.6.2] - 2026-09-30
 
 ### Security

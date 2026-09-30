@@ -13,40 +13,23 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.database.connection import SessionLocal
 from app.config import get_settings
+from app.services.alerts import deliver_alerts, extract_alerts
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.digest import digest_enabled, run_digest_cycle
-from app.services.notifications import Notifier, build_notifiers_from_env, dispatch
+from app.services.notifications import Notifier, build_notifiers_from_env
 
 logger = logging.getLogger(__name__)
 
 _scheduler: Optional[AsyncIOScheduler] = None
 
 
-def _extract_new_findings(monitoring_results: dict[str, Any]) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    for asset_result in monitoring_results.get("asset_results", []):
-        for vuln in asset_result.get("new_vulnerabilities", []):
-            findings.append(
-                {
-                    "asset_name": asset_result.get("asset_name"),
-                    "asset_version": asset_result.get("asset_version"),
-                    "user_email": asset_result.get("user_email"),
-                    "cve_id": vuln.get("cve_id"),
-                    "severity": vuln.get("severity"),
-                    "score": vuln.get("score"),
-                    "cve_url": vuln.get("cve_url"),
-                    "publish_date": vuln.get("publish_date"),
-                    "kev": vuln.get("kev", False),
-                    "epss": vuln.get("epss"),
-                }
-            )
-    return findings
-
-
 async def run_monitoring_cycle(
     notifiers: Optional[list[Notifier]] = None,
 ) -> list[dict[str, Any]]:
-    """Run one monitoring pass over all assets and notify about new findings."""
+    """Run one monitoring pass over all assets and send the resulting alerts.
+
+    ``notifiers`` are the instance-wide channels (default: from the env).
+    """
     if notifiers is None:
         notifiers = build_notifiers_from_env()
 
@@ -54,10 +37,10 @@ async def run_monitoring_cycle(
     try:
         service = CVEMonitoringService(db)
         results = await service.monitor_all_assets()
-        findings = _extract_new_findings(results)
-        logger.info("Monitoring cycle complete: %d new finding(s)", len(findings))
-        await dispatch(findings, notifiers)
-        return findings
+        found = extract_alerts(results)
+        logger.info("Monitoring cycle complete: %d alert(s)", len(found))
+        await deliver_alerts(db, found, notifiers)
+        return found
     except Exception as e:
         logger.error("Monitoring cycle failed: %s", e)
         return []

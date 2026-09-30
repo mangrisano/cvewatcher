@@ -20,9 +20,11 @@ from app.dependencies import (
     get_monitoring_service,
     get_owned_asset,
 )
+from app.services.alerts import deliver_alerts, extract_alerts
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
+from app.services.notifications import build_notifiers_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -216,10 +218,12 @@ async def delete_asset(
 @router.get("/{asset_id}/monitor")
 async def monitor_asset_cves(
     asset: Asset = Depends(get_owned_asset),
+    db: Session = Depends(get_db),
     monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
     try:
         result = await monitoring_service.monitor_asset(asset)
+        await _send_alerts(db, [result])
 
         return {
             "message": f"Monitoring completed for asset '{asset.name}'",
@@ -275,9 +279,19 @@ async def scan_all_assets(
         for asset in user_assets:
             result = await monitoring_service.monitor_asset(asset)
             scan_results["asset_results"].append(result)
+        await _send_alerts(db, scan_results["asset_results"])
 
         return scan_results
 
     except Exception:
         logger.exception("Error scanning assets")
         raise HTTPException(status_code=500, detail="Error scanning assets")
+
+
+async def _send_alerts(db: Session, asset_results: list[dict]) -> None:
+    # A scan records new findings as seen: alert now or the scheduler never will.
+    await deliver_alerts(
+        db,
+        extract_alerts({"asset_results": asset_results}),
+        build_notifiers_from_env(),
+    )
