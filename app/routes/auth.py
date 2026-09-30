@@ -10,13 +10,17 @@ from app.models import (
     RefreshTokenRequest,
     UserLoginRequest,
     UserRegistrationRequest,
+    VerifyEmailRequest,
 )
-from app.services.password_reset import (
+from app.services.account_emails import (
     consume_reset_token,
+    consume_verification_token,
+    email_links_available,
     issue_reset_token,
-    reset_available,
+    issue_verification_token,
     send_password_changed_notice,
     send_reset_email,
+    send_verification_email,
 )
 from app.utils.auth import (
     hash_password,
@@ -70,13 +74,33 @@ def _registration_open(db: Session) -> bool:
 
 @router.get("/auth/registration-status", tags=["auth"])
 def registration_status(db: Session = Depends(get_db)):
-    return {"open": _registration_open(db), "password_reset": reset_available()}
+    return {"open": _registration_open(db), "password_reset": email_links_available()}
+
+
+def _limit_email_links(request: Request, email: str) -> None:
+    """429 once an address or an IP asked for too many emailed links."""
+    client_ip = request.client.host if request.client else "unknown"
+    retry_after = max(
+        reset_ip_rate_limiter.retry_after(client_ip),
+        reset_email_rate_limiter.retry_after(email),
+    )
+    if retry_after > 0:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    reset_ip_rate_limiter.record_failure(client_ip)
+    reset_email_rate_limiter.record_failure(email)
 
 
 # Plain defs: hashing 600k PBKDF2 rounds runs in the threadpool, off the loop.
 @router.post("/auth/register", tags=["auth"])
 def register_user(
-    user: UserRegistrationRequest, request: Request, db: Session = Depends(get_db)
+    user: UserRegistrationRequest,
+    request: Request,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
 ):
     if not _registration_open(db):
         raise HTTPException(status_code=403, detail="Registration is disabled")
@@ -102,15 +126,27 @@ def register_user(
         raise HTTPException(status_code=400, detail="User already exists")
 
     hashed_password = hash_password(user.password)
-    db_user = User(username=user.username, email=email, password_hash=hashed_password)
+    # With email set up, a new account stays inactive until its link is opened.
+    verify = email_links_available()
+    db_user = User(
+        username=user.username,
+        email=email,
+        password_hash=hashed_password,
+        email_verified=not verify,
+    )
 
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
 
+    if verify:
+        token = issue_verification_token(db, db_user)
+        background.add_task(send_verification_email, email, token)
+
     return {
         "message": f"User {user.username} registered successfully",
         "email": email,
+        "verification_required": verify,
     }
 
 
@@ -141,6 +177,14 @@ def login_user(user: UserLoginRequest, request: Request, db: Session = Depends(g
 
     # The per-IP counter is not reset: one valid account must not unlock spraying.
     login_rate_limiter.reset(rate_limit_key)
+
+    # Checked after the password, so it can't reveal which addresses have accounts.
+    # Without email set up there is no way to confirm, so the check is skipped.
+    if not db_user.email_verified and email_links_available():
+        raise HTTPException(
+            status_code=403,
+            detail="Confirm your email address first: check your inbox for the link.",
+        )
 
     if password_needs_rehash(str(db_user.password_hash)):
         db_user.password_hash = hash_password(user.password)  # type: ignore[assignment]
@@ -222,23 +266,11 @@ def forgot_password(
     background: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    if not reset_available():
+    if not email_links_available():
         raise HTTPException(status_code=503, detail="Password reset is not available")
 
-    client_ip = request.client.host if request.client else "unknown"
     email = body.email.lower()
-    retry_after = max(
-        reset_ip_rate_limiter.retry_after(client_ip),
-        reset_email_rate_limiter.retry_after(email),
-    )
-    if retry_after > 0:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many reset requests. Please try again later.",
-            headers={"Retry-After": str(retry_after)},
-        )
-    reset_ip_rate_limiter.record_failure(client_ip)
-    reset_email_rate_limiter.record_failure(email)
+    _limit_email_links(request, email)
 
     # Same answer whether or not the account exists; the email goes out after
     # the response, so the SMTP round-trip doesn't give it away either.
@@ -265,9 +297,49 @@ def reset_password(
 
     db_user.password_hash = hash_password(body.new_password)  # type: ignore[assignment]
     db_user.session_version = (db_user.session_version or 0) + 1  # type: ignore[assignment]
+    # The link reached this inbox, which is what confirming the address proves.
+    db_user.email_verified = True  # type: ignore[assignment]
     db.commit()
 
     client_ip = request.client.host if request.client else "unknown"
     login_rate_limiter.reset(f"{str(db_user.email).lower()}:{client_ip}")
     background.add_task(send_password_changed_notice, str(db_user.email))
     return {"message": "Password reset. You can now sign in."}
+
+
+@router.post("/auth/verify-email", tags=["auth"])
+def verify_email(body: VerifyEmailRequest, db: Session = Depends(get_db)):
+    db_user = consume_verification_token(db, body.token)
+    if db_user is None:
+        raise HTTPException(
+            status_code=400,
+            detail="This confirmation link is invalid or has expired",
+        )
+    db_user.email_verified = True  # type: ignore[assignment]
+    db.commit()
+    return {"message": "Email confirmed. You can now sign in."}
+
+
+_VERIFICATION_SENT = {
+    "message": "If that account is waiting for confirmation, a new link is on its way."
+}
+
+
+@router.post("/auth/resend-verification", tags=["auth"])
+def resend_verification(
+    body: ForgotPasswordRequest,
+    request: Request,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    if not email_links_available():
+        raise HTTPException(status_code=503, detail="Email is not available")
+
+    email = body.email.lower()
+    _limit_email_links(request, email)
+
+    db_user = db.query(User).filter(_email_matches(email)).first()
+    if db_user is not None and not db_user.email_verified:
+        token = issue_verification_token(db, db_user)
+        background.add_task(send_verification_email, str(db_user.email), token)
+    return _VERIFICATION_SENT

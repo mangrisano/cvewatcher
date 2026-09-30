@@ -12,7 +12,7 @@ from app.models import (
 )
 from app.services.alerts import AlertPreferences, personal_notifiers
 from app.services.notifications import smtp_config
-from app.services.password_reset import send_password_changed_notice
+from app.services.account_emails import send_password_changed_notice
 from app.utils.auth import hash_password, issue_tokens, verify_password
 from app.utils.rate_limit import InMemoryRateLimiter
 

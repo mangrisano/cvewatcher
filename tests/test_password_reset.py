@@ -7,9 +7,9 @@ import pytest
 
 from app.config import get_settings
 from app.database.connection import SessionLocal
-from app.database.models import PasswordResetToken
+from app.database.models import PasswordResetToken, User
 from app.routes import auth as auth_routes
-from app.services import password_reset
+from app.services import account_emails
 from app.utils.rate_limit import reset_ip_rate_limiter
 
 PASSWORD = "Password123"
@@ -20,8 +20,9 @@ NEW_PASSWORD = "NewPassword456"
 def reset_on(monkeypatch):
     """Reset enabled; returns the (email, token) pairs that would be emailed."""
     monkeypatch.setenv("PUBLIC_URL", "https://cvw.example.com/")
-    monkeypatch.setattr(password_reset, "smtp_config", lambda: {"host": "smtp"})
+    monkeypatch.setattr(account_emails, "smtp_config", lambda: {"host": "smtp"})
     monkeypatch.setattr(auth_routes, "send_password_changed_notice", lambda e: None)
+    monkeypatch.setattr(auth_routes, "send_verification_email", lambda e, t: None)
     sent = []
     monkeypatch.setattr(
         auth_routes,
@@ -39,6 +40,10 @@ def _register_and_login(client, username):
         "/auth/register",
         json={"username": username, "email": email, "password": PASSWORD},
     )
+    # With email on, sign-ups wait for confirmation; these tests are about resets.
+    with SessionLocal() as db:
+        db.query(User).filter(User.email == email).update({"email_verified": True})
+        db.commit()
     return client.post(
         "/auth/login", json={"email": email, "password": PASSWORD}
     ).json()
@@ -62,7 +67,7 @@ def test_status_says_whether_reset_is_available(client, reset_on, monkeypatch):
 
 
 def test_forgot_password_is_unavailable_without_public_url(client, monkeypatch):
-    monkeypatch.setattr(password_reset, "smtp_config", lambda: {"host": "smtp"})
+    monkeypatch.setattr(account_emails, "smtp_config", lambda: {"host": "smtp"})
     monkeypatch.delenv("PUBLIC_URL", raising=False)
     assert _forgot(client, "anyone@example.com").status_code == 503
 
@@ -144,7 +149,7 @@ def test_the_emailed_link_uses_public_url_and_a_fragment(monkeypatch):
     monkeypatch.setenv("PUBLIC_URL", "https://cvw.example.com/")
     sent = []
     monkeypatch.setattr(
-        password_reset, "send_email", lambda to, subject, body: sent.append(body)
+        account_emails, "send_email", lambda to, subject, body: sent.append(body)
     )
-    password_reset.send_reset_email("a@example.com", "tok123")
+    account_emails.send_reset_email("a@example.com", "tok123")
     assert "https://cvw.example.com/dashboard#reset=tok123" in sent[0]

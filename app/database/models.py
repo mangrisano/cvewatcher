@@ -42,6 +42,10 @@ class User(Base):
     # Carried in every token as "ver"; bumping it (password change or reset)
     # invalidates all the sessions issued before.
     session_version = Column(Integer, nullable=False, default=0, server_default="0")
+    # False only while a sign-up waits for its emailed confirmation link.
+    email_verified = Column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
 
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"
@@ -98,6 +102,21 @@ class PasswordResetToken(Base):
     """A pending password reset; only the SHA-256 of the emailed token is kept."""
 
     __tablename__ = "password_reset_tokens"
+
+    token_hash = Column(String(64), primary_key=True)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class EmailVerificationToken(Base):
+    """A pending sign-up confirmation; only the SHA-256 of the emailed token is kept."""
+
+    __tablename__ = "email_verification_tokens"
 
     token_hash = Column(String(64), primary_key=True)
     user_id = Column(

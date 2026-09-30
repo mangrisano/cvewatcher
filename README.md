@@ -142,6 +142,14 @@ link is built from `PUBLIC_URL`, never from the request's `Host` header, so a
 forged request cannot point it at another site. Without email, an admin resets
 a password with `utils/reset_password.py`.
 
+**Email confirmation**: with the same settings, a new sign-up stays inactive
+until its owner opens the link emailed to them (valid 24 hours). Signing in
+before that returns `403` (only after a correct password, so it never reveals
+which addresses have accounts) and the login card offers a new link. Accounts
+that existed before this feature, and all accounts when email is not
+configured, are active as usual; resetting the password also confirms the
+address.
+
 **Behind a reverse proxy** (nginx, traefik, …) rate limits are keyed on the
 client IP, so uvicorn must trust the proxy's `X-Forwarded-For`: set
 `FORWARDED_ALLOW_IPS` to the proxy's IP or subnet (e.g. the Docker network).
@@ -238,6 +246,8 @@ active findings.
 - `POST /auth/logout` - Logout user (revokes access and refresh tokens)
 - `POST /auth/forgot-password` - Email a reset link to `email`; the answer is the same whether or not the account exists (3 per address and 10 per IP per hour)
 - `POST /auth/reset-password` - Set `new_password` with the `token` from the link; signs out every session
+- `POST /auth/verify-email` - Confirm a new account with the `token` from the emailed link
+- `POST /auth/resend-verification` - Email a new confirmation link to `email` (same generic answer and limits as `forgot-password`)
 
 ### Asset Management
 

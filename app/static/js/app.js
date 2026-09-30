@@ -132,6 +132,7 @@
             : "Don't have an account?";
         $("authToggleLink").textContent = register ? "Sign in" : "Create one";
         $("loginError").classList.add("hidden");
+        $("resendVerifyLink").classList.add("hidden");
         $("regUsername").value = "";
         $("loginEmail").value = "";
         $("loginPassword").value = "";
@@ -151,7 +152,10 @@
         });
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
-            throw new Error(errorText(data, "Login failed"));
+            const err = new Error(errorText(data, "Login failed"));
+            // 403 = right password, but the sign-up is still waiting for confirmation.
+            err.unverified = res.status === 403;
+            throw err;
         }
         const data = await res.json();
         localStorage.setItem(TOKEN_KEY, data.access_token);
@@ -164,6 +168,7 @@
         event.preventDefault();
         $("loginError").classList.add("hidden");
         $("loginNotice").classList.add("hidden");
+        $("resendVerifyLink").classList.add("hidden");
         const email = $("loginEmail").value;
         const password = $("loginPassword").value;
         try {
@@ -174,17 +179,71 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ username, email, password }),
                 });
+                const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
-                    const data = await res.json().catch(() => ({}));
                     throw new Error(errorText(data, "Registration failed"));
+                }
+                if (data.verification_required) {
+                    setAuthMode("login");
+                    $("loginEmail").value = email;
+                    showCardMessage(
+                        "loginNotice",
+                        "Account created. Open the link we emailed you to activate it, then sign in.",
+                        true
+                    );
+                    return false;
                 }
             }
             await doLogin(email, password);
         } catch (err) {
             $("loginError").textContent = err.message;
             $("loginError").classList.remove("hidden");
+            $("resendVerifyLink").classList.toggle("hidden", !err.unverified);
         }
         return false;
+    }
+
+    async function resendVerification(event) {
+        event.preventDefault();
+        $("resendVerifyLink").classList.add("hidden");
+        $("loginError").classList.add("hidden");
+        try {
+            const res = await fetch("/auth/resend-verification", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: $("loginEmail").value }),
+            });
+            const data = await res.json().catch(() => ({}));
+            showCardMessage(
+                res.ok ? "loginNotice" : "loginError",
+                res.ok ? data.message : errorText(data, "Could not send the link"),
+                res.ok
+            );
+            if (!res.ok) $("loginError").className = "alert alert--error";
+        } catch (_) {
+            /* the error box stays hidden; the user can try again */
+        }
+    }
+
+    // A confirmation link opens the dashboard with #verify=<token>.
+    async function openVerifyLink() {
+        const match = location.hash.match(/^#verify=([A-Za-z0-9_-]+)$/);
+        if (!match) return false;
+        history.replaceState(null, "", location.pathname + location.search);
+        showAuthCard("loginForm");
+        const res = await fetch("/auth/verify-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: match[1] }),
+        }).catch(() => null);
+        const data = res ? await res.json().catch(() => ({})) : {};
+        if (res && res.ok) {
+            showCardMessage("loginNotice", data.message, true);
+        } else {
+            $("loginError").textContent = errorText(data, "Could not confirm the email");
+            $("loginError").classList.remove("hidden");
+        }
+        return true;
     }
 
     async function logout() {
@@ -1011,6 +1070,11 @@
     on("forgotForm", "submit", submitForgot);
     on("resetBack", "click", backToLogin);
     on("resetForm", "submit", submitReset);
+    on("resendVerifyLink", "click", resendVerification);
 
-    if (!openResetLink() && token()) enterApp();
+    if (!openResetLink()) {
+        openVerifyLink().then((opened) => {
+            if (!opened && token()) enterApp();
+        });
+    }
 })();

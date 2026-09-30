@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Email confirmation for new accounts**: with SMTP and `PUBLIC_URL` set, a
+  sign-up stays inactive until the emailed link is opened (valid 24 hours);
+  the login page explains why and can send a new link
+  (`POST /auth/verify-email`, `POST /auth/resend-verification`). Existing
+  accounts are unaffected, and so is every account when email is off.
+
 ### Changed
 
 - **SQLAlchemy 2.1 and psycopg 3**: the database layer moves to SQLAlchemy
