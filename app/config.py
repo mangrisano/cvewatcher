@@ -9,12 +9,49 @@ from functools import lru_cache
 from typing import Optional
 
 from cryptography.fernet import Fernet
-from pydantic import field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LEGACY_OIDC_PROVIDER = "default"
+
+
+class OidcProviderSettings(BaseModel):
+    """One OpenID Connect provider, from ``OIDC_PROVIDERS__<ID>__<FIELD>``."""
+
+    issuer: str
+    client_id: str
+    client_secret: Optional[str] = None
+    # Where the app itself fetches the discovery document, when the issuer URL is
+    # not reachable from the server (e.g. a provider in the same Docker network).
+    discovery_url: Optional[str] = None
+    # Button label; defaults to the capitalised provider id.
+    name: Optional[str] = None
+    # Icon file in app/static/img/providers (without .svg); defaults to the id.
+    icon: Optional[str] = None
+    scopes: str = "openid email profile"
+    auto_create: bool = True
+    allowed_domains: str = ""
+
+    @field_validator("icon")
+    @classmethod
+    def _icon_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and not value.replace("-", "").replace("_", "").isalnum():
+            raise ValueError("an OIDC icon name may only use letters, digits, - and _")
+        return value
+
+    @property
+    def allowed_domain_set(self) -> set[str]:
+        return {
+            d.strip().lower().lstrip("@")
+            for d in self.allowed_domains.split(",")
+            if d.strip()
+        }
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_ignore_empty=True, extra="ignore", env_nested_delimiter="__"
+    )
 
     database_url: str = "sqlite:///./cvewatcher.db"
     log_level: str = "INFO"
@@ -30,12 +67,13 @@ class Settings(BaseSettings):
     # Base URL users reach the app at, used in emailed links (password reset).
     public_url: Optional[str] = None
 
-    # Single sign-on through any OpenID Connect provider (Keycloak, Entra ID, …).
+    # Single sign-on: any number of OpenID Connect providers, keyed by an id
+    # (OIDC_PROVIDERS__GOOGLE__ISSUER=... -> "google").
+    oidc_providers: dict[str, OidcProviderSettings] = {}
+    # The single-provider variables of 2.12.0, still read as provider "default".
     oidc_issuer: Optional[str] = None
     oidc_client_id: Optional[str] = None
     oidc_client_secret: Optional[str] = None
-    # Where the app itself fetches the discovery document, when the issuer URL is
-    # not reachable from the server (e.g. a provider in the same Docker network).
     oidc_discovery_url: Optional[str] = None
     oidc_provider_name: str = "SSO"
     oidc_scopes: str = "openid email profile"
@@ -119,6 +157,38 @@ class Settings(BaseSettings):
             raise ValueError("PUBLIC_URL must start with https:// or http://")
         return value
 
+    @field_validator("oidc_providers")
+    @classmethod
+    def _provider_ids(
+        cls, value: dict[str, OidcProviderSettings]
+    ) -> dict[str, OidcProviderSettings]:
+        for provider_id in value:
+            if not provider_id.replace("_", "").isalnum():
+                raise ValueError(
+                    f"OIDC provider id {provider_id!r} may only use letters, "
+                    "digits and underscores"
+                )
+        return value
+
+    @model_validator(mode="after")
+    def _legacy_oidc_provider(self) -> "Settings":
+        if (
+            self.oidc_issuer
+            and self.oidc_client_id
+            and LEGACY_OIDC_PROVIDER not in self.oidc_providers
+        ):
+            self.oidc_providers[LEGACY_OIDC_PROVIDER] = OidcProviderSettings(
+                issuer=self.oidc_issuer,
+                client_id=self.oidc_client_id,
+                client_secret=self.oidc_client_secret,
+                discovery_url=self.oidc_discovery_url,
+                name=self.oidc_provider_name,
+                scopes=self.oidc_scopes,
+                auto_create=self.oidc_auto_create,
+                allowed_domains=self.oidc_allowed_domains,
+            )
+        return self
+
     @property
     def notify_email_recipients(self) -> list[str]:
         return [
@@ -128,19 +198,6 @@ class Settings(BaseSettings):
     @property
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
-
-    @property
-    def oidc_enabled(self) -> bool:
-        # PUBLIC_URL builds the redirect URI registered with the provider.
-        return bool(self.oidc_issuer and self.oidc_client_id and self.public_url)
-
-    @property
-    def oidc_allowed_domain_set(self) -> set[str]:
-        return {
-            d.strip().lower().lstrip("@")
-            for d in self.oidc_allowed_domains.split(",")
-            if d.strip()
-        }
 
 
 @lru_cache

@@ -34,7 +34,6 @@ class EncryptedString(TypeDecorator):
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = (UniqueConstraint("oidc_issuer", "oidc_subject"),)
 
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid4)
     username = Column(String(50), unique=True, index=True, nullable=False)
@@ -49,12 +48,27 @@ class User(Base):
     email_verified = Column(
         Boolean, nullable=False, default=True, server_default=true()
     )
-    # The OpenID Connect identity (issuer + subject) linked to this account.
-    oidc_issuer = Column(String(255), nullable=True)
-    oidc_subject = Column(String(255), nullable=True)
 
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"
+
+
+class UserIdentity(Base):
+    """An OpenID Connect identity (issuer + subject) that signs in as a user."""
+
+    __tablename__ = "user_identities"
+    __table_args__ = (UniqueConstraint("issuer", "subject"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    issuer = Column(String(255), nullable=False)
+    subject = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Asset(Base):

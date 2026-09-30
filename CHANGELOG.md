@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Several single sign-on providers at once**: each provider is configured
+  with `OIDC_PROVIDERS__<ID>__<SETTING>` variables (e.g.
+  `OIDC_PROVIDERS__GOOGLE__ISSUER`), gets its own button with an icon on the
+  login page, and has its own `ALLOWED_DOMAINS` and `AUTO_CREATE`. Adding a
+  provider needs no code change. One account can be linked to several
+  providers. Icons ship for Google and Keycloak.
+
+### Changed
+
+- `GET /auth/registration-status` returns `oidc` as a list of
+  `{id, name, icon}` (empty when single sign-on is off) instead of one name.
+  The single-provider `OIDC_*` variables keep working, as provider `default`.
+
+### Fixed
+
+- **Sign in with Google**: Google's ID tokens may name the issuer as
+  `accounts.google.com`, without `https://`; they are no longer refused.
+
 ## [2.12.0] - 2026-09-30
 
 ### Added

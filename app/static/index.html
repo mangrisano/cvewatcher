@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=19">
+    <link rel="stylesheet" href="/static/css/app.css?v=20">
 </head>
 
 <body>
@@ -30,7 +30,7 @@
             <button id="authSubmit" class="btn btn--primary btn--block" type="submit">Sign in</button>
             <div id="oidcBlock" class="oidc-block hidden">
                 <span class="auth-sep muted">or</span>
-                <a id="oidcLink" class="btn btn--block" href="/auth/oidc/login">Sign in with SSO</a>
+                <div id="oidcButtons" class="oidc-block"></div>
             </div>
             <p class="auth-toggle muted">
                 <span id="authToggleText">Don't have an account?</span>
@@ -500,7 +500,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=28"></script>
+    <script src="/static/js/app.js?v=30"></script>
 </body>
 
 </html>

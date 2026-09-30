@@ -150,32 +150,59 @@ that existed before this feature, and all accounts when email is not
 configured, are active as usual; resetting the password also confirms the
 address.
 
-**Single sign-on (OpenID Connect)**: set `OIDC_ISSUER`, `OIDC_CLIENT_ID` (and
-`OIDC_CLIENT_SECRET` for a confidential client) plus `PUBLIC_URL`, and the
-login card shows _Sign in with …_. Any standard provider works (Keycloak,
-Microsoft Entra ID, Google, Okta, Authentik, …); register
-`PUBLIC_URL/auth/oidc/callback` as its redirect URI.
+**Single sign-on (OpenID Connect)**: the login card shows one _Sign in with …_
+button per configured provider. Any standard provider works (Google, Keycloak,
+Microsoft Entra ID, Okta, Authentik, …). Each one is a set of variables named
+`OIDC_PROVIDERS__<ID>__<SETTING>`, where `<ID>` is a name you choose (letters,
+digits and `_`); adding a provider needs no code change. `PUBLIC_URL` must be
+set, and every provider must have `PUBLIC_URL/auth/oidc/callback` registered as
+a redirect URI.
 
-| Variable               | Default                | Description                                                                                       |
-| ---------------------- | ---------------------- | ------------------------------------------------------------------------------------------------- |
-| `OIDC_ISSUER`          | _(unset)_              | Issuer URL of the provider; must equal the `iss` of its tokens                                    |
-| `OIDC_CLIENT_ID`       | _(unset)_              | Client ID registered at the provider                                                              |
-| `OIDC_CLIENT_SECRET`   | _(unset)_              | Client secret; leave empty for a public client (PKCE is always used)                              |
-| `OIDC_DISCOVERY_URL`   | _(issuer)_             | Where the app itself fetches the discovery document, when it reaches the provider at another host |
-| `OIDC_PROVIDER_NAME`   | `SSO`                  | Name on the login button                                                                          |
-| `OIDC_SCOPES`          | `openid email profile` | Scopes requested                                                                                  |
-| `OIDC_AUTO_CREATE`     | `true`                 | Create an account on first sign-in; `false` only lets in addresses that already have one          |
-| `OIDC_ALLOWED_DOMAINS` | _(any)_                | Comma-separated email domains allowed to sign in                                                  |
+| Setting           | Default                 | Description                                                                                       |
+| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `ISSUER`          | _(required)_            | Issuer URL of the provider; must equal the `iss` of its tokens                                    |
+| `CLIENT_ID`       | _(required)_            | Client ID registered at the provider                                                              |
+| `CLIENT_SECRET`   | _(unset)_               | Client secret; leave empty for a public client (PKCE is always used)                              |
+| `DISCOVERY_URL`   | _(issuer)_              | Where the app itself fetches the discovery document, when it reaches the provider at another host |
+| `NAME`            | _(the id, capitalised)_ | Name on the login button                                                                          |
+| `ICON`            | _(the id)_              | Icon from `app/static/img/providers/<ICON>.svg`; no file, no icon                                 |
+| `SCOPES`          | `openid email profile`  | Scopes requested                                                                                  |
+| `AUTO_CREATE`     | `true`                  | Create an account on first sign-in; `false` only lets in addresses that already have one          |
+| `ALLOWED_DOMAINS` | _(any)_                 | Comma-separated email domains allowed to sign in                                                  |
+
+```bash
+PUBLIC_URL=https://cvewatcher.example.com
+OIDC_PROVIDERS__GOOGLE__ISSUER=https://accounts.google.com
+OIDC_PROVIDERS__GOOGLE__CLIENT_ID=1234-abc.apps.googleusercontent.com
+OIDC_PROVIDERS__GOOGLE__CLIENT_SECRET=...
+OIDC_PROVIDERS__GOOGLE__ALLOWED_DOMAINS=example.com
+OIDC_PROVIDERS__CORP__ISSUER=https://sso.example.com/realms/corp
+OIDC_PROVIDERS__CORP__CLIENT_ID=cvewatcher
+OIDC_PROVIDERS__CORP__CLIENT_SECRET=...
+OIDC_PROVIDERS__CORP__NAME=Company SSO
+OIDC_PROVIDERS__CORP__ICON=keycloak
+```
+
+Icons ship for `google` and `keycloak`; for another provider, drop its SVG in
+`app/static/img/providers/`. The single-provider variables of 2.12.0
+(`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_DISCOVERY_URL`,
+`OIDC_PROVIDER_NAME`, `OIDC_SCOPES`, `OIDC_AUTO_CREATE`,
+`OIDC_ALLOWED_DOMAINS`) still work, as a provider with the id `default`.
 
 The app uses the authorization code flow with PKCE, `state` and `nonce`, and
 accepts only ID tokens signed with an asymmetric key published by the
 provider. A person is recognised by the provider's issuer and subject; on the
-first sign-in the account with the same email is linked, or created
-(registration gating does not apply: the provider decides who gets in). The
-provider must vouch for the address (`email_verified`), otherwise the sign-in
-is refused. Accounts created this way have no password: they cannot change
-one, and confirm deletion by typing their email. Local passwords keep working
-next to SSO.
+first sign-in with a provider, the account with the same email is linked, or
+created (registration gating does not apply: the provider decides who gets
+in). One account can be linked to several providers, but to one identity per
+provider. The provider must vouch for the address (`email_verified`),
+otherwise the sign-in is refused. Accounts created this way have no password:
+they cannot change one, and confirm deletion by typing their email. Local
+passwords keep working next to SSO.
+
+With a public provider such as **Google**, anyone with an account there could
+sign in and get an account here: set its `ALLOWED_DOMAINS` or
+`AUTO_CREATE=false`.
 
 To try it locally, `docker compose --profile oidc up -d` (from `docker/`)
 starts a Keycloak at <http://localhost:8081> (admin console: `admin`/`admin`)
@@ -185,16 +212,15 @@ app with:
 
 ```bash
 PUBLIC_URL=http://localhost:8000
-OIDC_ISSUER=http://localhost:8081/realms/cvewatcher
-OIDC_DISCOVERY_URL=http://keycloak:8080/realms/cvewatcher/.well-known/openid-configuration
-OIDC_CLIENT_ID=cvewatcher
-OIDC_CLIENT_SECRET=cvewatcher-dev-secret
-OIDC_PROVIDER_NAME=Keycloak
+OIDC_PROVIDERS__KEYCLOAK__ISSUER=http://localhost:8081/realms/cvewatcher
+OIDC_PROVIDERS__KEYCLOAK__DISCOVERY_URL=http://keycloak:8080/realms/cvewatcher/.well-known/openid-configuration
+OIDC_PROVIDERS__KEYCLOAK__CLIENT_ID=cvewatcher
+OIDC_PROVIDERS__KEYCLOAK__CLIENT_SECRET=cvewatcher-dev-secret
 ```
 
 The browser reaches Keycloak at `localhost:8081`, the app container at
-`keycloak:8080`: `OIDC_DISCOVERY_URL` covers the second, while tokens keep
-the public issuer. This realm is for development only.
+`keycloak:8080`: `DISCOVERY_URL` covers the second, while tokens keep the
+public issuer. This realm is for development only.
 
 **Behind a reverse proxy** (nginx, traefik, …) rate limits are keyed on the
 client IP, so uvicorn must trust the proxy's `X-Forwarded-For`: set
@@ -285,7 +311,7 @@ active findings.
 
 ### Authentication
 
-- `GET /auth/registration-status` - Check whether public sign-up is currently open (`open`), whether password reset by email is available (`password_reset`) and the single sign-on provider name (`oidc`, `null` when off)
+- `GET /auth/registration-status` - Check whether public sign-up is currently open (`open`), whether password reset by email is available (`password_reset`) and the single sign-on providers (`oidc`: a list of `{id, name, icon}`, empty when off)
 - `POST /auth/register` - Register new user (subject to registration gating and rate limiting)
 - `POST /auth/login` - User login (rate-limited per email+IP)
 - `POST /auth/refresh` - Exchange a refresh token for a new access token **and a new refresh token** (the one sent is revoked: store the new one)
@@ -294,7 +320,7 @@ active findings.
 - `POST /auth/reset-password` - Set `new_password` with the `token` from the link; signs out every session
 - `POST /auth/verify-email` - Confirm a new account with the `token` from the emailed link
 - `POST /auth/resend-verification` - Email a new confirmation link to `email` (same generic answer and limits as `forgot-password`)
-- `GET /auth/oidc/login` - Start single sign-on: redirects to the provider (only when OIDC is configured)
+- `GET /auth/oidc/login?provider=<id>` - Start single sign-on: redirects to that provider (`provider` may be left out when only one is configured)
 - `GET /auth/oidc/callback` - Where the provider sends the user back; redirects to the dashboard with a one-time code valid 60 seconds
 - `POST /auth/oidc/exchange` - Trade that `code` for an access and refresh token pair (works once)
 

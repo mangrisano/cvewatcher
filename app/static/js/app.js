@@ -238,6 +238,26 @@
         account_linked_elsewhere: "This email is already linked to a different sign-in identity.",
     };
 
+    function renderOidcButtons(providers) {
+        $("oidcButtons").replaceChildren(
+            ...providers.map((provider) => {
+                const link = document.createElement("a");
+                link.className = "btn btn--block";
+                link.href = `/auth/oidc/login?provider=${encodeURIComponent(provider.id)}`;
+                if (provider.icon) {
+                    const icon = document.createElement("img");
+                    icon.className = "provider-icon";
+                    icon.src = provider.icon;
+                    icon.alt = "";
+                    link.append(icon);
+                }
+                link.append(`Sign in with ${provider.name}`);
+                return link;
+            }),
+        );
+        $("oidcBlock").classList.toggle("hidden", providers.length === 0);
+    }
+
     // The callback lands on #oidc=<one-time code> or #oidc_error=<reason>.
     async function openOidcLink() {
         const match = location.hash.match(/^#oidc(_error)?=([A-Za-z0-9_.-]+)$/);
@@ -1109,10 +1129,7 @@
                 if (toggle) toggle.classList.add("hidden");
             }
             $("forgotLink").classList.toggle("hidden", !status.password_reset);
-            if (status.oidc) {
-                $("oidcLink").textContent = `Sign in with ${status.oidc}`;
-                $("oidcBlock").classList.remove("hidden");
-            }
+            renderOidcButtons(status.oidc || []);
         } catch (_) {
             /* leave the toggle visible on error */
         }

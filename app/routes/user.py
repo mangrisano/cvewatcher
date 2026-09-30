@@ -11,6 +11,7 @@ from app.database import (
     NotificationPreference,
     PasswordResetToken,
     User,
+    UserIdentity,
     get_db,
 )
 from app.models import (
@@ -86,7 +87,7 @@ def get_user_profile(
         "email": db_user.email,
         "created_at": db_user.created_at,
         "has_password": db_user.password_hash is not None,
-        "sso": db_user.oidc_subject is not None,
+        "sso": db.query(UserIdentity).filter_by(user_id=db_user.id).first() is not None,
     }
 
 
@@ -156,7 +157,12 @@ def delete_account(
         synchronize_session=False
     )
     db.query(Asset).filter(Asset.user_email == email).delete(synchronize_session=False)
-    for model in (NotificationPreference, PasswordResetToken, EmailVerificationToken):
+    for model in (
+        NotificationPreference,
+        PasswordResetToken,
+        EmailVerificationToken,
+        UserIdentity,
+    ):
         db.query(model).filter(model.user_id == user.id).delete(
             synchronize_session=False
         )

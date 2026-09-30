@@ -46,6 +46,7 @@ from app.services.token_blocklist import (
 )
 from app.database import get_db, User
 from app.config import get_settings
+from app.routes.oidc import public_providers
 
 router = APIRouter()
 
@@ -74,12 +75,11 @@ def _registration_open(db: Session) -> bool:
 
 @router.get("/auth/registration-status", tags=["auth"])
 def registration_status(db: Session = Depends(get_db)):
-    settings = get_settings()
     return {
         "open": _registration_open(db),
         "password_reset": email_links_available(),
-        # The button label when single sign-on is configured, else None.
-        "oidc": settings.oidc_provider_name if settings.oidc_enabled else None,
+        # One entry per single sign-on provider, in button order.
+        "oidc": public_providers(),
     }
 
 

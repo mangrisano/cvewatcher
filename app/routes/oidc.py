@@ -1,5 +1,7 @@
 import hmac
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -9,7 +11,13 @@ from starlette.concurrency import run_in_threadpool
 from app.config import get_settings
 from app.database import User, get_db
 from app.models import OidcExchangeRequest
-from app.services.oidc import OidcError, finish_login, resolve_user, start_login
+from app.services.oidc import (
+    OidcError,
+    OidcProvider,
+    get_provider,
+    providers,
+    resolve_user,
+)
 from app.services.token_blocklist import is_token_revoked, revoke_token
 from app.utils.auth import (
     issue_tokens,
@@ -25,11 +33,33 @@ _COOKIE = "cvw_oidc"
 _COOKIE_PATH = "/auth/oidc"
 _LOGIN_SECONDS = 600
 _HANDOFF_SECONDS = 60
+# Dropping <name>.svg here gives every provider using that icon its logo.
+_ICONS_DIR = Path(__file__).resolve().parent.parent / "static" / "img" / "providers"
 
 
-def _require_enabled() -> None:
-    if not get_settings().oidc_enabled:
-        raise HTTPException(status_code=404, detail="Single sign-on is not configured")
+def _icon_url(provider: OidcProvider) -> Optional[str]:
+    name = provider.config.icon or provider.id
+    if (_ICONS_DIR / f"{name}.svg").is_file():
+        return f"/static/img/providers/{name}.svg"
+    return None
+
+
+def public_providers() -> list[dict[str, Optional[str]]]:
+    """What the login page needs to draw one button per provider."""
+    return [
+        {"id": p.id, "name": p.name, "icon": _icon_url(p)} for p in providers().values()
+    ]
+
+
+def _provider(provider_id: str | None) -> OidcProvider:
+    """The provider asked for; the only one when there is just one."""
+    configured = providers()
+    if provider_id is None and len(configured) == 1:
+        return next(iter(configured.values()))
+    provider = get_provider(provider_id or "")
+    if provider is None:
+        raise HTTPException(status_code=404, detail="Unknown sign-in provider")
+    return provider
 
 
 def _to_dashboard(fragment: str) -> RedirectResponse:
@@ -40,14 +70,19 @@ def _to_dashboard(fragment: str) -> RedirectResponse:
 
 
 @router.get("/auth/oidc/login", tags=["auth"])
-async def oidc_login():
-    _require_enabled()
+async def oidc_login(provider: str | None = None):
+    selected = _provider(provider)
     try:
-        login = await start_login()
+        login = await selected.start_login()
     except OidcError as e:
         return _to_dashboard(f"oidc_error={e.code}")
     pending = sign_short_lived(
-        {"state": login.state, "nonce": login.nonce, "cv": login.verifier},
+        {
+            "p": selected.id,
+            "state": login.state,
+            "nonce": login.nonce,
+            "cv": login.verifier,
+        },
         "oidc_login",
         _LOGIN_SECONDS,
     )
@@ -72,7 +107,6 @@ async def oidc_callback(
     error: str | None = None,
     db: Session = Depends(get_db),
 ):
-    _require_enabled()
     pending = verify_short_lived(request.cookies.get(_COOKIE, ""), "oidc_login")
     try:
         if error:
@@ -82,8 +116,11 @@ async def oidc_callback(
             state, str(pending["state"])
         ):
             raise OidcError("invalid_state")
-        claims = await finish_login(code, pending["nonce"], pending["cv"])
-        user = await run_in_threadpool(resolve_user, db, claims)
+        provider = get_provider(str(pending.get("p")))
+        if provider is None:
+            raise OidcError("invalid_state")
+        claims = await provider.finish_login(code, pending["nonce"], pending["cv"])
+        user = await run_in_threadpool(resolve_user, db, provider, claims)
         handoff = sign_short_lived(
             {"sub": user.email, "ver": user.session_version or 0},
             "oidc_handoff",

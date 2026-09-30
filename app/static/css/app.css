@@ -184,6 +184,7 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-we
 .oidc-block { display: flex; flex-direction: column; gap: 10px; }
 .auth-sep { text-align: center; font-size: 12px; }
 .login-card a.btn { text-align: center; color: var(--text); text-decoration: none; }
+.provider-icon { width: 18px; height: 18px; flex-shrink: 0; }
 
 /* Logo */
 .logo { display: flex; align-items: center; gap: 9px; }

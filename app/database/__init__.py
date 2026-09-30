@@ -10,6 +10,7 @@ from app.database.models import (
     PasswordResetToken,
     RevokedToken,
     User,
+    UserIdentity,
 )
 
 
@@ -48,6 +49,7 @@ def init_schema():
 
 __all__ = [
     "User",
+    "UserIdentity",
     "Asset",
     "CVE",
     "RevokedToken",
