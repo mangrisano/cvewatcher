@@ -155,7 +155,7 @@ def test_assets_require_authentication(client):
     assert response.status_code in (401, 403)
 
 
-def test_vulnerabilities_returns_503_when_nvd_unavailable(client, monkeypatch):
+def test_asset_vulnerabilities_are_served_while_nvd_is_down(client, monkeypatch):
     from app.services import nist_nvd
     from app.services.nist_nvd import NvdUnavailableError
 
@@ -184,8 +184,8 @@ def test_vulnerabilities_returns_503_when_nvd_unavailable(client, monkeypatch):
     monkeypatch.setattr(nist_nvd.nist_client, "find_cpe_names", boom)
 
     response = client.get(f"/assets/{asset_id}/vulnerabilities", headers=headers)
-    assert response.status_code == 503
-    assert "NVD" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["vulnerabilities"] == []
 
 
 def test_asset_list_pagination(client):

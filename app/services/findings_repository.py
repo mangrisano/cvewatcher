@@ -124,13 +124,15 @@ class FindingRepository:
             or_(AssetCVE.last_seen.is_(None), AssetCVE.last_seen < scanned_at),
         ).delete(synchronize_session=False)
 
-    def save(self) -> None:
-        """Commit the pending finding changes; best-effort."""
+    def save(self) -> bool:
+        """Commit the pending finding changes; best-effort. False if nothing was stored."""
         try:
             self.db.commit()
+            return True
         except Exception as e:
             logger.error("Error saving findings: %s", e)
             self.db.rollback()
+            return False
 
     def set_status(
         self, asset_id: AssetId, cve_id: str, status: str, notes: str | None

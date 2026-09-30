@@ -18,7 +18,11 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.database.models import Asset
-from app.dependencies import get_current_user, get_monitoring_service
+from app.dependencies import (
+    count_live_lookup,
+    get_current_user,
+    get_monitoring_service,
+)
 from app.models import FindingsSummary, FindingStatus, VulnerabilityResponse
 from app.services.cve_monitoring import CVEMonitoringService
 from app.services.findings_query import (
@@ -91,6 +95,7 @@ async def findings_summary(
 ):
     user_email = _user_email(current_user)
     if refresh:
+        count_live_lookup(user_email)
         assets = db.query(Asset).filter(Asset.user_email == user_email).all()
         await scan_and_alert(db, service, assets)
 
@@ -104,7 +109,7 @@ async def findings_summary(
         descending=order == "desc",
     )
     page = query_findings(db, user_email, filters, limit=limit, offset=offset)
-    last_scan, unscanned = scan_state(db, user_email)
+    last_scan, unscanned, total_assets = scan_state(db, user_email)
     return FindingsSummary(
         total=page.total,
         kev=page.kev,
@@ -115,6 +120,7 @@ async def findings_summary(
         offset=offset,
         last_scan=last_scan,
         unscanned_assets=unscanned,
+        total_assets=total_assets,
         findings=[VulnerabilityResponse(**f) for f in page.findings],
     )
 

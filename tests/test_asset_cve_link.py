@@ -106,38 +106,6 @@ def test_nvd_concurrency_limit(monkeypatch):
     assert sources.nvd_concurrency_limit(nist_nvd.nist_client) == 7
 
 
-def test_get_user_vulnerabilities_aggregates_across_assets(monkeypatch):
-    db = SessionLocal()
-    try:
-        db.query(Asset).filter(Asset.user_email == _EMAIL).delete()
-        db.commit()
-        a1 = Asset(name="nginx", version="1.24.0", user_email=_EMAIL)
-        a2 = Asset(name="openssl", version="3.0.0", user_email=_EMAIL)
-        db.add_all([a1, a2])
-        db.commit()
-        db.refresh(a1)
-        db.refresh(a2)
-
-        svc = CVEMonitoringService(db)
-
-        async def fake_get(
-            asset_response, days=0, severity_filter=None, use_cache=True
-        ):
-            return [{"cve_id": f"CVE-{asset_response.name}", "severity": "HIGH"}]
-
-        monkeypatch.setattr(svc, "find_vulnerabilities", fake_get)
-
-        out = asyncio.run(svc.get_user_vulnerabilities(_EMAIL))
-
-        assert {v["cve_id"] for v in out} == {"CVE-nginx", "CVE-openssl"}
-        # Each finding is tagged with its originating asset.
-        assert {v["asset_name"] for v in out} == {"nginx", "openssl"}
-    finally:
-        db.query(Asset).filter(Asset.user_email == _EMAIL).delete()
-        db.commit()
-        db.close()
-
-
 def test_set_and_attach_finding_status():
     db = SessionLocal()
     try:
@@ -272,38 +240,42 @@ def test_unavailable_source_with_no_findings_raises():
         asyncio.run(svc.find_vulnerabilities(_asset_response()))
 
 
-def test_monitoring_report_uses_the_matching_engine():
+def test_monitoring_report_reads_the_stored_findings():
     db = SessionLocal()
     email = "report@example.com"
     try:
         db.query(Asset).filter(Asset.user_email == email).delete()
         db.commit()
-        db.add_all(
-            [
-                Asset(name="nginx", version="1.24.0", user_email=email),
-                Asset(name="openssl", version="3.0.0", user_email=email),
-            ]
-        )
+        assets = [
+            Asset(name="nginx", version="1.24.0", user_email=email),
+            Asset(name="openssl", version="3.0.0", user_email=email),
+        ]
+        db.add_all(assets)
         db.commit()
-
-        seen_windows = []
 
         class FixedSource:
             async def search(self, asset, start, end, use_cache):
-                seen_windows.append((end - start).days)
+                recent = "2099-01-01T00:00:00"
                 shared = {"cve_id": "CVE-2099-0100", "severity": "LOW"}
                 own = {
                     "cve_id": f"CVE-2099-{asset.name}",
                     "severity": "CRITICAL" if asset.name == "openssl" else "HIGH",
-                    "publish_date": "2099-01-01T00:00:00",
                 }
-                return sources.SourceResult([own, shared])
+                old = {"cve_id": "CVE-2000-0100", "severity": "HIGH"}
+                return sources.SourceResult(
+                    [
+                        {**own, "publish_date": recent},
+                        {**shared, "publish_date": recent},
+                        {**old, "publish_date": "2000-01-01T00:00:00"},
+                    ]
+                )
 
         svc = CVEMonitoringService(db, sources=[FixedSource()])
+        asyncio.run(svc.monitor_assets(assets))
         report = asyncio.run(svc.get_monitoring_report(email, days=7))
 
-        assert seen_windows == [7, 7]
-        # One entry per CVE even when it affects several assets, highest first.
+        # One entry per CVE even when it affects several assets, highest first;
+        # the CVE published outside the window is left out.
         assert [v["cve_id"] for v in report["recent_vulnerabilities"]] == [
             "CVE-2099-openssl",
             "CVE-2099-nginx",
@@ -318,6 +290,15 @@ def test_monitoring_report_uses_the_matching_engine():
         }
         assert report["total_assets"] == 2
     finally:
+        ids = [a.id for a in db.query(Asset).filter(Asset.user_email == email)]
+        db.query(AssetCVE).filter(AssetCVE.asset_id.in_(ids)).delete(
+            synchronize_session=False
+        )
         db.query(Asset).filter(Asset.user_email == email).delete()
+        db.query(CVE).filter(
+            CVE.id.in_(
+                ["CVE-2099-nginx", "CVE-2099-openssl", "CVE-2099-0100", "CVE-2000-0100"]
+            )
+        ).delete(synchronize_session=False)
         db.commit()
         db.close()

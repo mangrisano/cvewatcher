@@ -6,15 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.dependencies import (
+    count_live_lookup,
     get_current_user,
     get_cve_service,
-    get_monitoring_service,
     require_admin,
 )
 from app.models import VulnerabilityResponse
 from app.services.cve_service import CVEService
-from app.services.cve_monitoring import CVEMonitoringService
-from app.services.nist_nvd import NvdUnavailableError
+from app.services.findings_query import FindingFilters, query_findings
 
 logger = logging.getLogger(__name__)
 
@@ -104,21 +103,16 @@ def get_recent_cves(
 @router.get("/vulnerabilities", response_model=list[VulnerabilityResponse])
 async def check_my_vulnerabilities(
     current_user: dict = Depends(get_current_user),
-    service: CVEMonitoringService = Depends(get_monitoring_service),
+    db: Session = Depends(get_db),
 ):
+    """All your findings as stored by the last scans, every triage status."""
     user_email = current_user.get("sub")
     if not user_email:
         raise HTTPException(status_code=401, detail="Invalid user token")
-
-    try:
-        vulnerabilities = await service.get_user_vulnerabilities(user_email)
-
-        return [VulnerabilityResponse(**vuln) for vuln in vulnerabilities]
-    except NvdUnavailableError:
-        raise
-    except Exception:
-        logger.exception("Error checking vulnerabilities for %s", user_email)
-        raise HTTPException(status_code=500, detail="Error checking vulnerabilities")
+    findings = query_findings(
+        db, user_email, FindingFilters(include_suppressed=True)
+    ).findings
+    return [VulnerabilityResponse(**finding) for finding in findings]
 
 
 @router.get("/search")
@@ -130,6 +124,7 @@ async def search_cves(
     current_user: dict = Depends(get_current_user),
     cve_service: CVEService = Depends(get_cve_service),
 ):
+    count_live_lookup(current_user.get("sub") or "")
     try:
         cves = await cve_service.search_cves_for_asset(product, version)
 

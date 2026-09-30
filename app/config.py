@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     monitor_interval_minutes: int = 360
     # Scan an asset right after it is created, imported or re-identified.
     scan_new_assets: bool = True
+    # Per user and hour: manual scans and CVE searches that query NVD live.
+    live_lookups_per_hour: int = 30
     digest_enabled: bool = False
     digest_interval_minutes: int = 1440
 

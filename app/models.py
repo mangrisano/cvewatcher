@@ -164,6 +164,7 @@ class FindingsSummary(BaseModel):
     offset: int
     last_scan: Optional[datetime.datetime] = None
     unscanned_assets: int = 0
+    total_assets: int = 0
     findings: list[VulnerabilityResponse]
 
 

@@ -246,23 +246,18 @@
         $("overviewLoading").classList.remove("hidden");
         $("overviewGrid").classList.add("hidden");
         let summary = { total: 0, kev: 0, by_severity: {}, by_status: {} };
-        let assetsCount = 0;
         try {
-            const [sRes, allAssets] = await Promise.all([
-                apiFetch(
-                    "/findings?include_suppressed=false&limit=0" +
-                    (force ? "&refresh=true" : "")
-                ),
-                fetchAllAssets(),
-            ]);
-            if (sRes.ok) summary = await sRes.json();
-            assetsCount = allAssets.length;
+            const url = "/findings?include_suppressed=false&limit=0";
+            let res = await apiFetch(url + (force ? "&refresh=true" : ""));
+            // Over the scan quota: still show the stored numbers.
+            if (res.status === 429) res = await apiFetch(url);
+            if (res.ok) summary = await res.json();
         } catch (_) {
             /* best effort */
         } finally {
             if (btn) btn.classList.remove("is-busy");
         }
-        renderOverview(summary, assetsCount);
+        renderOverview(summary);
         $("overviewLoading").classList.add("hidden");
         $("overviewGrid").classList.remove("hidden");
     }
@@ -271,13 +266,13 @@
         loadOverview(true);
     }
 
-    function renderOverview(summary, assetsCount) {
+    function renderOverview(summary) {
         const bySev = summary.by_severity || {};
         const byStatus = summary.by_status || {};
         $("statFindings").textContent = summary.total || 0;
         $("statKev").textContent = summary.kev || 0;
         $("statCritHigh").textContent = (bySev.CRITICAL || 0) + (bySev.HIGH || 0);
-        $("statAssets").textContent = assetsCount;
+        $("statAssets").textContent = summary.total_assets || 0;
 
         const sevTotal = Object.values(bySev).reduce((a, b) => a + b, 0) || 1;
         $("sevBars").innerHTML =
@@ -499,15 +494,20 @@
             : "Loading vulnerabilities\u2026";
         $("findingsLoading").classList.remove("hidden");
         let data = { findings: [], matched: 0 };
+        let notice = "";
         try {
-            const res = await apiFetch(findingsQuery(refresh));
+            let res = await apiFetch(findingsQuery(refresh));
+            if (res.status === 429) {
+                notice = "Scan limit reached, showing the last results. Try again later.";
+                res = await apiFetch(findingsQuery(false));
+            }
             if (res.ok) data = await res.json();
         } finally {
             if (btn) btn.classList.remove("is-busy");
         }
         $("findingsLoading").classList.add("hidden");
         findState.matched = data.matched || 0;
-        renderScanInfo(data);
+        renderScanInfo(data, notice);
         renderFindings(data.findings || []);
     }
 
@@ -558,8 +558,8 @@
         });
     }
 
-    function renderScanInfo(data) {
-        const parts = [];
+    function renderScanInfo(data, notice) {
+        const parts = notice ? [notice] : [];
         if (data.last_scan) {
             parts.push("Last scan: " + new Date(data.last_scan).toLocaleString());
         }

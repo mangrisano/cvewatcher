@@ -259,3 +259,110 @@ def test_new_assets_are_scanned_in_the_background(client, monkeypatch):
 
     assert str(scanned[0]) == created["id"]
     assert len(scanned) == 2
+
+
+def test_overlapping_scans_of_one_asset_run_one_at_a_time(db):
+    asset = _asset(db)
+    active = {"now": 0, "max": 0}
+
+    class _Slow(_Source):
+        async def search(self, asset, start, end, use_cache):
+            active["now"] += 1
+            active["max"] = max(active["max"], active["now"])
+            await asyncio.sleep(0.05)
+            active["now"] -= 1
+            return await super().search(asset, start, end, use_cache)
+
+    source = _Slow([_finding("CVE-2098-0500")])
+    other = SessionLocal()
+    try:
+        first = CVEMonitoringService(db, sources=[source], enricher=_Enricher())
+        second = CVEMonitoringService(other, sources=[source], enricher=_Enricher())
+        twin = other.get(Asset, asset.id)
+
+        async def both():
+            return await asyncio.gather(
+                first.monitor_asset(asset), second.monitor_asset(twin)
+            )
+
+        results = asyncio.run(both())
+    finally:
+        other.close()
+
+    assert active["max"] == 1
+    # The second scan sees the first one's finding: a single "new" alert.
+    assert sum(len(r["new_vulnerabilities"]) for r in results) == 1
+
+
+def test_a_scan_that_cannot_be_stored_sends_no_alerts(db, monkeypatch):
+    from app.services.alerts import extract_alerts
+
+    asset = _asset(db)
+    service = CVEMonitoringService(
+        db, sources=[_Source([_finding("CVE-2098-0600")])], enricher=_Enricher()
+    )
+    monkeypatch.setattr(service.findings, "save", lambda: False)
+
+    result = asyncio.run(service.monitor_asset(asset))
+    assert result["status"] == "error"
+    assert extract_alerts({"asset_results": [result]}) == []
+
+
+def _headers(client, username):
+    email = f"{username}@example.com"
+    client.post(
+        "/auth/register",
+        json={"username": username, "email": email, "password": "Password123"},
+    )
+    token = client.post(
+        "/auth/login", json={"email": email, "password": "Password123"}
+    ).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_live_lookups_are_limited_per_user(client, monkeypatch):
+    from app.utils import rate_limit
+    from app.utils.rate_limit import InMemoryRateLimiter
+
+    monkeypatch.setattr(
+        rate_limit,
+        "live_lookup_rate_limiter",
+        InMemoryRateLimiter(max_attempts=1, window_seconds=3600),
+    )
+    headers = _headers(client, "quota")
+    other = _headers(client, "quota2")
+
+    assert client.get("/findings?refresh=true", headers=headers).status_code == 200
+    limited = client.get("/findings?refresh=true", headers=headers)
+    assert limited.status_code == 429 and int(limited.headers["Retry-After"]) > 0
+    assert client.get("/cves/search?product=x", headers=headers).status_code == 429
+    assert (
+        client.post("/assets/monitoring/scan-all", headers=headers).status_code == 429
+    )
+    # Reading stored findings is never limited, and the quota is per user.
+    assert client.get("/findings", headers=headers).status_code == 200
+    assert client.get("/findings?refresh=true", headers=other).status_code == 200
+
+
+def test_asset_and_all_findings_endpoints_read_the_database(client):
+    headers = _headers(client, "dbreader")
+    asset_id = client.post(
+        "/assets/", headers=headers, json={"name": "reader-lib", "version": "1"}
+    ).json()["id"]
+    db = SessionLocal()
+    try:
+        asset = db.get(Asset, __import__("uuid").UUID(asset_id))
+        _scan(db, asset, _Source([_finding("CVE-2098-0700", "CRITICAL", 9.1)]))
+    finally:
+        db.close()
+
+    body = client.get(f"/assets/{asset_id}/vulnerabilities", headers=headers).json()
+    assert [v["cve_id"] for v in body["vulnerabilities"]] == ["CVE-2098-0700"]
+    only_low = client.get(
+        f"/assets/{asset_id}/vulnerabilities?severity=LOW", headers=headers
+    ).json()
+    assert only_low["total_vulnerabilities"] == 0
+    everything = client.get("/cves/vulnerabilities", headers=headers).json()
+    assert [v["cve_id"] for v in everything] == ["CVE-2098-0700"]
+    summary = client.get("/findings?limit=0", headers=headers).json()
+    assert summary["total_assets"] == 1 and summary["total"] == 1

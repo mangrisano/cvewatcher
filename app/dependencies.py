@@ -11,6 +11,7 @@ from app.services.cve_monitoring import CVEMonitoringService
 from app.services.cve_service import CVEService, cve_service
 from app.services.findings_repository import FindingRepository
 from app.services.token_blocklist import is_token_revoked
+from app.utils import rate_limit
 from app.utils.auth import verify_access_token
 
 
@@ -60,3 +61,16 @@ def get_findings_repository(db: Session = Depends(get_db)) -> FindingRepository:
 
 def get_cve_service() -> CVEService:
     return cve_service
+
+
+def count_live_lookup(user_email: str) -> None:
+    """Count a request that queries NVD / OSV.dev live; 429 once over the quota."""
+    limiter = rate_limit.live_lookup_rate_limiter
+    retry_after = limiter.retry_after(user_email)
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many scans or searches, try again later",
+            headers={"Retry-After": str(retry_after)},
+        )
+    limiter.record_failure(user_email)

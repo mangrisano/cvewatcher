@@ -26,12 +26,14 @@ from app.models import (
 from app.database.connection import get_db
 from app.database.models import Asset
 from app.dependencies import (
+    count_live_lookup,
     get_current_user,
     get_findings_repository,
     get_monitoring_service,
     get_owned_asset,
 )
 from app.services.cve_monitoring import CVEMonitoringService
+from app.services.findings_query import FindingFilters, query_findings
 from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
 from app.services.sbom import SbomError, parse_sbom
@@ -218,29 +220,22 @@ async def get_asset_vulnerabilities(
     ),
     severity: SeverityLevel | None = None,
     asset: Asset = Depends(get_owned_asset),
-    monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
+    db: Session = Depends(get_db),
 ):
-    try:
-        asset_response = AssetResponse.model_validate(asset)
-
-        vulnerabilities = await monitoring_service.find_vulnerabilities(
-            asset_response,
-            days=days,
-            severity_filter=severity.value if severity else None,
-        )
-
-        return AssetVulnerabilitiesResponse(
-            asset=asset_response,
-            vulnerabilities=[VulnerabilityResponse(**vuln) for vuln in vulnerabilities],
-            total_vulnerabilities=len(vulnerabilities),
-            days_searched=days,
-        )
-
-    except NvdUnavailableError:
-        raise
-    except Exception:
-        logger.exception("Error retrieving vulnerabilities for asset %s", asset.id)
-        raise HTTPException(status_code=500, detail="Error retrieving vulnerabilities")
+    """The asset's findings as stored by its last scan (all triage statuses)."""
+    filters = FindingFilters(
+        days=days,
+        include_suppressed=True,
+        severity=severity.value if severity else None,
+        asset_id=asset.id,
+    )
+    vulnerabilities = query_findings(db, str(asset.user_email), filters).findings
+    return AssetVulnerabilitiesResponse(
+        asset=AssetResponse.model_validate(asset),
+        vulnerabilities=[VulnerabilityResponse(**vuln) for vuln in vulnerabilities],
+        total_vulnerabilities=len(vulnerabilities),
+        days_searched=days,
+    )
 
 
 @router.patch(
@@ -319,6 +314,7 @@ async def monitor_asset_cves(
     db: Session = Depends(get_db),
     monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
+    count_live_lookup(str(asset.user_email))
     try:
         (result,) = await scan_and_alert(db, monitoring_service, [asset])
 
@@ -358,6 +354,7 @@ async def scan_all_assets(
     db: Session = Depends(get_db),
     monitoring_service: CVEMonitoringService = Depends(get_monitoring_service),
 ):
+    count_live_lookup(current_user.get("sub") or "")
     try:
         user_assets = (
             db.query(Asset).filter(Asset.user_email == current_user.get("sub")).all()

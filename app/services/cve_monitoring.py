@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import weakref
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -7,6 +8,7 @@ from typing import Any, Optional
 from sqlalchemy.orm import Session
 
 from app.database.models import Asset
+from app.services.findings_query import FindingFilters, query_findings
 from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import NvdUnavailableError
 from app.services.enrichment import EnrichmentService, enrichment_service
@@ -19,6 +21,21 @@ logger = logging.getLogger(__name__)
 
 # Assets scanned at once; each source also bounds its own requests.
 _SCAN_CONCURRENCY = 8
+
+# One scan per asset at a time: two overlapping scans would both report the
+# same finding as new (duplicate alerts). Per process; the app runs one.
+_asset_locks: "weakref.WeakValueDictionary[str, asyncio.Lock]" = (
+    weakref.WeakValueDictionary()
+)
+
+
+def _asset_lock(asset_id: Any) -> asyncio.Lock:
+    key = str(asset_id)
+    lock = _asset_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _asset_locks[key] = lock
+    return lock
 
 
 class CVEMonitoringService:
@@ -90,38 +107,34 @@ class CVEMonitoringService:
     async def monitor_assets(self, assets: list[Asset]) -> list[dict[str, Any]]:
         """Scan the assets and store what each scan found, one result per asset.
 
-        The source lookups run concurrently; the database writes then run one
-        asset at a time, so they never interleave on the shared session.
+        Lookups run concurrently. Storing a scan has no awaits, so two stores
+        never interleave on the shared session.
         """
         semaphore = asyncio.Semaphore(_SCAN_CONCURRENCY)
 
-        async def collect(asset: Asset):
-            async with semaphore:
+        async def scan(asset: Asset) -> dict[str, Any]:
+            async with _asset_lock(asset.id):
                 try:
-                    # Monitoring must never miss a freshly published CVE, so it
-                    # bypasses the read cache (the result still refreshes it).
-                    return await self._collect(
-                        AssetResponse.model_validate(asset), use_cache=False
-                    )
+                    async with semaphore:
+                        # Monitoring must never miss a freshly published CVE,
+                        # so it bypasses the read cache (and refreshes it).
+                        found, complete = await self._collect(
+                            AssetResponse.model_validate(asset), use_cache=False
+                        )
                 except Exception as e:
-                    return e
+                    return self._scan_error(asset, e)
+                return self._record_scan(asset, found, complete)
 
-        collected = await asyncio.gather(*(collect(asset) for asset in assets))
-        results = []
-        for asset, outcome in zip(assets, collected):
-            if isinstance(outcome, Exception):
-                logger.error(f"Error monitoring asset {asset.name}: {outcome}")
-                results.append(
-                    {
-                        "asset_id": asset.id,
-                        "asset_name": asset.name,
-                        "error": str(outcome),
-                        "status": "error",
-                    }
-                )
-            else:
-                results.append(self._record_scan(asset, *outcome))
-        return results
+        return list(await asyncio.gather(*(scan(asset) for asset in assets)))
+
+    def _scan_error(self, asset: Asset, error: Any) -> dict[str, Any]:
+        logger.error(f"Error monitoring asset {asset.name}: {error}")
+        return {
+            "asset_id": asset.id,
+            "asset_name": asset.name,
+            "error": str(error),
+            "status": "error",
+        }
 
     def _record_scan(
         self,
@@ -151,7 +164,9 @@ class CVEMonitoringService:
         # A source that did not answer may have hidden findings: keep them all.
         if complete:
             self.findings.close_scan(asset, scanned_at)
-        self.findings.save()
+        if not self.findings.save():
+            # Nothing was stored: alerting now would repeat on the next scan.
+            return self._scan_error(asset, "could not store the scan results")
 
         return {
             "asset_id": asset.id,
@@ -165,43 +180,6 @@ class CVEMonitoringService:
             "last_monitored": scanned_at,
             "status": "success",
         }
-
-    async def get_user_vulnerabilities(
-        self,
-        user_email: str,
-        days: int = 0,
-        severity_filter: str | None = None,
-        use_cache: bool = True,
-    ) -> list[dict[str, Any]]:
-        """All vulnerabilities across a user's assets, via the precise engine.
-
-        Uses the same CPE-aware, version-filtered, KEV/EPSS-enriched matching as
-        the per-asset endpoint, tagging each finding with its originating asset.
-        """
-        assets = self.db.query(Asset).filter(Asset.user_email == user_email).all()
-
-        async def for_asset(asset: Asset) -> list[dict[str, Any]]:
-            asset_response = AssetResponse.model_validate(asset)
-            vulns = await self.find_vulnerabilities(
-                asset_response,
-                days=days,
-                severity_filter=severity_filter,
-                use_cache=use_cache,
-            )
-            return [
-                {
-                    **vuln,
-                    "asset_id": asset.id,
-                    "asset_name": asset.name,
-                    "asset_version": asset.version,
-                }
-                for vuln in vulns
-            ]
-
-        # Assets are independent read-only lookups; run them concurrently. The
-        # shared per-service semaphore keeps total NVD concurrency bounded.
-        per_asset = await asyncio.gather(*(for_asset(asset) for asset in assets))
-        return [vuln for asset_vulns in per_asset for vuln in asset_vulns]
 
     async def find_vulnerabilities(
         self,
@@ -292,8 +270,7 @@ class CVEMonitoringService:
     ) -> dict[str, Any]:
         """CVEs published in the last ``days`` affecting the user's assets.
 
-        Uses the same engine as the findings endpoints (CPE-aware,
-        version-filtered, all sources), one entry per CVE.
+        Read from the findings stored by the last scans, one entry per CVE.
         """
         user_assets = self.db.query(Asset).filter(Asset.user_email == user_email).all()
         if not user_assets:
@@ -302,7 +279,9 @@ class CVEMonitoringService:
                 "total_assets": 0,
             }
 
-        findings = await self.get_user_vulnerabilities(user_email, days=days)
+        findings = query_findings(
+            self.db, user_email, FindingFilters(days=days, include_suppressed=True)
+        ).findings
         recent: dict[str, dict[str, Any]] = {}
         for finding in findings:
             recent.setdefault(finding["cve_id"], finding)
@@ -339,7 +318,7 @@ class CVEMonitoringService:
                 "medium": by_severity["MEDIUM"],
                 "low": by_severity["LOW"],
             },
-            "data_source": "NIST NVD + OSV.dev (live data)",
+            "data_source": "NIST NVD + OSV.dev (as of the last scan)",
         }
 
 

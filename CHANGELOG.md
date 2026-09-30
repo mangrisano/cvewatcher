@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A finding could be announced twice**: a manual scan started while another
+  scan of the same asset was running (for example right after an SBOM import)
+  could report the same finding as new again. Scans of one asset now run one
+  at a time, and a scan whose results cannot be stored sends no alerts.
+- **The SBOM section of the README** still said the import does not scan.
+
+### Security
+
+- **Per-user limit on live lookups**: manual scans and `GET /cves/search` query
+  NVD on every call, so a single user could exhaust NVD's rate limit for the
+  whole instance. Each user now gets `LIVE_LOOKUPS_PER_HOUR` of them (default
+  30), after which they get **429** with `Retry-After`.
+
+### Changed
+
+- **`GET /assets/{id}/vulnerabilities`, `GET /cves/vulnerabilities` and
+  `GET /assets/monitoring/report` read the stored findings**, like the
+  dashboard: they answer instantly, match the dashboard, and work while NVD is
+  down (they no longer return 503).
+- **The overview counts assets on the server** instead of downloading every
+  asset; `GET /findings` returns `total_assets`.
+
 ## [2.9.0] - 2026-09-30
 
 ### Changed

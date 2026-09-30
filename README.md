@@ -177,25 +177,30 @@ The application can periodically scan every registered asset against the NIST NV
 and alert on newly discovered vulnerabilities. It is **opt-in** and configured via
 environment variables (see `.env.example`):
 
-| Variable                   | Default   | Description                                    |
-| -------------------------- | --------- | ---------------------------------------------- |
-| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler                |
-| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                          |
+| Variable                   | Default   | Description                                     |
+| -------------------------- | --------- | ----------------------------------------------- |
+| `MONITOR_ENABLED`          | `false`   | Enable the background scheduler                 |
+| `MONITOR_INTERVAL_MINUTES` | `360`     | Minutes between scans                           |
 | `SCAN_NEW_ASSETS`          | `true`    | Scan an asset as soon as it is added or changed |
-| `ENRICH_ENABLED`           | `true`    | Add CISA KEV flag + FIRST.org EPSS score       |
-| `DIGEST_ENABLED`           | `false`   | Email each user a periodic digest of findings  |
-| `DIGEST_INTERVAL_MINUTES`  | `1440`    | Minutes between digest emails                  |
-| `NOTIFY_CONSOLE`           | `true`    | Log alerts via the application logger          |
-| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST every alert as JSON to this URL           |
-| `NOTIFY_SLACK_WEBHOOK_URL` | _(unset)_ | Post every alert to a Slack incoming webhook   |
-| `NOTIFY_EMAIL_HOST` …      | _(unset)_ | SMTP relay for all emails (see `.env.example`) |
+| `ENRICH_ENABLED`           | `true`    | Add CISA KEV flag + FIRST.org EPSS score        |
+| `DIGEST_ENABLED`           | `false`   | Email each user a periodic digest of findings   |
+| `DIGEST_INTERVAL_MINUTES`  | `1440`    | Minutes between digest emails                   |
+| `NOTIFY_CONSOLE`           | `true`    | Log alerts via the application logger           |
+| `NOTIFY_WEBHOOK_URL`       | _(unset)_ | POST every alert as JSON to this URL            |
+| `NOTIFY_SLACK_WEBHOOK_URL` | _(unset)_ | Post every alert to a Slack incoming webhook    |
+| `NOTIFY_EMAIL_HOST` …      | _(unset)_ | SMTP relay for all emails (see `.env.example`)  |
 
 When enabled, a scan runs at startup and then on the configured interval. An
 alert is raised when a CVE is first found on an asset, and when a known one
 **enters the CISA KEV catalog** or **its severity rises** (NVD often publishes
 CVEs unscored and rates them days later). Each alert includes the KEV flag and
 EPSS score. Manual scans (`/assets/{id}/monitor`, `/assets/monitoring/scan-all`)
-raise the same alerts.
+raise the same alerts. Scans of the same asset never overlap, so a finding is
+announced once even if a manual scan starts while another is running.
+
+Manual scans and `GET /cves/search` query NVD live, so each user gets
+`LIVE_LOOKUPS_PER_HOUR` of them (default 30); past that they answer **429**
+with `Retry-After`. Reading stored findings is never limited.
 
 Alerts go to two audiences:
 
@@ -234,11 +239,11 @@ active findings.
 
 ### CVE Monitoring
 
-- `GET /assets/{asset_id}/vulnerabilities` - Get vulnerabilities for specific asset
+- `GET /assets/{asset_id}/vulnerabilities` - The asset's findings from its last scan
 - `PATCH /assets/{asset_id}/vulnerabilities/{cve_id}` - Set a finding's triage status
 - `GET /assets/{asset_id}/monitor` - Monitor single asset for CVEs
 - `POST /assets/monitoring/scan-all` - Scan all user assets
-- `GET /assets/monitoring/report` - Generate monitoring report
+- `GET /assets/monitoring/report` - Report of recent CVEs from the last scans
 
 ### Findings
 
@@ -250,7 +255,7 @@ active findings.
 - `GET /cves/fetch-recent` - Fetch and store recent CVEs from NIST NVD (admin only: `ADMIN_EMAILS`)
 - `GET /cves/recent` - List stored CVEs that affect your assets
 - `GET /cves/search` - Search CVEs by product (and optional version)
-- `GET /cves/vulnerabilities` - Check vulnerabilities across all your assets
+- `GET /cves/vulnerabilities` - All findings across your assets, from the last scans
 
 ### User & Health
 
@@ -369,8 +374,8 @@ Each component with a package URL of a supported type (`pypi`, `npm`, `golang`,
 `maven`, `cargo`, `gem`, `nuget`, `composer`, `pub`, `hex`) becomes an asset
 with the matching ecosystem. The response lists what was skipped: packages you
 already track (same name and version), names or versions too long to store, and
-components without a supported purl. The import does not scan; run
-`POST /assets/monitoring/scan-all` (or wait for the scheduler) afterwards.
+components without a supported purl. The new assets are scanned in the
+background right after the import (see `SCAN_NEW_ASSETS`).
 
 ## Development
 

@@ -80,3 +80,8 @@ registration_rate_limiter = InMemoryRateLimiter(
     max_attempts=_settings.register_max_attempts,
     window_seconds=_settings.register_window_seconds,
 )
+
+# Requests that query NVD / OSV.dev live, so no user can exhaust NVD's limit.
+live_lookup_rate_limiter = InMemoryRateLimiter(
+    max_attempts=_settings.live_lookups_per_hour, window_seconds=3600
+)

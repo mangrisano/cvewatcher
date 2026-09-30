@@ -46,6 +46,7 @@ class FindingFilters:
     search: Optional[str] = None
     sort: Optional[str] = None
     descending: bool = True
+    asset_id: Optional[Any] = None
 
 
 @dataclass
@@ -102,12 +103,13 @@ def query_findings(
     return page
 
 
-def scan_state(db: Session, user_email: str) -> tuple[Optional[datetime], int]:
-    """When the user's assets were last fully scanned, and how many never were."""
-    last_scan, unscanned = (
+def scan_state(db: Session, user_email: str) -> tuple[Optional[datetime], int, int]:
+    """Last full scan of the user's assets, how many never had one, and the total."""
+    last_scan, unscanned, total = (
         db.query(
             func.max(Asset.last_scanned_at),
             func.sum(case((Asset.last_scanned_at.is_(None), 1), else_=0)),
+            func.count(Asset.id),
         )
         .filter(Asset.user_email == user_email)
         .one()
@@ -115,7 +117,7 @@ def scan_state(db: Session, user_email: str) -> tuple[Optional[datetime], int]:
     # SQLite drops the zone of timezone-aware columns; the value is UTC.
     if last_scan is not None and last_scan.tzinfo is None:
         last_scan = last_scan.replace(tzinfo=timezone.utc)
-    return last_scan, int(unscanned or 0)
+    return last_scan, int(unscanned or 0), int(total or 0)
 
 
 def _active(db: Session, user_email: str, filters: FindingFilters) -> Query:
@@ -127,6 +129,8 @@ def _active(db: Session, user_email: str, filters: FindingFilters) -> Query:
     )
     if not filters.include_suppressed:
         query = query.filter(_STATUS.notin_(SUPPRESSED_STATUSES))
+    if filters.asset_id is not None:
+        query = query.filter(AssetCVE.asset_id == filters.asset_id)
     if filters.days > 0:
         # cves.publish_date holds naive UTC.
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None)
