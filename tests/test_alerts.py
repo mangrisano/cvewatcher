@@ -277,6 +277,41 @@ def test_notification_settings_defaults_and_update(client):
     assert response.json()["min_severity"] == "CRITICAL"
 
 
+def test_notification_secrets_are_encrypted_at_rest(client):
+    from sqlalchemy import text
+
+    headers = _login(client, "notif-gina")
+    slack = "https://hooks.slack.com/services/T0/B0/at-rest-secret"
+    token = "123456789:" + "B" * 35
+    client.put(
+        "/user/notifications",
+        headers=headers,
+        json={
+            "slack_webhook_url": slack,
+            "telegram_bot_token": token,
+            "telegram_chat_id": "42",
+        },
+    )
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "notif-gina@example.com").one()
+        raw = db.execute(
+            text(
+                "SELECT slack_webhook_url, telegram_bot_token, telegram_chat_id "
+                "FROM notification_preferences WHERE user_id = :id"
+            ),
+            {"id": user.id.hex},
+        ).one()
+        assert slack not in raw[0] and token not in raw[1]
+        assert raw[2] == "42"  # the chat id is not a secret
+        prefs = alerts.load_preferences(db, [str(user.email)])[str(user.email)]
+        assert prefs.slack_webhook_url == slack
+        assert prefs.telegram_bot_token == token
+    finally:
+        db.close()
+
+
 def test_telegram_settings_need_token_and_chat_and_can_be_removed(client):
     headers = _login(client, "notif-fabio")
     token = "123456789:" + "A" * 35

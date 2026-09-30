@@ -4,6 +4,7 @@ cvss~=3.6
 fastapi[standard]~=0.141.1
 httpx~=0.28.1
 joserfc~=1.7.4
+cryptography~=50.0.1
 packaging~=26.3
 psycopg2-binary~=2.9.12
 pydantic[email]~=2.13.4

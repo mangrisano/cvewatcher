@@ -8,6 +8,7 @@ Empty variables count as unset (e.g. ``NVD_API_KEY=`` keeps the default).
 from functools import lru_cache
 from typing import Optional
 
+from cryptography.fernet import Fernet
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +23,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
+    # Fernet key for secrets stored in the DB; derived from the JWT key if unset.
+    secrets_encryption_key: Optional[str] = None
 
     registration_enabled: bool = False
     register_max_attempts: int = 5
@@ -60,6 +63,19 @@ class Settings(BaseSettings):
         # RFC 7518 §3.2: an HMAC key must be at least as long as the hash output.
         if value is not None and len(value.encode()) < 32:
             raise ValueError("JWT_SECRET_KEY must be at least 32 bytes long")
+        return value
+
+    @field_validator("secrets_encryption_key")
+    @classmethod
+    def _fernet_key(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            try:
+                Fernet(value)
+            except ValueError:
+                raise ValueError(
+                    "SECRETS_ENCRYPTION_KEY must be a Fernet key "
+                    "(32 url-safe base64-encoded bytes)"
+                ) from None
         return value
 
     @field_validator("nvd_max_concurrency")

@@ -7,12 +7,27 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Text,
+    TypeDecorator,
     true,
 )
 from uuid import uuid4
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 from app.database.connection import Base
+from app.utils import crypto
+
+
+class EncryptedString(TypeDecorator):
+    """Text encrypted at rest; reads as None if the key can't decrypt it."""
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return None if value is None else crypto.encrypt(value)
+
+    def process_result_value(self, value, dialect):
+        return None if value is None else crypto.decrypt(value)
 
 
 class User(Base):
@@ -121,10 +136,10 @@ class NotificationPreference(Base):
     )
     always_kev = Column(Boolean, nullable=False, default=True, server_default=true())
     escalations = Column(Boolean, nullable=False, default=True, server_default=true())
-    slack_webhook_url = Column(String(500), nullable=True)
-    teams_webhook_url = Column(String(500), nullable=True)
-    discord_webhook_url = Column(String(500), nullable=True)
-    telegram_bot_token = Column(String(100), nullable=True)
+    slack_webhook_url = Column(EncryptedString, nullable=True)
+    teams_webhook_url = Column(EncryptedString, nullable=True)
+    discord_webhook_url = Column(EncryptedString, nullable=True)
+    telegram_bot_token = Column(EncryptedString, nullable=True)
     telegram_chat_id = Column(String(64), nullable=True)
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Chat webhooks and bot tokens are encrypted at rest**: they were stored in
+  plain text, so a leaked database or backup let anyone post to the users'
+  Slack, Teams, Discord or Telegram channels. They are now encrypted with
+  Fernet using `SECRETS_ENCRYPTION_KEY`, or a key derived from
+  `JWT_SECRET_KEY` when it is not set; the upgrade encrypts the existing
+  values. Keep the key out of database backups. Changing it makes the stored
+  secrets unreadable: they read as not configured and must be entered again.
+
 ## [2.7.0] - 2026-09-30
 
 ### Added
