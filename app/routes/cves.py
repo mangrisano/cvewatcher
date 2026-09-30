@@ -101,7 +101,7 @@ def get_recent_cves(
 
 
 @router.get("/vulnerabilities", response_model=list[VulnerabilityResponse])
-async def check_my_vulnerabilities(
+def check_my_vulnerabilities(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Database work no longer holds up other requests**: 17 endpoints (assets,
+  findings export, notifications, refresh/logout, metrics, …) ran their
+  synchronous database queries on the event loop, so a slow one — like a large
+  export — stalled every other request. They now run in worker threads.
+
 ## [2.10.1] - 2026-09-30
 
 ### Fixed

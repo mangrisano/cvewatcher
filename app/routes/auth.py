@@ -69,7 +69,7 @@ def _registration_open(db: Session) -> bool:
 
 
 @router.get("/auth/registration-status", tags=["auth"])
-async def registration_status(db: Session = Depends(get_db)):
+def registration_status(db: Session = Depends(get_db)):
     return {"open": _registration_open(db), "password_reset": reset_available()}
 
 
@@ -158,9 +158,7 @@ def login_user(user: UserLoginRequest, request: Request, db: Session = Depends(g
 
 
 @router.post("/auth/refresh", tags=["auth"])
-async def refresh_access_token(
-    request: RefreshTokenRequest, db: Session = Depends(get_db)
-):
+def refresh_access_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
     try:
         payload = verify_refresh_token(request.refresh_token)
         user_email = payload.get("sub")
@@ -193,7 +191,7 @@ async def refresh_access_token(
 
 
 @router.post("/auth/logout", tags=["auth"])
-async def logout_user(
+def logout_user(
     body: Optional[RefreshTokenRequest] = None,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -218,7 +216,7 @@ _RESET_SENT = {
 
 
 @router.post("/auth/forgot-password", tags=["auth"])
-async def forgot_password(
+def forgot_password(
     body: ForgotPasswordRequest,
     request: Request,
     background: BackgroundTasks,

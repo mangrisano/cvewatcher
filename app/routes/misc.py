@@ -14,7 +14,7 @@ async def health_check():
 
 
 @router.get("/metrics", tags=["misc"])
-async def metrics(db: Session = Depends(get_db)):
+def metrics(db: Session = Depends(get_db)):
     return Response(
         content=render_metrics(db),
         media_type="text/plain; version=0.0.4",

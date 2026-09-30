@@ -67,7 +67,7 @@ class SeverityLevel(StrEnum):
 
 
 @router.post("/", response_model=AssetResponse)
-async def create_asset(
+def create_asset(
     asset_data: AssetCreate,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
@@ -188,7 +188,7 @@ async def import_sbom(
 
 
 @router.get("/", response_model=list[AssetResponse])
-async def get_my_assets(
+def get_my_assets(
     limit: int = Query(default=50, ge=1, le=100, description="Max assets to return"),
     offset: int = Query(default=0, ge=0, description="Number of assets to skip"),
     current_user: dict = Depends(get_current_user),
@@ -206,12 +206,12 @@ async def get_my_assets(
 
 
 @router.get("/{asset_id}", response_model=AssetResponse)
-async def get_asset(asset: Asset = Depends(get_owned_asset)):
+def get_asset(asset: Asset = Depends(get_owned_asset)):
     return AssetResponse.model_validate(asset)
 
 
 @router.get("/{asset_id}/vulnerabilities", response_model=AssetVulnerabilitiesResponse)
-async def get_asset_vulnerabilities(
+def get_asset_vulnerabilities(
     days: int = Query(
         default=0,
         ge=0,
@@ -241,7 +241,7 @@ async def get_asset_vulnerabilities(
 @router.patch(
     "/{asset_id}/vulnerabilities/{cve_id}", response_model=FindingStatusResponse
 )
-async def set_vulnerability_status(
+def set_vulnerability_status(
     update: FindingStatusUpdate,
     cve_id: str = Path(max_length=20, pattern=_FINDING_ID_PATTERN),
     asset: Asset = Depends(get_owned_asset),
@@ -251,7 +251,7 @@ async def set_vulnerability_status(
 
 
 @router.patch("/{asset_id}", response_model=AssetResponse)
-async def update_asset(
+def update_asset(
     asset_data: AssetUpdate,
     background_tasks: BackgroundTasks,
     asset: Asset = Depends(get_owned_asset),
@@ -300,7 +300,7 @@ async def update_asset(
 
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_asset(
+def delete_asset(
     asset: Asset = Depends(get_owned_asset),
     db: Session = Depends(get_db),
 ):

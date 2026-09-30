@@ -126,7 +126,7 @@ async def findings_summary(
 
 
 @router.get("/export")
-async def export_findings(
+def export_findings(
     format: str = Query(default="json", pattern="^(json|csv)$"),
     days: int = Query(default=0, ge=0, le=MAX_DATE_RANGE_DAYS),
     include_suppressed: bool = Query(default=False),

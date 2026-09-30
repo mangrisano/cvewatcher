@@ -424,6 +424,43 @@ def test_password_hashing_does_not_block_other_requests(client, monkeypatch):
     assert served_meanwhile == [True]
 
 
+def test_a_slow_export_does_not_block_other_requests(client, monkeypatch):
+    import asyncio
+    import threading
+
+    import httpx
+
+    from app.main import app
+    from app.routes import findings as findings_routes
+
+    headers = _login(client, "exporter", "exporter@example.com")
+    querying = threading.Event()
+    health_done = threading.Event()
+    served_meanwhile = []
+    real_query = findings_routes.query_findings
+
+    def slow_query(*args, **kwargs):
+        querying.set()
+        served_meanwhile.append(health_done.wait(timeout=3))
+        return real_query(*args, **kwargs)
+
+    monkeypatch.setattr(findings_routes, "query_findings", slow_query)
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+            export = asyncio.create_task(
+                c.get("/findings/export?format=csv", headers=headers)
+            )
+            await asyncio.to_thread(querying.wait, 3)
+            health = await c.get("/health")
+            health_done.set()
+            return health.status_code, (await export).status_code
+
+    assert asyncio.run(scenario()) == (200, 200)
+    assert served_meanwhile == [True]
+
+
 def test_findings_are_served_while_nvd_is_down(client, monkeypatch):
     from app.services import nist_nvd
     from app.services.nist_nvd import NvdUnavailableError

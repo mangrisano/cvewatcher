@@ -64,7 +64,7 @@ def _settings(
 
 
 @router.get("/user", tags=["user"])
-async def get_user_profile(
+def get_user_profile(
     current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     db_user = _account(current_user, db)
@@ -115,7 +115,7 @@ def change_password(
 
 
 @router.get("/user/notifications", response_model=NotificationSettings, tags=["user"])
-async def get_notification_settings(
+def get_notification_settings(
     current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     user = _account(current_user, db)
@@ -123,7 +123,7 @@ async def get_notification_settings(
 
 
 @router.put("/user/notifications", response_model=NotificationSettings, tags=["user"])
-async def update_notification_settings(
+def update_notification_settings(
     update: NotificationSettingsUpdate,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
