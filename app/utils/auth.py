@@ -25,22 +25,51 @@ _CLAIMS_REGISTRY = jwt.JWTClaimsRegistry()
 ACCESS_TOKEN_EXPIRE_MINUTES = _settings.jwt_access_token_expire_minutes
 REFRESH_TOKEN_EXPIRE_DAYS = _settings.jwt_refresh_token_expire_days
 
+# OWASP's current minimum for PBKDF2-HMAC-SHA256.
+PASSWORD_HASH_ITERATIONS = 600_000
+_HASH_SCHEME = "pbkdf2_sha256"
+# Hashes written before 2.7.2 are "salt:digest" at this fixed count.
+_LEGACY_ITERATIONS = 100_000
+
 
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(32)
-    hashed_password = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
-    return salt.hex() + ":" + hashed_password.hex()
+    iterations = PASSWORD_HASH_ITERATIONS
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
+    return f"{_HASH_SCHEME}${iterations}${salt.hex()}${digest.hex()}"
+
+
+def _parse_hash(stored_hash: str) -> tuple[int, bytes, bytes]:
+    if stored_hash.startswith(f"{_HASH_SCHEME}$"):
+        _, iterations, salt_hex, digest_hex = stored_hash.split("$")
+        return int(iterations), bytes.fromhex(salt_hex), bytes.fromhex(digest_hex)
+    salt_hex, digest_hex = stored_hash.split(":")
+    return _LEGACY_ITERATIONS, bytes.fromhex(salt_hex), bytes.fromhex(digest_hex)
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
     try:
-        salt_hex, password_hashed_hex = stored_hash.split(":")
-        salt = bytes.fromhex(salt_hex)
-        stored_password_hashed = bytes.fromhex(password_hashed_hex)
-        password_hashed = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
-        return hmac.compare_digest(password_hashed, stored_password_hashed)
+        iterations, salt, expected = _parse_hash(stored_hash)
     except (ValueError, TypeError):
         return False
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
+    return hmac.compare_digest(digest, expected)
+
+
+def password_needs_rehash(stored_hash: str) -> bool:
+    """True when the hash uses fewer iterations than the current setting."""
+    try:
+        iterations, _, _ = _parse_hash(stored_hash)
+    except (ValueError, TypeError):
+        return True
+    return iterations < PASSWORD_HASH_ITERATIONS
+
+
+def spend_password_check(password: str) -> None:
+    """Take as long as a real check, so unknown emails can't be told by timing."""
+    hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), bytes(32), PASSWORD_HASH_ITERATIONS
+    )
 
 
 def create_access_token(

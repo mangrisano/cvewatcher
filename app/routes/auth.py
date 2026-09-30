@@ -9,6 +9,8 @@ from app.utils.auth import (
     create_access_token,
     create_refresh_token,
     hash_password,
+    password_needs_rehash,
+    spend_password_check,
     verify_password,
     verify_refresh_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -117,6 +119,8 @@ async def login_user(
 
     db_user = db.query(User).filter(_email_matches(user.email)).first()
 
+    if db_user is None:
+        spend_password_check(user.password)
     if not db_user or not verify_password(user.password, str(db_user.password_hash)):
         login_rate_limiter.record_failure(rate_limit_key)
         login_ip_rate_limiter.record_failure(client_ip)
@@ -124,6 +128,10 @@ async def login_user(
 
     # The per-IP counter is not reset: one valid account must not unlock spraying.
     login_rate_limiter.reset(rate_limit_key)
+
+    if password_needs_rehash(str(db_user.password_hash)):
+        db_user.password_hash = hash_password(user.password)  # type: ignore[assignment]
+        db.commit()
 
     # Tokens carry the stored email: assets are owned by that exact string.
     access_token = create_access_token(data={"sub": db_user.email})

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Stronger password hashing**: passwords are hashed with PBKDF2-HMAC-SHA256
+  at 600,000 iterations (OWASP's current minimum) instead of 100,000, and the
+  stored hash now records its iteration count. Existing hashes keep working and
+  are upgraded the next time each user logs in; nobody has to reset a password.
+- **Login no longer reveals which emails are registered**: an unknown email
+  now takes as long as a wrong password, since it runs the same password hash.
+
 ## [2.7.1] - 2026-09-30
 
 ### Security
