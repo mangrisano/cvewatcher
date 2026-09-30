@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.2] - 2026-09-30
+
 ### Security
 
 - **Possible stored XSS in the dashboard**: the severity of a finding and the
