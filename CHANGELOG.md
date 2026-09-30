@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A sign-in froze the whole app for a moment**: hashing the password
+  (600,000 PBKDF2 rounds) on login and registration ran on the event loop,
+  holding every other request until it finished. It now runs in a worker
+  thread.
+
 ## [2.10.0] - 2026-09-30
 
 ### Added

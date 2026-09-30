@@ -386,6 +386,44 @@ def test_waiting_on_nvd_does_not_block_other_requests(client, monkeypatch):
     assert asyncio.run(scenario()) == (200, 200)
 
 
+def test_password_hashing_does_not_block_other_requests(client, monkeypatch):
+    import asyncio
+    import threading
+
+    import httpx
+
+    from app.main import app
+    from app.routes import auth as auth_routes
+
+    hashing = threading.Event()
+    health_done = threading.Event()
+    served_meanwhile = []
+
+    def slow_hash(password):
+        hashing.set()
+        served_meanwhile.append(health_done.wait(timeout=3))
+
+    monkeypatch.setattr(auth_routes, "spend_password_check", slow_hash)
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+            login = asyncio.create_task(
+                c.post(
+                    "/auth/login",
+                    json={"email": "nobody@x.it", "password": "Password123"},
+                )
+            )
+            await asyncio.to_thread(hashing.wait, 3)
+            health = await c.get("/health")
+            health_done.set()
+            return health.status_code, (await login).status_code
+
+    # On the event loop, the hash would hold /health until it gave up waiting.
+    assert asyncio.run(scenario()) == (200, 401)
+    assert served_meanwhile == [True]
+
+
 def test_findings_are_served_while_nvd_is_down(client, monkeypatch):
     from app.services import nist_nvd
     from app.services.nist_nvd import NvdUnavailableError

@@ -73,8 +73,9 @@ async def registration_status(db: Session = Depends(get_db)):
     return {"open": _registration_open(db), "password_reset": reset_available()}
 
 
+# Plain defs: hashing 600k PBKDF2 rounds runs in the threadpool, off the loop.
 @router.post("/auth/register", tags=["auth"])
-async def register_user(
+def register_user(
     user: UserRegistrationRequest, request: Request, db: Session = Depends(get_db)
 ):
     if not _registration_open(db):
@@ -114,9 +115,7 @@ async def register_user(
 
 
 @router.post("/auth/login", tags=["auth"])
-async def login_user(
-    user: UserLoginRequest, request: Request, db: Session = Depends(get_db)
-):
+def login_user(user: UserLoginRequest, request: Request, db: Session = Depends(get_db)):
     client_ip = request.client.host if request.client else "unknown"
     rate_limit_key = f"{user.email.lower()}:{client_ip}"
 
