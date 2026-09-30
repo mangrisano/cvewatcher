@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=14">
+    <link rel="stylesheet" href="/static/css/app.css?v=15">
 </head>
 
 <body>
@@ -190,8 +190,14 @@
                         <div class="section-head__filters">
                             <input id="assetFilter" class="input-sm" placeholder="Filter assets…">
                         </div>
-                        <button id="assetAddBtn" class="btn btn--primary">+ Add asset</button>
+                        <div class="section-head__actions">
+                            <button id="sbomImportBtn" class="btn"
+                                data-tip="Create assets from a CycloneDX or SPDX JSON file">Import SBOM</button>
+                            <input type="file" id="sbomFile" accept=".json,application/json" hidden>
+                            <button id="assetAddBtn" class="btn btn--primary">+ Add asset</button>
+                        </div>
                     </div>
+                    <div id="sbomResult" class="section-note hidden"></div>
                     <div id="assetsLoading" class="muted">Loading assets&hellip;</div>
                     <div id="assetsEmpty" class="placeholder hidden">No assets yet. Add your first asset to start
                         monitoring.</div>
@@ -384,7 +390,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20"></script>
+    <script src="/static/js/app.js?v=21"></script>
 </body>
 
 </html>

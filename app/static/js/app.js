@@ -249,14 +249,14 @@
         let summary = { total: 0, kev: 0, by_severity: {}, by_status: {} };
         let assetsCount = 0;
         try {
-            const [sRes, aRes] = await Promise.all([
+            const [sRes, allAssets] = await Promise.all([
                 apiFetch(
                     "/findings?include_suppressed=false" + (force ? "&refresh=true" : "")
                 ),
-                apiFetch("/assets/"),
+                fetchAllAssets(),
             ]);
             if (sRes.ok) summary = await sRes.json();
-            if (aRes.ok) assetsCount = (await aRes.json()).length;
+            assetsCount = allAssets.length;
         } catch (_) {
             /* best effort */
         } finally {
@@ -300,15 +300,76 @@
 
     // --- Assets ------------------------------------------------------------
     let assets = [];
+    const ASSET_PAGE = 100;
+    const MAX_SBOM_BYTES = 5 * 1024 * 1024;
+
+    // The API returns at most 100 assets per request.
+    async function fetchAllAssets() {
+        const all = [];
+        for (let offset = 0; ; offset += ASSET_PAGE) {
+            const res = await apiFetch(`/assets/?limit=${ASSET_PAGE}&offset=${offset}`);
+            if (!res.ok) return all;
+            const page = await res.json();
+            all.push(...page);
+            if (page.length < ASSET_PAGE) return all;
+        }
+    }
 
     async function loadAssets() {
         $("assetsLoading").classList.remove("hidden");
         $("assetsTableWrap").classList.add("hidden");
         $("assetsEmpty").classList.add("hidden");
-        const res = await apiFetch("/assets/");
-        assets = res.ok ? await res.json() : [];
+        assets = await fetchAllAssets();
         $("assetsLoading").classList.add("hidden");
         renderAssets();
+    }
+
+    function showSbomResult(ok, text) {
+        const box = $("sbomResult");
+        box.className = "section-note " + (ok ? "alert--ok" : "alert--error");
+        box.textContent = text;
+    }
+
+    async function importSbom(event) {
+        const file = event.target.files[0];
+        event.target.value = "";
+        if (!file) return;
+        if (file.size > MAX_SBOM_BYTES) {
+            showSbomResult(false, "The SBOM is larger than 5 MB.");
+            return;
+        }
+        const btn = $("sbomImportBtn");
+        btn.classList.add("is-busy");
+        try {
+            const res = await apiFetch("/assets/import-sbom", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: await file.text(),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showSbomResult(false, errorText(data, "Import failed"));
+                return;
+            }
+            const skipped = [
+                [data.skipped_existing.length, "already present"],
+                [data.skipped_invalid.length, "with a name or version too long"],
+                [data.unsupported.length, "without a supported package URL"],
+            ]
+                .filter(([n]) => n)
+                .map(([n, why]) => `${n} ${why}`);
+            showSbomResult(
+                true,
+                `Created ${data.created} asset(s)` +
+                (data.project ? ` from ${data.project}` : "") +
+                "." +
+                (skipped.length ? ` Skipped: ${skipped.join(", ")}.` : "") +
+                (data.created ? " Use Rescan under Vulnerabilities to check them." : "")
+            );
+            loadAssets();
+        } finally {
+            btn.classList.remove("is-busy");
+        }
     }
 
     function renderAssets() {
@@ -757,6 +818,8 @@
     on("overviewRefresh", "click", refreshOverview);
     on("assetFilter", "input", renderAssets);
     on("assetAddBtn", "click", () => openAssetModal());
+    on("sbomImportBtn", "click", () => $("sbomFile").click());
+    on("sbomFile", "change", importSbom);
     on("findSearch", "input", renderFindings);
     on("findSeverity", "change", renderFindings);
     on("findStatus", "change", renderFindings);

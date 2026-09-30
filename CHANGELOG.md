@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **SBOM import**: `POST /assets/import-sbom` and an "Import SBOM" button in the
+  dashboard create one asset per package listed in a CycloneDX or SPDX JSON
+  SBOM. The ecosystem comes from each package URL (purl), so OSV.dev matching
+  works right away. Packages already tracked are skipped, and the response says
+  what was skipped and why. Limits: 5 MB and 2000 components per file.
+
 ### Security
 
 - **Stronger password hashing**: passwords are hashed with PBKDF2-HMAC-SHA256
@@ -22,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dashboard page from an older release, whose buttons the new security policy
   blocks. HTML pages are now sent with `Cache-Control: no-cache`, so the
   browser always checks for the current version.
+- **The dashboard showed at most 50 assets**: it now loads every page of the
+  asset list, and `GET /assets/` has a stable order so paging never repeats or
+  skips assets created at the same moment.
 
 ## [2.7.1] - 2026-09-30
 

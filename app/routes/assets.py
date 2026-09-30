@@ -1,5 +1,6 @@
+import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -10,6 +11,7 @@ from app.models import (
     AssetVulnerabilitiesResponse,
     FindingStatusResponse,
     FindingStatusUpdate,
+    SbomImportResponse,
     VulnerabilityResponse,
 )
 from app.database.connection import get_db
@@ -25,6 +27,7 @@ from app.services.cve_monitoring import CVEMonitoringService
 from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
 from app.services.notifications import build_notifiers_from_env
+from app.services.sbom import SbomError, parse_sbom
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,11 @@ _FINDING_ID_PATTERN = r"^[A-Z][A-Z0-9]{1,15}-[A-Za-z0-9-]+$"
 
 # Fields that decide which CVEs match an asset.
 _IDENTITY_FIELDS = ("name", "version", "cpe", "ecosystem")
+
+MAX_SBOM_BYTES = 5 * 1024 * 1024
+# Column sizes of assets.name and assets.version.
+_MAX_NAME_LENGTH = 100
+_MAX_VERSION_LENGTH = 50
 
 
 class SeverityLevel(StrEnum):
@@ -90,6 +98,75 @@ async def create_asset(
         raise HTTPException(status_code=500, detail="Error creating asset")
 
 
+@router.post(
+    "/import-sbom",
+    response_model=SbomImportResponse,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {"application/json": {"schema": {"type": "object"}}},
+            "description": "A CycloneDX or SPDX SBOM in JSON format",
+        }
+    },
+)
+async def import_sbom(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SbomImportResponse:
+    """Create one asset per package listed in the SBOM. It does not start a scan."""
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_SBOM_BYTES:
+            raise HTTPException(status_code=413, detail="The SBOM is larger than 5 MB")
+    try:
+        document = json.loads(body)
+    except (ValueError, RecursionError):
+        raise HTTPException(status_code=400, detail="The SBOM is not valid JSON")
+    try:
+        sbom = parse_sbom(document)
+    except SbomError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RecursionError:
+        raise HTTPException(status_code=400, detail="The SBOM is nested too deeply")
+
+    user_email = current_user.get("sub")
+    existing = set(
+        db.query(Asset.name, Asset.version).filter(Asset.user_email == user_email)
+    )
+    description = f"Imported from SBOM: {sbom.project[:200]}" if sbom.project else None
+    response = SbomImportResponse(
+        project=sbom.project,
+        created=0,
+        skipped_existing=[],
+        skipped_invalid=[],
+        unsupported=sbom.unsupported,
+    )
+    for package in sbom.packages:
+        label = f"{package.name}@{package.version}" if package.version else package.name
+        if (package.name, package.version) in existing:
+            response.skipped_existing.append(label)
+        elif len(package.name) > _MAX_NAME_LENGTH or (
+            len(package.version or "") > _MAX_VERSION_LENGTH
+        ):
+            response.skipped_invalid.append(label)
+        else:
+            db.add(
+                Asset(
+                    name=package.name,
+                    version=package.version,
+                    ecosystem=package.ecosystem,
+                    user_email=user_email,
+                    description=description,
+                )
+            )
+            existing.add((package.name, package.version))
+            response.created += 1
+    db.commit()
+    return response
+
+
 @router.get("/", response_model=list[AssetResponse])
 async def get_my_assets(
     limit: int = Query(default=50, ge=1, le=100, description="Max assets to return"),
@@ -100,7 +177,7 @@ async def get_my_assets(
     assets = (
         db.query(Asset)
         .filter(Asset.user_email == current_user.get("sub"))
-        .order_by(Asset.created_at.desc())
+        .order_by(Asset.created_at.desc(), Asset.id)
         .offset(offset)
         .limit(limit)
         .all()

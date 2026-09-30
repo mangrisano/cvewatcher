@@ -38,6 +38,7 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities" -H "Authorization: Bearer $TOKEN" 
 ## Features
 
 - **Asset inventory** — track software with name, version, optional CPE, **ecosystem** and description, scoped per user.
+- **SBOM import** — upload a **CycloneDX** or **SPDX** JSON SBOM to create one asset per package in one go, each with its OSV.dev ecosystem taken from the package URL (purl).
 - **Precise CVE matching** — NVD `cpeName` lookups evaluate version ranges server-side (no keyword 100-result cap).
 - **Automatic CPE resolution** — derive a CPE from a product name via the NVD CPE dictionary.
 - **Keyword fallback** — free-text NVD search with local product/version filtering to cut the noise.
@@ -86,7 +87,7 @@ three sections:
   (actively exploited) count, Critical + High count and asset count, plus
   breakdowns by severity and by triage status.
 - **Assets** — full inventory management: add / edit / delete assets (with an
-  optional **ecosystem** to enable OSV.dev) and filter by name.
+  optional **ecosystem** to enable OSV.dev), **import an SBOM** and filter by name.
 - **Vulnerabilities** — a cross-asset table of every finding, each with a linked
   CVE id, colour-coded **severity** badge, CVSS **score**, **KEV** badge, **EPSS**
   probability and an inline **triage status** selector. You can search by CVE or
@@ -217,6 +218,7 @@ active findings.
 ### Asset Management
 
 - `POST /assets/` - Create new asset
+- `POST /assets/import-sbom` - Create assets from a CycloneDX or SPDX JSON SBOM (max 5 MB, 2000 components)
 - `GET /assets/` - List user's assets
 - `GET /assets/{asset_id}` - Get specific asset details
 - `PATCH /assets/{asset_id}` - Update asset information
@@ -341,6 +343,26 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities?severity=HIGH&days=365" \
 > If NVD is unreachable the endpoint returns **HTTP 503** rather than an empty
 > list, so an empty `vulnerabilities` array always means "no known CVEs", never
 > "the lookup failed".
+
+### Importing an SBOM
+
+Instead of adding packages one by one, generate an SBOM with a tool such as
+[Syft](https://github.com/anchore/syft) and import it:
+
+```bash
+syft dir:. -o cyclonedx-json > sbom.json
+
+curl -s -X POST "$BASE/assets/import-sbom" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  --data-binary @sbom.json | python3 -m json.tool
+```
+
+Each component with a package URL of a supported type (`pypi`, `npm`, `golang`,
+`maven`, `cargo`, `gem`, `nuget`, `composer`, `pub`, `hex`) becomes an asset
+with the matching ecosystem. The response lists what was skipped: packages you
+already track (same name and version), names or versions too long to store, and
+components without a supported purl. The import does not scan; run
+`POST /assets/monitoring/scan-all` (or wait for the scheduler) afterwards.
 
 ## Development
 

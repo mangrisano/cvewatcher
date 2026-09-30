@@ -96,6 +96,14 @@ class AssetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SbomImportResponse(BaseModel):
+    project: Optional[str] = None
+    created: int
+    skipped_existing: list[str]
+    skipped_invalid: list[str]
+    unsupported: list[str]
+
+
 class VulnerabilityResponse(BaseModel):
     """A single CVE finding. The asset_* fields are populated when a finding is
     returned outside a per-asset envelope (e.g. by ``GET /cves/vulnerabilities``).
