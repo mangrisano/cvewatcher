@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-09-30
+
 ### Added
 
 - **Delete your account**: a *Delete account* item in the user menu
