@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CVE Watcher</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=18">
+    <link rel="stylesheet" href="/static/css/app.css?v=19">
 </head>
 
 <body>
@@ -28,6 +28,10 @@
             </label>
             <a href="#" id="forgotLink" class="forgot-link hidden">Forgot password?</a>
             <button id="authSubmit" class="btn btn--primary btn--block" type="submit">Sign in</button>
+            <div id="oidcBlock" class="oidc-block hidden">
+                <span class="auth-sep muted">or</span>
+                <a id="oidcLink" class="btn btn--block" href="/auth/oidc/login">Sign in with SSO</a>
+            </div>
             <p class="auth-toggle muted">
                 <span id="authToggleText">Don't have an account?</span>
                 <a href="#" id="authToggleLink">Create one</a>
@@ -478,8 +482,11 @@
                 <form id="deleteForm" class="form">
                     <p class="hint">This permanently deletes your account, your assets, their findings and
                         your notification settings. It cannot be undone.</p>
-                    <label>Password
+                    <label id="deletePasswordField">Password
                         <input id="deletePassword" type="password" autocomplete="current-password" required>
+                    </label>
+                    <label id="deleteEmailField" class="hidden">Type your email address to confirm
+                        <input id="deleteEmail" type="email" autocomplete="off">
                     </label>
                     <label class="check"><input type="checkbox" id="deleteConfirm" required> I understand that
                         everything will be deleted</label>
@@ -493,7 +500,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=27"></script>
+    <script src="/static/js/app.js?v=28"></script>
 </body>
 
 </html>

@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     registration_enabled: bool = False
     # Base URL users reach the app at, used in emailed links (password reset).
     public_url: Optional[str] = None
+
+    # Single sign-on through any OpenID Connect provider (Keycloak, Entra ID, …).
+    oidc_issuer: Optional[str] = None
+    oidc_client_id: Optional[str] = None
+    oidc_client_secret: Optional[str] = None
+    # Where the app itself fetches the discovery document, when the issuer URL is
+    # not reachable from the server (e.g. a provider in the same Docker network).
+    oidc_discovery_url: Optional[str] = None
+    oidc_provider_name: str = "SSO"
+    oidc_scopes: str = "openid email profile"
+    oidc_auto_create: bool = True
+    oidc_allowed_domains: str = ""
     register_max_attempts: int = 5
     register_window_seconds: int = 3600
     login_max_attempts: int = 5
@@ -116,6 +128,19 @@ class Settings(BaseSettings):
     @property
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
+    @property
+    def oidc_enabled(self) -> bool:
+        # PUBLIC_URL builds the redirect URI registered with the provider.
+        return bool(self.oidc_issuer and self.oidc_client_id and self.public_url)
+
+    @property
+    def oidc_allowed_domain_set(self) -> set[str]:
+        return {
+            d.strip().lower().lstrip("@")
+            for d in self.oidc_allowed_domains.split(",")
+            if d.strip()
+        }
 
 
 @lru_cache

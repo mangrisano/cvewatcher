@@ -1,0 +1,57 @@
+{
+    "realm": "cvewatcher",
+    "enabled": true,
+    "sslRequired": "none",
+    "registrationAllowed": false,
+    "clients": [
+        {
+            "clientId": "cvewatcher",
+            "name": "CVE Watcher (local development)",
+            "enabled": true,
+            "publicClient": false,
+            "secret": "cvewatcher-dev-secret",
+            "standardFlowEnabled": true,
+            "directAccessGrantsEnabled": false,
+            "implicitFlowEnabled": false,
+            "redirectUris": [
+                "http://localhost:8000/auth/oidc/callback"
+            ],
+            "webOrigins": [],
+            "attributes": {
+                "pkce.code.challenge.method": "S256"
+            }
+        }
+    ],
+    "users": [
+        {
+            "username": "alice",
+            "email": "alice@example.com",
+            "emailVerified": true,
+            "firstName": "Alice",
+            "lastName": "Tester",
+            "enabled": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "alice-password",
+                    "temporary": false
+                }
+            ]
+        },
+        {
+            "username": "mallory",
+            "email": "mallory@example.com",
+            "emailVerified": false,
+            "firstName": "Mallory",
+            "lastName": "Unverified",
+            "enabled": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "mallory-password",
+                    "temporary": false
+                }
+            ]
+        }
+    ]
+}

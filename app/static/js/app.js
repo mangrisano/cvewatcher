@@ -225,6 +225,48 @@
         }
     }
 
+    // --- Single sign-on (OpenID Connect) -----------------------------------
+    const OIDC_ERRORS = {
+        provider_unavailable: "The sign-in provider can't be reached right now. Try again later.",
+        provider_refused: "Sign-in was cancelled at the provider.",
+        invalid_state: "The sign-in took too long or was started elsewhere. Please try again.",
+        token_exchange_failed: "The sign-in provider's answer could not be verified.",
+        invalid_id_token: "The sign-in provider's answer could not be verified.",
+        email_not_verified: "Your provider account has no verified email address.",
+        domain_not_allowed: "Accounts from your email domain can't sign in here.",
+        no_account: "There is no CVE Watcher account for you yet. Ask an administrator.",
+        account_linked_elsewhere: "This email is already linked to a different sign-in identity.",
+    };
+
+    // The callback lands on #oidc=<one-time code> or #oidc_error=<reason>.
+    async function openOidcLink() {
+        const match = location.hash.match(/^#oidc(_error)?=([A-Za-z0-9_.-]+)$/);
+        if (!match) return false;
+        history.replaceState(null, "", location.pathname + location.search);
+        showAuthCard("loginForm");
+        if (match[1]) {
+            $("loginError").textContent = OIDC_ERRORS[match[2]] || "Sign-in failed.";
+            $("loginError").classList.remove("hidden");
+            return true;
+        }
+        const res = await fetch("/auth/oidc/exchange", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: match[2] }),
+        }).catch(() => null);
+        const data = res ? await res.json().catch(() => ({})) : {};
+        if (!res || !res.ok) {
+            $("loginError").textContent = errorText(data, "Sign-in failed.");
+            $("loginError").classList.remove("hidden");
+            return true;
+        }
+        localStorage.setItem(TOKEN_KEY, data.access_token);
+        localStorage.setItem(REFRESH_KEY, data.refresh_token);
+        localStorage.setItem(EMAIL_KEY, data.user.email);
+        enterApp();
+        return true;
+    }
+
     // A confirmation link opens the dashboard with #verify=<token>.
     async function openVerifyLink() {
         const match = location.hash.match(/^#verify=([A-Za-z0-9_-]+)$/);
@@ -272,6 +314,21 @@
         $("userEmailFull").textContent = email;
         $("userAvatar").textContent = initials(email);
         showSection("overview");
+        loadProfile();
+    }
+
+    // Single sign-on accounts have no password: no "Change password", and they
+    // confirm deletion by typing their email instead.
+    let hasPassword = true;
+    async function loadProfile() {
+        const res = await apiFetch("/user");
+        if (!res.ok) return;
+        hasPassword = (await res.json()).has_password !== false;
+        $("pwdBtn").classList.toggle("hidden", !hasPassword);
+        $("deletePasswordField").classList.toggle("hidden", !hasPassword);
+        $("deletePassword").required = hasPassword;
+        $("deleteEmailField").classList.toggle("hidden", hasPassword);
+        $("deleteEmail").required = !hasPassword;
     }
 
     function initials(email) {
@@ -918,7 +975,11 @@
             const res = await apiFetch("/user", {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ password: $("deletePassword").value }),
+                body: JSON.stringify(
+                    hasPassword
+                        ? { password: $("deletePassword").value }
+                        : { confirm_email: $("deleteEmail").value }
+                ),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
@@ -1048,6 +1109,10 @@
                 if (toggle) toggle.classList.add("hidden");
             }
             $("forgotLink").classList.toggle("hidden", !status.password_reset);
+            if (status.oidc) {
+                $("oidcLink").textContent = `Sign in with ${status.oidc}`;
+                $("oidcBlock").classList.remove("hidden");
+            }
         } catch (_) {
             /* leave the toggle visible on error */
         }
@@ -1122,8 +1187,9 @@
     on("deleteForm", "submit", deleteAccount);
 
     if (!openResetLink()) {
-        openVerifyLink().then((opened) => {
-            if (!opened && token()) enterApp();
-        });
+        (async () => {
+            if (await openOidcLink()) return;
+            if (!(await openVerifyLink()) && token()) enterApp();
+        })();
     }
 })();

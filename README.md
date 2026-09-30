@@ -150,6 +150,52 @@ that existed before this feature, and all accounts when email is not
 configured, are active as usual; resetting the password also confirms the
 address.
 
+**Single sign-on (OpenID Connect)**: set `OIDC_ISSUER`, `OIDC_CLIENT_ID` (and
+`OIDC_CLIENT_SECRET` for a confidential client) plus `PUBLIC_URL`, and the
+login card shows _Sign in with …_. Any standard provider works (Keycloak,
+Microsoft Entra ID, Google, Okta, Authentik, …); register
+`PUBLIC_URL/auth/oidc/callback` as its redirect URI.
+
+| Variable               | Default                | Description                                                                                       |
+| ---------------------- | ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `OIDC_ISSUER`          | _(unset)_              | Issuer URL of the provider; must equal the `iss` of its tokens                                    |
+| `OIDC_CLIENT_ID`       | _(unset)_              | Client ID registered at the provider                                                              |
+| `OIDC_CLIENT_SECRET`   | _(unset)_              | Client secret; leave empty for a public client (PKCE is always used)                              |
+| `OIDC_DISCOVERY_URL`   | _(issuer)_             | Where the app itself fetches the discovery document, when it reaches the provider at another host |
+| `OIDC_PROVIDER_NAME`   | `SSO`                  | Name on the login button                                                                          |
+| `OIDC_SCOPES`          | `openid email profile` | Scopes requested                                                                                  |
+| `OIDC_AUTO_CREATE`     | `true`                 | Create an account on first sign-in; `false` only lets in addresses that already have one          |
+| `OIDC_ALLOWED_DOMAINS` | _(any)_                | Comma-separated email domains allowed to sign in                                                  |
+
+The app uses the authorization code flow with PKCE, `state` and `nonce`, and
+accepts only ID tokens signed with an asymmetric key published by the
+provider. A person is recognised by the provider's issuer and subject; on the
+first sign-in the account with the same email is linked, or created
+(registration gating does not apply: the provider decides who gets in). The
+provider must vouch for the address (`email_verified`), otherwise the sign-in
+is refused. Accounts created this way have no password: they cannot change
+one, and confirm deletion by typing their email. Local passwords keep working
+next to SSO.
+
+To try it locally, `docker compose --profile oidc up -d` (from `docker/`)
+starts a Keycloak at <http://localhost:8081> (admin console: `admin`/`admin`)
+with a `cvewatcher` realm and two users: `alice`/`alice-password` (verified
+email) and `mallory`/`mallory-password` (unverified, refused). Configure the
+app with:
+
+```bash
+PUBLIC_URL=http://localhost:8000
+OIDC_ISSUER=http://localhost:8081/realms/cvewatcher
+OIDC_DISCOVERY_URL=http://keycloak:8080/realms/cvewatcher/.well-known/openid-configuration
+OIDC_CLIENT_ID=cvewatcher
+OIDC_CLIENT_SECRET=cvewatcher-dev-secret
+OIDC_PROVIDER_NAME=Keycloak
+```
+
+The browser reaches Keycloak at `localhost:8081`, the app container at
+`keycloak:8080`: `OIDC_DISCOVERY_URL` covers the second, while tokens keep
+the public issuer. This realm is for development only.
+
 **Behind a reverse proxy** (nginx, traefik, …) rate limits are keyed on the
 client IP, so uvicorn must trust the proxy's `X-Forwarded-For`: set
 `FORWARDED_ALLOW_IPS` to the proxy's IP or subnet (e.g. the Docker network).
@@ -239,7 +285,7 @@ active findings.
 
 ### Authentication
 
-- `GET /auth/registration-status` - Check whether public sign-up is currently open (`open`) and whether password reset by email is available (`password_reset`)
+- `GET /auth/registration-status` - Check whether public sign-up is currently open (`open`), whether password reset by email is available (`password_reset`) and the single sign-on provider name (`oidc`, `null` when off)
 - `POST /auth/register` - Register new user (subject to registration gating and rate limiting)
 - `POST /auth/login` - User login (rate-limited per email+IP)
 - `POST /auth/refresh` - Exchange a refresh token for a new access token **and a new refresh token** (the one sent is revoked: store the new one)
@@ -248,6 +294,9 @@ active findings.
 - `POST /auth/reset-password` - Set `new_password` with the `token` from the link; signs out every session
 - `POST /auth/verify-email` - Confirm a new account with the `token` from the emailed link
 - `POST /auth/resend-verification` - Email a new confirmation link to `email` (same generic answer and limits as `forgot-password`)
+- `GET /auth/oidc/login` - Start single sign-on: redirects to the provider (only when OIDC is configured)
+- `GET /auth/oidc/callback` - Where the provider sends the user back; redirects to the dashboard with a one-time code valid 60 seconds
+- `POST /auth/oidc/exchange` - Trade that `code` for an access and refresh token pair (works once)
 
 ### Asset Management
 
@@ -281,7 +330,7 @@ active findings.
 ### User & Health
 
 - `GET /user` - Get the current user's profile
-- `DELETE /user` - Delete your account with its assets, findings and settings: `{"password": "..."}` (wrong passwords are rate-limited; the owner gets an email when SMTP is configured)
+- `DELETE /user` - Delete your account with its assets, findings and settings: `{"password": "..."}`, or `{"confirm_email": "..."}` for an account without a password (single sign-on). Wrong confirmations are rate-limited; the owner gets an email when SMTP is configured
 - `POST /user/password` - Change your password: `current_password` + `new_password`. Signs out every other session and returns a fresh token pair for this one; the owner gets an email when SMTP is configured. Wrong current passwords are rate-limited (5 per 15 minutes)
 - `GET /user/notifications` - Your alert settings (webhook URLs and bot tokens are never returned, only whether they are set)
 - `PUT /user/notifications` - Update them: `min_severity`, `always_kev`, `escalations`, `slack_webhook_url`, `teams_webhook_url`, `discord_webhook_url`, `telegram_bot_token` + `telegram_chat_id` (only the fields sent change; `""` removes a channel; each URL must be an HTTPS webhook of that service)

@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.routes.landing import router as landing_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.auth import router as auth_router
+from app.routes.oidc import router as oidc_router
 from app.routes.misc import router as misc_router
 from app.routes.user import router as user_router
 from app.routes.assets import router as assets_router
@@ -99,6 +100,7 @@ async def nvd_unavailable(request: Request, exc: NvdUnavailableError):
 app.include_router(landing_router)
 app.include_router(dashboard_router)
 app.include_router(auth_router)
+app.include_router(oidc_router)
 app.include_router(misc_router)
 app.include_router(user_router)
 app.include_router(assets_router)

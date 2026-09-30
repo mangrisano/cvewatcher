@@ -74,7 +74,13 @@ def _registration_open(db: Session) -> bool:
 
 @router.get("/auth/registration-status", tags=["auth"])
 def registration_status(db: Session = Depends(get_db)):
-    return {"open": _registration_open(db), "password_reset": email_links_available()}
+    settings = get_settings()
+    return {
+        "open": _registration_open(db),
+        "password_reset": email_links_available(),
+        # The button label when single sign-on is configured, else None.
+        "oidc": settings.oidc_provider_name if settings.oidc_enabled else None,
+    }
 
 
 def _limit_email_links(request: Request, email: str) -> None:
@@ -168,7 +174,7 @@ def login_user(user: UserLoginRequest, request: Request, db: Session = Depends(g
 
     db_user = db.query(User).filter(_email_matches(user.email)).first()
 
-    if db_user is None:
+    if db_user is None or db_user.password_hash is None:
         spend_password_check(user.password)
     if not db_user or not verify_password(user.password, str(db_user.password_hash)):
         login_rate_limiter.record_failure(rate_limit_key)

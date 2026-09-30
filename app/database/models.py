@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     Text,
     TypeDecorator,
+    UniqueConstraint,
     true,
 )
 from uuid import uuid4
@@ -33,11 +34,13 @@ class EncryptedString(TypeDecorator):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("oidc_issuer", "oidc_subject"),)
 
     id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid4)
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    # None for accounts that only ever sign in through OpenID Connect.
+    password_hash = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     # Carried in every token as "ver"; bumping it (password change or reset)
     # invalidates all the sessions issued before.
@@ -46,6 +49,9 @@ class User(Base):
     email_verified = Column(
         Boolean, nullable=False, default=True, server_default=true()
     )
+    # The OpenID Connect identity (issuer + subject) linked to this account.
+    oidc_issuer = Column(String(255), nullable=True)
+    oidc_subject = Column(String(255), nullable=True)
 
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"

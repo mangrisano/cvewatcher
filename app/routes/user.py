@@ -85,6 +85,8 @@ def get_user_profile(
         "username": db_user.username,
         "email": db_user.email,
         "created_at": db_user.created_at,
+        "has_password": db_user.password_hash is not None,
+        "sso": db_user.oidc_subject is not None,
     }
 
 
@@ -139,8 +141,13 @@ def delete_account(
     db: Session = Depends(get_db),
 ):
     user = _account(current_user, db)
-    _confirm_password(user, body.password)
     email = str(user.email)
+    if user.password_hash is not None:
+        _confirm_password(user, body.password or "")
+    elif (body.confirm_email or "").strip().lower() != email.lower():
+        raise HTTPException(
+            status_code=400, detail="Type your email address to confirm"
+        )
 
     # Explicit deletes: assets are linked by email (no foreign key), and SQLite
     # only honours ON DELETE CASCADE when foreign keys are switched on.

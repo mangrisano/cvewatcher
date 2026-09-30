@@ -7,11 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Single sign-on through OpenID Connect**: with `OIDC_ISSUER`,
+  `OIDC_CLIENT_ID` and `PUBLIC_URL` set, the login page offers _Sign in with …_
+  for any standard provider (Keycloak, Entra ID, Google, Okta, …). It uses the
+  authorization code flow with PKCE, requires a verified email, links the
+  account with the same address or creates one (`OIDC_AUTO_CREATE`,
+  `OIDC_ALLOWED_DOMAINS`), and keeps password sign-in working. Accounts
+  without a password confirm deletion with their email. A Keycloak for local
+  testing starts with `docker compose --profile oidc up -d`.
+
 ## [2.11.0] - 2026-09-30
 
 ### Added
 
-- **Delete your account**: a *Delete account* item in the user menu
+- **Delete your account**: a _Delete account_ item in the user menu
   (`DELETE /user` with the current password) removes the account with its
   assets, findings, notification settings and pending links, and ends every
   session. The shared CVE catalogue and other users' data are untouched.

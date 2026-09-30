@@ -129,6 +129,29 @@ def token_matches_session(claims: dict, user) -> bool:
     return claims.get("ver", 0) == (user.session_version or 0)
 
 
+def sign_short_lived(data: dict, purpose: str, seconds: int) -> str:
+    """A signed token for one internal ``purpose``; never valid as an access token."""
+    now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    claims = {
+        **data,
+        "type": purpose,
+        "iat": now,
+        "exp": now + seconds,
+        "jti": uuid.uuid4().hex,
+    }
+    return jwt.encode({"alg": ALGORITHM}, claims, _JWT_KEY)
+
+
+def verify_short_lived(token: str, purpose: str) -> Optional[dict]:
+    """The claims of a valid, unexpired ``purpose`` token, else None."""
+    try:
+        decoded = jwt.decode(token, _JWT_KEY, algorithms=[ALGORITHM])
+        _CLAIMS_REGISTRY.validate(decoded.claims)
+    except (JoseError, ValueError):
+        return None
+    return decoded.claims if decoded.claims.get("type") == purpose else None
+
+
 def verify_access_token(token: str) -> dict:
     try:
         decoded = jwt.decode(token, _JWT_KEY, algorithms=[ALGORITHM])

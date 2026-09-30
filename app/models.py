@@ -73,7 +73,14 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class DeleteAccountRequest(BaseModel):
-    password: str = Field(max_length=1024)
+    # Accounts with a password confirm with it; single sign-on ones retype
+    # their email address instead.
+    password: Optional[str] = Field(default=None, max_length=1024)
+    confirm_email: Optional[str] = Field(default=None, max_length=254)
+
+
+class OidcExchangeRequest(BaseModel):
+    code: str = Field(max_length=2048)
 
 
 class VerifyEmailRequest(BaseModel):
