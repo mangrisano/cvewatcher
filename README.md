@@ -53,7 +53,8 @@ curl -s "$BASE/assets/$ASSET/vulnerabilities" -H "Authorization: Bearer $TOKEN" 
 - **Prometheus metrics** — aggregate assets and findings exposed at `/metrics`.
 - **Web dashboard** — redesigned single-page UI (vanilla JS + hand-written CSS, **no build step, no CDN**) with Overview / Assets / Vulnerabilities sections and light/dark themes.
 - **Secure JSON API** — JWT auth, per-user isolation, OpenAPI docs at `/docs` and `/redoc`.
-- **Self-hosted** — PostgreSQL + Alembic migrations, shipped as a Docker image on GHCR.
+- **Accounts & single sign-on** — email confirmation, password change and reset by email, account deletion, and sign-in through any number of **OpenID Connect** providers (Google, Keycloak, Entra ID, …), one button each.
+- **Self-hosted** — PostgreSQL + Alembic migrations, shipped as a Docker image on GHCR and Docker Hub.
 
 ## Requirements
 
@@ -107,7 +108,10 @@ CVEs.
 The login card can toggle to a registration form, but **public sign-up is
 closed by default**: only the very first account (bootstrap) can always
 register — after that, new sign-ups require `REGISTRATION_ENABLED=true` (see
-[Authentication & Access Control](#authentication--access-control)). Sessions
+[Authentication & Access Control](#authentication--access-control)). When
+single sign-on is configured, the card also shows one _Sign in with …_ button
+per provider. The user menu offers _Change password_ (accounts with a password)
+and _Delete account_. Sessions
 refresh themselves silently in the background using the refresh token, so you
 stay signed in without re-entering credentials until the refresh token itself
 expires (`JWT_REFRESH_TOKEN_EXPIRE_DAYS`). Refresh tokens are single-use: each
@@ -355,7 +359,7 @@ active findings.
 
 ### User & Health
 
-- `GET /user` - Get the current user's profile
+- `GET /user` - Get the current user's profile, including `has_password` and `sso` (linked to a single sign-on provider)
 - `DELETE /user` - Delete your account with its assets, findings and settings: `{"password": "..."}`, or `{"confirm_email": "..."}` for an account without a password (single sign-on). Wrong confirmations are rate-limited; the owner gets an email when SMTP is configured
 - `POST /user/password` - Change your password: `current_password` + `new_password`. Signs out every other session and returns a fresh token pair for this one; the owner gets an email when SMTP is configured. Wrong current passwords are rate-limited (5 per 15 minutes)
 - `GET /user/notifications` - Your alert settings (webhook URLs and bot tokens are never returned, only whether they are set)
@@ -372,7 +376,7 @@ active findings.
 
 - **Backend**: FastAPI (Python)
 - **Database**: PostgreSQL with SQLAlchemy ORM
-- **Authentication**: JWT with joserfc
+- **Authentication**: JWT with joserfc; single sign-on through OpenID Connect (authorization code + PKCE)
 - **Migration**: Alembic
 - **Scheduling**: APScheduler (optional background monitoring)
 - **Container**: Docker & Docker Compose
@@ -394,6 +398,10 @@ docker compose -f docker/docker-compose.yml up --build -d   # start app + databa
 docker compose -f docker/docker-compose.yml logs -f app     # follow the application logs
 docker compose -f docker/docker-compose.yml down            # stop and remove the stack
 ```
+
+Add `--profile oidc` to `up` to also start a development Keycloak for trying
+single sign-on (see
+[Authentication & Access Control](#authentication--access-control)).
 
 ### Prebuilt image
 
