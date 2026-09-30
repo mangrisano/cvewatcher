@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-09-30
+
 ### Added
 
 - **SBOM import**: `POST /assets/import-sbom` and an "Import SBOM" button in the
