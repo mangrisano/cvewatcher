@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790800860629,
+  "lastUpdate": 1790939003873,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -1755,6 +1755,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.0000043224858612670805",
             "extra": "mean: 53.15126696339364 usec\nrounds: 11908"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "9f0704d66f652befcfa878989cb50d067b36a307",
+          "message": "feat(dashboard): numbered pages in the findings table\n\nPrev/Next only stepped one page at a time. The pager now lists the\nfirst and last page plus two pages around the current one, so any page\nis one click away.",
+          "timestamp": "2026-10-02T13:02:04+02:00",
+          "tree_id": "da41df27987f949bd4dac655f3204edad31e29fa",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/9f0704d66f652befcfa878989cb50d067b36a307"
+        },
+        "date": 1790939003125,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 91430.9815438754,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000013004664955039045",
+            "extra": "mean: 10.937211688142334 usec\nrounds: 37286"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 47361.54783324982,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000034048791959206234",
+            "extra": "mean: 21.114174805282808 usec\nrounds: 16567"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 18833.57152074557,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000027708558175367382",
+            "extra": "mean: 53.09667361278127 usec\nrounds: 12093"
           }
         ]
       }
