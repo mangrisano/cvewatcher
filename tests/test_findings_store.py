@@ -63,8 +63,8 @@ def db():
     session.close()
 
 
-def _asset(db, name="app"):
-    asset = Asset(name=name, version="1.0", user_email=_OWNER)
+def _asset(db, name="app", ecosystem=None):
+    asset = Asset(name=name, version="1.0", ecosystem=ecosystem, user_email=_OWNER)
     db.add(asset)
     db.commit()
     db.refresh(asset)
@@ -172,6 +172,15 @@ def test_query_pages_filters_and_sorts_in_sql(db):
     assert scores == sorted(scores)
     assert _ids(db, search="0105") == ["CVE-2098-0105"]
     assert query_findings(db, _OWNER, limit=0).findings == []
+
+
+def test_findings_tell_apart_the_same_package_in_two_ecosystems(db):
+    _scan(db, _asset(db, "linux", "Debian:13"), _Source([_finding("CVE-2098-0250")]))
+    _scan(db, _asset(db, "linux", "Debian:12"), _Source([_finding("CVE-2098-0250")]))
+    found = query_findings(db, _OWNER).findings
+    assert sorted(f["asset_ecosystem"] for f in found) == ["Debian:12", "Debian:13"]
+    searched = query_findings(db, _OWNER, FindingFilters(search="debian:13")).findings
+    assert [f["asset_ecosystem"] for f in searched] == ["Debian:13"]
 
 
 def test_search_treats_wildcards_literally(db):

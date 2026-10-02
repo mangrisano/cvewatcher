@@ -275,7 +275,7 @@
                 <section id="section-findings" class="section hidden">
                     <div class="section-head">
                         <div class="section-head__filters">
-                            <input id="findSearch" class="input-sm" placeholder="Search CVE or asset…">
+                            <input id="findSearch" class="input-sm" placeholder="Search CVE, asset or ecosystem…">
                             <select id="findSeverity" class="input-sm">
                                 <option value="">All severities</option>
                                 <option>CRITICAL</option>
@@ -359,20 +359,10 @@
                     <label>Name <input id="assetName" placeholder="e.g. nginx" required></label>
                     <label>Version <input id="assetVersion" placeholder="e.g. 1.24.0"></label>
                     <label>Ecosystem
-                        <select id="assetEcosystem">
-                            <option value="">&mdash; none &mdash;</option>
-                            <option>npm</option>
-                            <option>PyPI</option>
-                            <option>Go</option>
-                            <option>Maven</option>
-                            <option>RubyGems</option>
-                            <option>crates.io</option>
-                            <option>NuGet</option>
-                            <option>Packagist</option>
-                            <option>Pub</option>
-                            <option>Hex</option>
-                        </select>
-                        <span class="hint">Enables OSV.dev for language packages.</span>
+                        <input id="assetEcosystem" list="assetEcosystems" placeholder="e.g. PyPI, npm, Debian:13" autocomplete="off">
+                        <datalist id="assetEcosystems"></datalist>
+                        <span class="hint">Enables OSV.dev. For distributions add the release: Debian:13,
+                            Ubuntu:24.04:LTS, Alpine:v3.22.</span>
                     </label>
                     <label>CPE <input id="assetCpe" placeholder="cpe:2.3:a:f5:nginx:1.24.0"><span class="hint">Optional;
                             improves matching.</span></label>

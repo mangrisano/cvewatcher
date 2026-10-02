@@ -549,7 +549,24 @@
         });
     }
 
+    let ecosystemsLoaded = false;
+
+    async function loadEcosystems() {
+        if (ecosystemsLoaded) return;
+        const res = await apiFetch("/assets/ecosystems");
+        if (!res.ok) return;
+        ecosystemsLoaded = true;
+        $("assetEcosystems").replaceChildren(
+            ...(await res.json()).map((name) => {
+                const option = document.createElement("option");
+                option.value = name;
+                return option;
+            })
+        );
+    }
+
     function openAssetModal(id) {
+        loadEcosystems();
         $("assetModalError").classList.add("hidden");
         const editing = assets.find((a) => a.id === id);
         $("assetModalTitle").textContent = editing ? "Edit asset" : "Add asset";
@@ -574,7 +591,7 @@
             name: $("assetName").value,
             version: $("assetVersion").value || null,
             cpe: $("assetCpe").value || null,
-            ecosystem: $("assetEcosystem").value || null,
+            ecosystem: $("assetEcosystem").value.trim() || null,
             description: $("assetDescription").value || null,
         };
         const res = await apiFetch(id ? "/assets/" + id : "/assets/", {
@@ -737,7 +754,10 @@
                     : esc(f.cve_id);
                 const asset =
                     esc(f.asset_name || "\u2014") +
-                    (f.asset_version ? ` <span class="muted">v${esc(f.asset_version)}</span>` : "");
+                    (f.asset_version ? ` <span class="muted">v${esc(f.asset_version)}</span>` : "") +
+                    (f.asset_ecosystem
+                        ? ` <span class="pill pill--eco">${esc(f.asset_ecosystem)}</span>`
+                        : "");
                 return `<tr>
                     <td class="mono">${cve}</td>
                     <td>${asset}</td>

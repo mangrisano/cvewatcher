@@ -7,8 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The asset **Ecosystem** field is free text with suggestions, so Linux
+  distributions work too (`Debian:13`, `Ubuntu:24.04:LTS`, `Alpine:v3.22`).
+  `GET /assets/ecosystems` lists the OSV.dev ecosystem names.
+- Findings show the asset's ecosystem next to its name (and the API and CSV
+  export carry `asset_ecosystem`), so the same package followed in two
+  ecosystems can be told apart. The findings search also matches the
+  ecosystem (e.g. `debian:13`).
+
+### Changed
+
+- The ecosystem name is validated against OSV.dev's list (case-insensitive,
+  stored with OSV's spelling: `debian:13` becomes `Debian:13`); an unknown
+  name is rejected with 422. The release after `:` is not checked.
+
 ### Fixed
 
+- The same package can be followed in two ecosystems (e.g. `debug 4.3.4` on
+  PyPI and npm): an asset is a duplicate only if name, version **and**
+  ecosystem match, on create, edit and SBOM import.
 - A failed OSV.dev query (network error, rejected ecosystem) no longer looks
   like "no vulnerabilities": the scan reports an error and keeps the
   findings it already had.

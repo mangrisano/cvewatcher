@@ -20,9 +20,37 @@ OSV_QUERY_URL = "https://api.osv.dev/v1/query"
 # Distro packages such as Debian's "linux" span several pages of results.
 MAX_PAGES = 10
 
+# https://osv-vulnerabilities.storage.googleapis.com/ecosystems.txt
+OSV_ECOSYSTEMS = (
+    "AlmaLinux", "Alpaquita", "Alpine", "Android", "Azure Linux",
+    "BellSoft Hardened Containers", "Bitnami", "CRAN", "Chainguard",
+    "CleanStart", "Debian", "Echo", "GHC", "GIT", "GitHub Actions", "Go",
+    "Hackage", "Hex", "Julia", "Linux", "Mageia", "Maven", "MinimOS", "NuGet",
+    "OSS-Fuzz", "Packagist", "Pub", "PyPI", "Red Hat", "Rocky Linux", "Root",
+    "RubyGems", "SUSE", "SwiftURL", "TuxCare", "Ubuntu", "VSCode", "Wolfi",
+    "crates.io", "npm", "opam", "openEuler", "openSUSE",
+)  # fmt: skip
+_CANONICAL_ECOSYSTEMS = {name.lower(): name for name in OSV_ECOSYSTEMS}
+
 
 class OsvError(Exception):
     """OSV.dev did not answer the query."""
+
+
+def normalize_ecosystem(value: str) -> str:
+    """Canonical OSV spelling of ``value`` ("debian:13" -> "Debian:13").
+
+    Only the ecosystem name is checked; a release suffix such as ":13" or
+    ":24.04:LTS" is kept as written. Raises ValueError for an unknown name.
+    """
+    base, sep, release = value.strip().partition(":")
+    canonical = _CANONICAL_ECOSYSTEMS.get(base.strip().lower())
+    if canonical is None:
+        raise ValueError(
+            f"Unknown ecosystem '{base.strip()}'. Use an OSV.dev ecosystem such as "
+            "PyPI, npm, Debian:13, Ubuntu:24.04:LTS or Alpine:v3.22."
+        )
+    return canonical + sep + release.strip()
 
 
 # GHSA uses "MODERATE"; normalise to CVE Watcher's severity vocabulary.

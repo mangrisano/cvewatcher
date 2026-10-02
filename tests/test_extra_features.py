@@ -11,7 +11,7 @@ from app.database.models import Asset, AssetCVE, CVE
 from app.services import matching, osv
 from app.services.digest import _format_digest
 from app.services.metrics import render_metrics
-from app.services.osv import OsvClient, OsvError
+from app.services.osv import OsvClient, OsvError, normalize_ecosystem
 
 
 def _as_async(fn):
@@ -136,6 +136,27 @@ def test_osv_source_reports_a_failed_query_as_unavailable():
     result = asyncio.run(OsvSource(DownOsvClient()).search(asset, None, None, True))
     assert result.findings == []
     assert result.unavailable
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("PyPI", "PyPI"),
+        ("pypi", "PyPI"),
+        ("debian:13", "Debian:13"),
+        (" Ubuntu:24.04:LTS ", "Ubuntu:24.04:LTS"),
+        ("red hat:enterprise_linux:9", "Red Hat:enterprise_linux:9"),
+        ("crates.io", "crates.io"),
+    ],
+)
+def test_normalize_ecosystem_uses_osv_spelling(value, expected):
+    assert normalize_ecosystem(value) == expected
+
+
+@pytest.mark.parametrize("value", ["Debain:13", "arch", ":13", "pip"])
+def test_normalize_ecosystem_rejects_unknown_names(value):
+    with pytest.raises(ValueError, match="Unknown ecosystem"):
+        normalize_ecosystem(value)
 
 
 def test_osv_search_follows_page_tokens(monkeypatch):

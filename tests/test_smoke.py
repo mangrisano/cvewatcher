@@ -246,6 +246,58 @@ def _login(client, username, email):
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_asset_ecosystem_is_validated_and_normalised(client):
+    headers = _login(client, "ecoeve", "ecoeve@example.com")
+    typo = client.post(
+        "/assets/", headers=headers, json={"name": "linux", "ecosystem": "Debain:13"}
+    )
+    assert typo.status_code == 422
+    assert "Unknown ecosystem" in typo.text
+
+    created = client.post(
+        "/assets/", headers=headers, json={"name": "linux", "ecosystem": "debian:13"}
+    )
+    assert created.status_code == 200
+    assert created.json()["ecosystem"] == "Debian:13"
+
+    url = f"/assets/{created.json()['id']}"
+    assert (
+        client.patch(url, headers=headers, json={"ecosystem": "pip"}).status_code == 422
+    )
+    cleared = client.patch(url, headers=headers, json={"ecosystem": ""})
+    assert cleared.status_code == 200
+    assert cleared.json()["ecosystem"] is None
+
+
+def test_same_package_can_be_followed_in_two_ecosystems(client):
+    headers = _login(client, "ecogil", "ecogil@example.com")
+
+    def create(ecosystem):
+        body = {"name": "linux", "version": "6.12.110-1", "ecosystem": ecosystem}
+        return client.post("/assets/", headers=headers, json=body)
+
+    trixie = create("Debian:13")
+    assert trixie.status_code == 200
+    assert create("Debian:12").status_code == 200
+    duplicate = create("Debian:13")
+    assert duplicate.status_code == 400
+    assert "in 'Debian:13' already exists" in duplicate.json()["detail"]
+
+    moved = client.patch(
+        f"/assets/{trixie.json()['id']}",
+        headers=headers,
+        json={"ecosystem": "Debian:12"},
+    )
+    assert moved.status_code == 400
+
+
+def test_ecosystems_endpoint_lists_osv_names(client):
+    assert client.get("/assets/ecosystems").status_code == 401
+    headers = _login(client, "ecofay", "ecofay@example.com")
+    names = client.get("/assets/ecosystems", headers=headers).json()
+    assert {"Debian", "Ubuntu", "Alpine", "PyPI", "npm"} <= set(names)
+
+
 def test_days_beyond_the_nvd_window_are_rejected(client):
     headers = _login(client, "gina", "gina@example.com")
     assert client.get("/findings?days=365", headers=headers).status_code == 422

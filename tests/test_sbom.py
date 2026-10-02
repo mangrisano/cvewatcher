@@ -144,6 +144,18 @@ def test_import_sbom_creates_assets_and_skips_existing(client):
     assert again["created"] == 0
 
 
+def test_import_sbom_keeps_the_same_package_from_another_ecosystem(client):
+    headers = _login(client, "sbomtwin")
+    client.post(
+        "/assets/",
+        json={"name": "debug", "version": "4.3.4", "ecosystem": "PyPI"},
+        headers=headers,
+    )
+    document = _cyclonedx("pkg:npm/debug@4.3.4")
+    body = client.post("/assets/import-sbom", json=document, headers=headers).json()
+    assert body["created"] == 1 and body["skipped_existing"] == []
+
+
 def test_imported_assets_page_without_repeats(client):
     headers = _login(client, "sbompager")
     purls = [f"pkg:pypi/page{i}@1.0" for i in range(150)]

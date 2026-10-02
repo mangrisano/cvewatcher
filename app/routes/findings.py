@@ -51,6 +51,7 @@ _EXPORT_COLUMNS = [
     "cve_id",
     "asset_name",
     "asset_version",
+    "asset_ecosystem",
     "severity",
     "score",
     "kev",
@@ -78,7 +79,9 @@ async def findings_summary(
     severity: Optional[SeverityFilter] = Query(default=None),
     status: Optional[FindingStatus] = Query(default=None),
     q: Optional[str] = Query(
-        default=None, max_length=100, description="Search CVE id or asset name"
+        default=None,
+        max_length=100,
+        description="Search CVE id, asset name or ecosystem",
     ),
     sort: Optional[SortKey] = Query(
         default=None, description="Default: KEV, severity, EPSS, then newest"

@@ -18,6 +18,14 @@ from app.services.notifications import (
     check_telegram_token,
     check_webhook_url,
 )
+from app.services.osv import normalize_ecosystem
+
+
+def validate_ecosystem(value: Optional[str]) -> Optional[str]:
+    # A misspelt ecosystem makes OSV.dev reject every query for the asset.
+    if value is None or not value.strip():
+        return None
+    return normalize_ecosystem(value)
 
 
 def validate_password_strength(password: str) -> str:
@@ -104,6 +112,8 @@ class AssetCreate(BaseModel):
     ecosystem: Optional[str] = None
     description: Optional[str] = None
 
+    _ecosystem = field_validator("ecosystem")(validate_ecosystem)
+
 
 class AssetUpdate(BaseModel):
     """Partial update: only the fields sent are changed; null clears an optional one."""
@@ -113,6 +123,8 @@ class AssetUpdate(BaseModel):
     cpe: Optional[str] = None
     ecosystem: Optional[str] = None
     description: Optional[str] = None
+
+    _ecosystem = field_validator("ecosystem")(validate_ecosystem)
 
     @field_validator("name")
     @classmethod
@@ -152,6 +164,7 @@ class VulnerabilityResponse(BaseModel):
     asset_id: Optional[UUID] = None
     asset_name: Optional[str] = None
     asset_version: Optional[str] = None
+    asset_ecosystem: Optional[str] = None
     severity: Optional[str] = None
     score: Optional[float] = None
     summary: Optional[str] = None

@@ -36,6 +36,7 @@ from app.services.cve_monitoring import CVEMonitoringService
 from app.services.findings_query import FindingFilters, query_findings
 from app.services.findings_repository import FindingRepository
 from app.services.nist_nvd import MAX_DATE_RANGE_DAYS, NvdUnavailableError
+from app.services.osv import OSV_ECOSYSTEMS
 from app.services.sbom import SbomError, parse_sbom
 from app.services.scanning import (
     scan_and_alert,
@@ -66,6 +67,31 @@ class SeverityLevel(StrEnum):
     LOW = "LOW"
 
 
+def _reject_duplicate(
+    db: Session,
+    user_email,
+    name,
+    version,
+    ecosystem,
+    exclude_id=None,
+) -> None:
+    """400 if the user already has this package: same name, version and ecosystem."""
+    query = db.query(Asset.id).filter(
+        Asset.user_email == user_email,
+        Asset.name == name,
+        Asset.version == version,
+        Asset.ecosystem == ecosystem,
+    )
+    if exclude_id is not None:
+        query = query.filter(Asset.id != exclude_id)
+    if query.first():
+        where = f" in '{ecosystem}'" if ecosystem else ""
+        raise HTTPException(
+            status_code=400,
+            detail=f"Asset '{name}' version '{version}'{where} already exists",
+        )
+
+
 @router.post("/", response_model=AssetResponse)
 def create_asset(
     asset_data: AssetCreate,
@@ -75,21 +101,9 @@ def create_asset(
 ) -> AssetResponse:
     try:
         user_email = current_user.get("sub")
-        existing = (
-            db.query(Asset)
-            .filter(
-                Asset.name == asset_data.name,
-                Asset.user_email == user_email,
-                Asset.version == asset_data.version,
-            )
-            .first()
+        _reject_duplicate(
+            db, user_email, asset_data.name, asset_data.version, asset_data.ecosystem
         )
-
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Asset '{asset_data.name}' version '{asset_data.version}' already exists",
-            )
 
         new_asset = Asset(
             name=asset_data.name,
@@ -150,7 +164,9 @@ async def import_sbom(
 
     user_email = current_user.get("sub")
     existing = set(
-        db.query(Asset.name, Asset.version).filter(Asset.user_email == user_email)
+        db.query(Asset.name, Asset.version, Asset.ecosystem).filter(
+            Asset.user_email == user_email
+        )
     )
     description = f"Imported from SBOM: {sbom.project[:200]}" if sbom.project else None
     response = SbomImportResponse(
@@ -163,7 +179,8 @@ async def import_sbom(
     created: list[Asset] = []
     for package in sbom.packages:
         label = f"{package.name}@{package.version}" if package.version else package.name
-        if (package.name, package.version) in existing:
+        key = (package.name, package.version, package.ecosystem)
+        if key in existing:
             response.skipped_existing.append(label)
         elif len(package.name) > _MAX_NAME_LENGTH or (
             len(package.version or "") > _MAX_VERSION_LENGTH
@@ -179,7 +196,7 @@ async def import_sbom(
                     description=description,
                 )
             )
-            existing.add((package.name, package.version))
+            existing.add(key)
     db.add_all(created)
     db.commit()
     response.created = len(created)
@@ -203,6 +220,12 @@ def get_my_assets(
         .all()
     )
     return [AssetResponse.model_validate(asset) for asset in assets]
+
+
+@router.get("/ecosystems", response_model=list[str])
+def list_ecosystems(_: dict = Depends(get_current_user)) -> list[str]:
+    """OSV.dev ecosystem names; distributions take a release suffix (Debian:13)."""
+    return sorted(OSV_ECOSYSTEMS, key=str.lower)
 
 
 @router.get("/{asset_id}", response_model=AssetResponse)
@@ -264,21 +287,10 @@ def update_asset(
     }
     name = changes.get("name", asset.name)
     version = changes.get("version", asset.version)
-    duplicate = (
-        db.query(Asset)
-        .filter(
-            Asset.id != asset.id,
-            Asset.user_email == asset.user_email,
-            Asset.name == name,
-            Asset.version == version,
-        )
-        .first()
+    ecosystem = changes.get("ecosystem", asset.ecosystem)
+    _reject_duplicate(
+        db, asset.user_email, name, version, ecosystem, exclude_id=asset.id
     )
-    if duplicate:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Asset '{name}' version '{version}' already exists",
-        )
 
     identity_changed = any(
         key in _IDENTITY_FIELDS and getattr(asset, key) != value

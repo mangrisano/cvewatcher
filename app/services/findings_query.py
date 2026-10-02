@@ -159,6 +159,7 @@ def _filtered(query: Query, filters: FindingFilters) -> Query:
             or_(
                 func.lower(AssetCVE.cve_id).like(pattern, escape="\\"),
                 func.lower(Asset.name).like(pattern, escape="\\"),
+                func.lower(Asset.ecosystem).like(pattern, escape="\\"),
             )
         )
     return query
@@ -189,6 +190,7 @@ def _as_finding(link: AssetCVE, cve: CVE, asset: Asset) -> dict[str, Any]:
         "asset_id": asset.id,
         "asset_name": asset.name,
         "asset_version": asset.version,
+        "asset_ecosystem": asset.ecosystem,
         "severity": cve.severity,
         "score": cve.score,
         "summary": cve.summary,
