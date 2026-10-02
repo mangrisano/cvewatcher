@@ -28,6 +28,22 @@ def validate_ecosystem(value: Optional[str]) -> Optional[str]:
     return normalize_ecosystem(value)
 
 
+# Debian's rules accept "6.12..110-1" and order it above every 6.12.x, so a
+# typo silently hides every fixed CVE; no real version looks like this.
+_MALFORMED_VERSION = re.compile(r"\s|\.\.|\.-|-\.|--|^[.-]|[.-]$")
+
+
+def validate_version(value: Optional[str]) -> Optional[str]:
+    if value is None or not value.strip():
+        return None
+    value = value.strip()
+    problem = _MALFORMED_VERSION.search(value)
+    if problem:
+        found = repr(problem.group()) if problem.group().strip() else "a space"
+        raise ValueError(f"Version '{value}' looks malformed ({found})")
+    return value
+
+
 def validate_password_strength(password: str) -> str:
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters long")
@@ -112,6 +128,7 @@ class AssetCreate(BaseModel):
     ecosystem: Optional[str] = None
     description: Optional[str] = None
 
+    _version = field_validator("version")(validate_version)
     _ecosystem = field_validator("ecosystem")(validate_ecosystem)
 
 
@@ -124,6 +141,7 @@ class AssetUpdate(BaseModel):
     ecosystem: Optional[str] = None
     description: Optional[str] = None
 
+    _version = field_validator("version")(validate_version)
     _ecosystem = field_validator("ecosystem")(validate_ecosystem)
 
     @field_validator("name")

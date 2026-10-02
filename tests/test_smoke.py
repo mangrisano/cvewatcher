@@ -1,6 +1,9 @@
 import re
 
+import pytest
+
 from app.config import get_settings
+from app.models import validate_version
 
 
 def test_health(client):
@@ -267,6 +270,50 @@ def test_asset_ecosystem_is_validated_and_normalised(client):
     cleared = client.patch(url, headers=headers, json={"ecosystem": ""})
     assert cleared.status_code == 200
     assert cleared.json()["ecosystem"] is None
+
+
+@pytest.mark.parametrize(
+    "version",
+    ["6.12..110-1", "6.12.111.-1", "1.0-.1", "1.0--1", ".1.0", "1.0.", "1.0-", "1. 0"],
+)
+def test_malformed_versions_are_rejected(version):
+    with pytest.raises(ValueError, match="looks malformed"):
+        validate_version(version)
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        "6.12.110-1",
+        "6.11~rc4-1~exp1",
+        "6.1.38-2~bpo11+1",
+        "2.4.0+~cs1.2.3-1",
+        "1:2.3-1",
+        "v1.8.0",
+        "1.8.0_292",
+        "1.0.0-rc.1+build.5",
+        " 2.31.0 ",
+    ],
+)
+def test_real_versions_are_accepted(version):
+    assert validate_version(version) == version.strip()
+
+
+def test_asset_with_malformed_version_is_rejected(client):
+    headers = _login(client, "verhal", "verhal@example.com")
+    body = {"name": "linux", "version": "6.12..110-1", "ecosystem": "Debian:13"}
+    response = client.post("/assets/", headers=headers, json=body)
+    assert response.status_code == 422
+    assert "looks malformed ('..')" in response.text
+
+    body["version"] = "6.12.110-1"
+    created = client.post("/assets/", headers=headers, json=body)
+    assert created.status_code == 200
+    url = f"/assets/{created.json()['id']}"
+    assert (
+        client.patch(url, headers=headers, json={"version": "6.12.111.-1"}).status_code
+        == 422
+    )
 
 
 def test_same_package_can_be_followed_in_two_ecosystems(client):

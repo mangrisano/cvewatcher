@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The ecosystem name is validated against OSV.dev's list (case-insensitive,
   stored with OSV's spelling: `debian:13` becomes `Debian:13`); an unknown
   name is rejected with 422. The release after `:` is not checked.
+- Malformed asset versions are rejected with 422: repeated or adjacent
+  separators (`..`, `.-`, `-.`, `--`), a leading or trailing `.`/`-`, or
+  spaces. Debian's rules accept `6.12..110-1` and rank it above every
+  `6.12.x`, so such a typo silently hid every fixed CVE.
 
 ### Fixed
 
