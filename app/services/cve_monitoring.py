@@ -111,27 +111,28 @@ class CVEMonitoringService:
         never interleave on the shared session.
         """
         semaphore = asyncio.Semaphore(_SCAN_CONCURRENCY)
+        # Read every asset now: a later commit or rollback expires them, and
+        # one deleted meanwhile could no longer be loaded.
+        views = [AssetResponse.model_validate(asset) for asset in assets]
 
-        async def scan(asset: Asset) -> dict[str, Any]:
-            async with _asset_lock(asset.id):
+        async def scan(asset: Asset, view: AssetResponse) -> dict[str, Any]:
+            async with _asset_lock(view.id):
                 try:
                     async with semaphore:
                         # Monitoring must never miss a freshly published CVE,
                         # so it bypasses the read cache (and refreshes it).
-                        found, complete = await self._collect(
-                            AssetResponse.model_validate(asset), use_cache=False
-                        )
+                        found, complete = await self._collect(view, use_cache=False)
                 except Exception as e:
-                    return self._scan_error(asset, e)
-                return self._record_scan(asset, found, complete)
+                    return self._scan_error(view, e)
+                return self._record_scan(asset, view, found, complete)
 
-        return list(await asyncio.gather(*(scan(asset) for asset in assets)))
+        return list(await asyncio.gather(*map(scan, assets, views)))
 
-    def _scan_error(self, asset: Asset, error: Any) -> dict[str, Any]:
-        logger.error(f"Error monitoring asset {asset.name}: {error}")
+    def _scan_error(self, view: AssetResponse, error: Any) -> dict[str, Any]:
+        logger.error(f"Error monitoring asset {view.name}: {error}")
         return {
-            "asset_id": asset.id,
-            "asset_name": asset.name,
+            "asset_id": view.id,
+            "asset_name": view.name,
             "error": str(error),
             "status": "error",
         }
@@ -139,14 +140,58 @@ class CVEMonitoringService:
     def _record_scan(
         self,
         asset: Asset,
+        view: AssetResponse,
         current_vulnerabilities: list[dict[str, Any]],
         complete: bool,
     ) -> dict[str, Any]:
         scanned_at = datetime.now(timezone.utc)
+        try:
+            existing, new_vulnerabilities, escalations = self._store_scan(
+                asset, view, current_vulnerabilities, complete, scanned_at
+            )
+            stored = self.findings.save()
+        except Exception as e:
+            # E.g. the asset was deleted while its scan ran (foreign key).
+            logger.error("Error storing the scan of %s: %s", view.name, e)
+            self.db.rollback()
+            stored = False
+        if not stored:
+            if not self.db.query(Asset.id).filter(Asset.id == view.id).first():
+                logger.info("Asset %s was deleted during its scan", view.name)
+                return {
+                    "asset_id": view.id,
+                    "asset_name": view.name,
+                    "status": "deleted",
+                }
+            # Nothing was stored: alerting now would repeat on the next scan.
+            return self._scan_error(view, "could not store the scan results")
+
+        return {
+            "asset_id": view.id,
+            "asset_name": view.name,
+            "asset_version": view.version,
+            "user_email": view.user_email,
+            "total_vulnerabilities": len(current_vulnerabilities),
+            "new_vulnerabilities": new_vulnerabilities,
+            "escalations": escalations,
+            "existing_vulnerabilities": len(existing),
+            "last_monitored": scanned_at,
+            "status": "success",
+        }
+
+    def _store_scan(
+        self,
+        asset: Asset,
+        view: AssetResponse,
+        current_vulnerabilities: list[dict[str, Any]],
+        complete: bool,
+        scanned_at: datetime,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+        """Stage one scan's findings in the session: links, new ones, escalations."""
         candidate_cve_ids = [
             vuln["cve_id"] for vuln in current_vulnerabilities if vuln.get("cve_id")
         ]
-        existing = self.findings.links(asset.id, candidate_cve_ids)
+        existing = self.findings.links(view.id, candidate_cve_ids)
         kev_known = self.enricher.kev_catalog_loaded
 
         new_vulnerabilities = []
@@ -160,26 +205,11 @@ class CVEMonitoringService:
                 new_vulnerabilities.append(vuln)
             else:
                 escalations.extend(alerts.observe(link, vuln, kev_known))
-            self.findings.record(asset.id, vuln, kev_known, scanned_at, link)
+            self.findings.record(view.id, vuln, kev_known, scanned_at, link)
         # A source that did not answer may have hidden findings: keep them all.
         if complete:
             self.findings.close_scan(asset, scanned_at)
-        if not self.findings.save():
-            # Nothing was stored: alerting now would repeat on the next scan.
-            return self._scan_error(asset, "could not store the scan results")
-
-        return {
-            "asset_id": asset.id,
-            "asset_name": asset.name,
-            "asset_version": asset.version,
-            "user_email": asset.user_email,
-            "total_vulnerabilities": len(current_vulnerabilities),
-            "new_vulnerabilities": new_vulnerabilities,
-            "escalations": escalations,
-            "existing_vulnerabilities": len(existing),
-            "last_monitored": scanned_at,
-            "status": "success",
-        }
+        return existing, new_vulnerabilities, escalations
 
     async def find_vulnerabilities(
         self,

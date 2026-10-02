@@ -127,6 +127,27 @@ def test_findings_gone_from_a_complete_scan_disappear(db):
     assert finding["status"] == "acknowledged"
 
 
+def test_asset_deleted_during_its_scan_does_not_break_the_others(db):
+    victim, keeper = _asset(db, "victim"), _asset(db, "keeper")
+    victim_id = victim.id
+
+    class DeletingSource:
+        async def search(self, asset, start, end, use_cache):
+            if asset.id == victim_id:
+                other = SessionLocal()
+                other.query(Asset).filter(Asset.id == victim_id).delete()
+                other.commit()
+                other.close()
+            return SourceResult([_finding("CVE-2098-0050")])
+
+    service = CVEMonitoringService(db, sources=[DeletingSource()], enricher=_Enricher())
+    results = asyncio.run(service.monitor_assets([victim, keeper]))
+
+    assert [r["status"] for r in results] == ["deleted", "success"]
+    assert "new_vulnerabilities" not in results[0]
+    assert _ids(db) == ["CVE-2098-0050"]
+
+
 def test_incomplete_scan_keeps_findings_it_could_not_see(db):
     asset = _asset(db)
     _scan(db, asset, _Source([_finding("CVE-2098-0005"), _finding("CVE-2098-0006")]))

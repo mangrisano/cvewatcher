@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is re-read once the scan ends, and the scanning notice stays until then.
   The dashboard's JS/CSS cache-busting versions are bumped so browsers load
   the new code.
+- Deleting an asset while it is being scanned no longer fails the whole scan
+  (Rescan answered 500 and the other assets' results were lost): that asset
+  is skipped, the others are stored normally.
 - The same package can be followed in two ecosystems (e.g. `debug 4.3.4` on
   PyPI and npm): an asset is a duplicate only if name, version **and**
   ecosystem match, on create, edit and SBOM import.
