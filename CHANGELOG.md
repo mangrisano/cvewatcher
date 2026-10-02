@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- An OSV.dev advisory that covers several CVEs now gives one finding per CVE
+  instead of only the first: a Red Hat advisory (RHSA) often lists many
+  (openssl on RHEL 9: 75 CVEs instead of 16). Distro records of any
+  distribution (Debian, Ubuntu, Alpine, Red Hat, …) are read from `upstream`.
+
 ## [2.14.0] - 2026-10-02
 
 ### Added

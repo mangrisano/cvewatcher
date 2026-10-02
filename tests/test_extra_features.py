@@ -29,7 +29,7 @@ def test_osv_to_finding_prefers_cve_alias():
         "published": "2024-01-01T00:00:00Z",
         "database_specific": {"severity": "MODERATE"},
     }
-    finding = OsvClient._to_finding(vuln)
+    finding = OsvClient._to_findings(vuln)[0]
     assert finding["cve_id"] == "CVE-2024-1234"
     assert finding["severity"] == "MEDIUM"  # MODERATE normalised
     assert "cve.org" in finding["cve_url"]
@@ -37,7 +37,7 @@ def test_osv_to_finding_prefers_cve_alias():
 
 def test_osv_to_finding_falls_back_to_osv_id():
     vuln = {"id": "GHSA-yyyy", "summary": "flaw", "aliases": []}
-    finding = OsvClient._to_finding(vuln)
+    finding = OsvClient._to_findings(vuln)[0]
     assert finding["cve_id"] == "GHSA-yyyy"
     assert "osv.dev" in finding["cve_url"]
 
@@ -51,7 +51,7 @@ def test_osv_to_finding_derives_score_and_band_from_cvss_vector():
             {"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"}
         ],
     }
-    finding = OsvClient._to_finding(vuln)
+    finding = OsvClient._to_findings(vuln)[0]
     assert finding["score"] == 5.3
     assert finding["severity"] == "MEDIUM"  # derived from score, no GHSA band
 
@@ -65,7 +65,7 @@ def test_osv_to_finding_keeps_ghsa_band_but_scores_from_vector():
             {"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"}
         ],
     }
-    finding = OsvClient._to_finding(vuln)
+    finding = OsvClient._to_findings(vuln)[0]
     assert finding["severity"] == "HIGH"
     assert finding["score"] == 7.5
 
@@ -79,9 +79,9 @@ def test_osv_to_finding_rejects_unknown_severity_text():
             {"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"}
         ],
     }
-    assert OsvClient._to_finding(vuln)["severity"] == "HIGH"  # band from score
+    assert OsvClient._to_findings(vuln)[0]["severity"] == "HIGH"  # band from score
     del vuln["severity"]
-    assert OsvClient._to_finding(vuln)["severity"] is None
+    assert OsvClient._to_findings(vuln)[0]["severity"] is None
 
 
 def test_finding_richness_lets_scored_duplicate_win_merge():
@@ -103,7 +103,7 @@ def test_osv_search_parses_and_raises_on_failure(monkeypatch):
 
     monkeypatch.setattr(osv, "_http_post", _as_async(fake_post))
     assert asyncio.run(OsvClient().search("PyPI", "django", "4.0")) == [
-        OsvClient._to_finding({"id": "GHSA-1", "aliases": []})
+        *OsvClient._to_findings({"id": "GHSA-1", "aliases": []})
     ]
 
     def boom(*a, **k):
@@ -196,10 +196,24 @@ def test_osv_search_stops_at_max_pages(monkeypatch):
 
 def test_osv_to_finding_reads_cve_from_debian_upstream():
     vuln = {"id": "DEBIAN-CVE-2026-80521", "upstream": ["CVE-2026-80521"]}
-    finding = OsvClient._to_finding(vuln)
+    finding = OsvClient._to_findings(vuln)[0]
     assert finding["cve_id"] == "CVE-2026-80521"
     assert finding["cve_url"].endswith("CVE-2026-80521")
     assert "DEBIAN-CVE-2026-80521" in finding["relevance_reason"]
+
+
+def test_osv_record_covering_several_cves_yields_one_finding_each():
+    vuln = {
+        "id": "RHSA-2022:6224",
+        "summary": "openssl security update",
+        "database_specific": {"severity": "HIGH"},
+        "upstream": ["CVE-2022-1292", "CVE-2022-2068", "CVE-2022-1292"],
+    }
+    findings = OsvClient._to_findings(vuln)
+    assert [f["cve_id"] for f in findings] == ["CVE-2022-1292", "CVE-2022-2068"]
+    assert {f["severity"] for f in findings} == {"HIGH"}
+    assert all("RHSA-2022:6224" in f["relevance_reason"] for f in findings)
+    assert findings[1]["cve_url"].endswith("CVE-2022-2068")
 
 
 def test_format_digest():

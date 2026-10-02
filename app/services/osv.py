@@ -134,14 +134,18 @@ class OsvClient:
         except (httpx.HTTPError, ValueError) as e:
             logger.warning("OSV query failed for %s/%s: %s", ecosystem, name, e)
             raise OsvError(f"OSV.dev query failed for {ecosystem}/{name}") from e
-        return [self._to_finding(vuln) for vuln in vulns]
+        return [finding for vuln in vulns for finding in self._to_findings(vuln)]
 
     @staticmethod
-    def _to_finding(vuln: dict[str, Any]) -> dict[str, Any]:
+    def _to_findings(vuln: dict[str, Any]) -> list[dict[str, Any]]:
+        """One finding per CVE the record covers, else one under its OSV id.
+
+        Distro records name their CVEs under "upstream" (DEBIAN-CVE-… one,
+        a Red Hat RHSA often several); language advisories under "aliases".
+        """
         osv_id = vuln.get("id", "")
-        # Distro records (e.g. DEBIAN-CVE-…) name the CVE under "upstream".
         related = [*(vuln.get("aliases") or []), *(vuln.get("upstream") or [])]
-        cve_id = next((a for a in related if a.startswith("CVE-")), osv_id)
+        cve_ids = list(dict.fromkeys(a for a in related if a.startswith("CVE-")))
 
         # Score from the CVSS vector; band from the explicit GHSA severity when
         # present, otherwise derived from the computed score.
@@ -153,23 +157,22 @@ class OsvClient:
             # Third-party text: never store a value outside the known bands.
             severity = _band_from_score(score)
 
-        is_cve = cve_id.startswith("CVE-")
-        cve_url = (
-            f"https://www.cve.org/CVERecord?id={cve_id}"
-            if is_cve
-            else f"https://osv.dev/vulnerability/{osv_id}"
-        )
         summary = vuln.get("summary") or (vuln.get("details") or "")[:300]
-        return {
-            "cve_id": cve_id,
-            "summary": summary,
-            "severity": severity,
-            "score": score,
-            "publish_date": vuln.get("published"),
-            "modified_date": vuln.get("modified"),
-            "relevance_reason": f"OSV.dev match ({osv_id})",
-            "cve_url": cve_url,
-        }
+        return [
+            {
+                "cve_id": cve_id,
+                "summary": summary,
+                "severity": severity,
+                "score": score,
+                "publish_date": vuln.get("published"),
+                "modified_date": vuln.get("modified"),
+                "relevance_reason": f"OSV.dev match ({osv_id})",
+                "cve_url": f"https://www.cve.org/CVERecord?id={cve_id}"
+                if cve_id.startswith("CVE-")
+                else f"https://osv.dev/vulnerability/{osv_id}",
+            }
+            for cve_id in cve_ids or [osv_id]
+        ]
 
 
 osv_client = OsvClient()
