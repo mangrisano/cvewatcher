@@ -674,11 +674,20 @@
             if (refresh) loadFindings(false, notice);
             return;
         }
+        const matched = data.matched || 0;
+        if (findState.offset > 0 && findState.offset >= matched) {
+            // The results shrank below this page: go to the last page that exists.
+            findState.offset = matched ? Math.floor((matched - 1) / FIND_PAGE) * FIND_PAGE : 0;
+            if (matched) {
+                loadFindings(false, notice);
+                return;
+            }
+        }
         if (scansRunning === 0) {
             $("findingsLoading").classList.add("hidden");
             $("findRefresh")?.classList.remove("is-busy");
         }
-        findState.matched = data.matched || 0;
+        findState.matched = matched;
         renderScanInfo(data, notice);
         renderFindings(data.findings || []);
     }

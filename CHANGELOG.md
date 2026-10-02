@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is re-read once the scan ends, and the scanning notice stays until then.
   The dashboard's JS/CSS cache-busting versions are bumped so browsers load
   the new code.
+- Findings table: when the results shrink below the page being viewed (e.g.
+  page 4 of 200, then 60 left after a scan), it moves to the last page that
+  exists instead of saying "No vulnerabilities match".
 - Deleting an asset while it is being scanned no longer fails the whole scan
   (Rescan answered 500 and the other assets' results were lost): that asset
   is skipped, the others are stored normally.
