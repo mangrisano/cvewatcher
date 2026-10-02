@@ -264,7 +264,7 @@ def test_finding_status_rejects_malformed_ids(client):
     url = f"/assets/{asset_id}/vulnerabilities"
     body = {"status": "fixed"}
 
-    for bad in ("<img src=x>", "CVE-2024-" + "1" * 20, "not-an-id"):
+    for bad in ("<img src=x>", "CVE-2024-" + "1" * 60, "not-an-id"):
         assert (
             client.patch(f"{url}/{bad}", headers=headers, json=body).status_code == 422
         )

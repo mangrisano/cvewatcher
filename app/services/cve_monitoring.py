@@ -217,7 +217,8 @@ class CVEMonitoringService:
 
         if not vulnerabilities and not complete:
             raise NvdUnavailableError(
-                "Could not retrieve vulnerabilities: the NVD service is unavailable."
+                "Could not retrieve vulnerabilities: a vulnerability source "
+                "(NVD or OSV.dev) is unavailable."
             )
 
         vulnerabilities_list = list(

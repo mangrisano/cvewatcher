@@ -4,13 +4,14 @@ import asyncio
 from types import SimpleNamespace
 
 import httpx
+import pytest
 
 from app.database.connection import SessionLocal
 from app.database.models import Asset, AssetCVE, CVE
 from app.services import matching, osv
 from app.services.digest import _format_digest
 from app.services.metrics import render_metrics
-from app.services.osv import OsvClient
+from app.services.osv import OsvClient, OsvError
 
 
 def _as_async(fn):
@@ -93,7 +94,7 @@ def test_finding_richness_lets_scored_duplicate_win_merge():
     assert merged["CVE-1"]["score"] == 7.5
 
 
-def test_osv_search_parses_and_degrades(monkeypatch):
+def test_osv_search_parses_and_raises_on_failure(monkeypatch):
     def fake_post(url, json=None, timeout=None):
         return SimpleNamespace(
             raise_for_status=lambda: None,
@@ -109,7 +110,75 @@ def test_osv_search_parses_and_degrades(monkeypatch):
         raise httpx.ConnectError("down")
 
     monkeypatch.setattr(osv, "_http_post", _as_async(boom))
-    assert asyncio.run(OsvClient().search("PyPI", "django")) == []
+    with pytest.raises(OsvError):
+        asyncio.run(OsvClient().search("PyPI", "django"))
+
+
+def test_osv_search_raises_when_osv_rejects_the_query(monkeypatch):
+    def rejected(url, json=None, timeout=None):
+        request = httpx.Request("POST", url)
+        response = httpx.Response(400, request=request)
+        return SimpleNamespace(raise_for_status=response.raise_for_status)
+
+    monkeypatch.setattr(osv, "_http_post", _as_async(rejected))
+    with pytest.raises(OsvError):
+        asyncio.run(OsvClient().search("Debain:13", "linux"))
+
+
+def test_osv_source_reports_a_failed_query_as_unavailable():
+    from app.services.sources import OsvSource
+
+    class DownOsvClient:
+        async def search(self, ecosystem, name, version):
+            raise OsvError("down")
+
+    asset = SimpleNamespace(name="linux", version="6.12.110-1", ecosystem="Debian:13")
+    result = asyncio.run(OsvSource(DownOsvClient()).search(asset, None, None, True))
+    assert result.findings == []
+    assert result.unavailable
+
+
+def test_osv_search_follows_page_tokens(monkeypatch):
+    pages = {
+        None: {"vulns": [{"id": "A"}], "next_page_token": "t1"},
+        "t1": {"vulns": [{"id": "B"}], "next_page_token": "t2"},
+        "t2": {"vulns": [{"id": "C"}]},
+    }
+    tokens = []
+
+    def fake_post(url, json=None, timeout=None):
+        token = json.get("page_token")
+        tokens.append(token)
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: pages[token])
+
+    monkeypatch.setattr(osv, "_http_post", _as_async(fake_post))
+    found = asyncio.run(OsvClient().search("Debian:13", "linux", "6.12.110-1"))
+    assert [f["cve_id"] for f in found] == ["A", "B", "C"]
+    assert tokens == [None, "t1", "t2"]
+
+
+def test_osv_search_stops_at_max_pages(monkeypatch):
+    calls = []
+
+    def endless(url, json=None, timeout=None):
+        calls.append(1)
+        return SimpleNamespace(
+            raise_for_status=lambda: None,
+            json=lambda: {"vulns": [{"id": f"X-{len(calls)}"}], "next_page_token": "t"},
+        )
+
+    monkeypatch.setattr(osv, "_http_post", _as_async(endless))
+    found = asyncio.run(OsvClient().search("Debian:13", "linux"))
+    assert len(calls) == osv.MAX_PAGES
+    assert len(found) == osv.MAX_PAGES
+
+
+def test_osv_to_finding_reads_cve_from_debian_upstream():
+    vuln = {"id": "DEBIAN-CVE-2026-80521", "upstream": ["CVE-2026-80521"]}
+    finding = OsvClient._to_finding(vuln)
+    assert finding["cve_id"] == "CVE-2026-80521"
+    assert finding["cve_url"].endswith("CVE-2026-80521")
+    assert "DEBIAN-CVE-2026-80521" in finding["relevance_reason"]
 
 
 def test_format_digest():

@@ -15,7 +15,7 @@ from typing import Any, Optional, Protocol
 from app.config import get_settings
 from app.services import matching
 from app.services.nist_nvd import NistNvdClient, NvdUnavailableError, nist_client
-from app.services.osv import OsvClient, osv_client
+from app.services.osv import OsvClient, OsvError, osv_client
 
 logger = logging.getLogger(__name__)
 
@@ -182,11 +182,11 @@ class NvdSource:
 
 
 class OsvSource:
-    """OSV.dev: language-package ecosystems that NVD/CPE matches poorly.
+    """OSV.dev: language and distribution packages that NVD/CPE matches poorly.
 
-    Best-effort (failures yield no findings) and only for assets that declare
-    an ecosystem. OSV has no publication-date filter, so a requested window is
-    applied here on each advisory's ``published`` date.
+    Only for assets that declare an ecosystem; a failed query reports the
+    source as unavailable. OSV has no publication-date filter, so a requested
+    window is applied here on each advisory's ``published`` date.
     """
 
     def __init__(self, client: OsvClient):
@@ -202,7 +202,10 @@ class OsvSource:
         ecosystem = getattr(asset, "ecosystem", None)
         if not ecosystem:
             return SourceResult()
-        findings = await self.client.search(ecosystem, asset.name, asset.version)
+        try:
+            findings = await self.client.search(ecosystem, asset.name, asset.version)
+        except OsvError:
+            return SourceResult(unavailable=True)
         if pub_start_date or pub_end_date:
             findings = [
                 f

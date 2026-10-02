@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A failed OSV.dev query (network error, rejected ecosystem) no longer looks
+  like "no vulnerabilities": the scan reports an error and keeps the
+  findings it already had.
+- **Distro packages via OSV** (e.g. ecosystem `Debian:13`, package `linux`):
+  OSV results are now read across all pages (up to 10) instead of the first
+  one only, so a Debian kernel no longer misses about half of its CVEs.
+  Debian advisories (`DEBIAN-CVE-…`) are stored under their CVE id, read
+  from OSV's `upstream` field.
+- CVE ids up to 64 characters are accepted (were 20): a longer advisory id
+  made the whole scan fail to save on PostgreSQL. Migration `b4c5d6e7f8a9`.
+
 ## [2.13.0] - 2026-09-30
 
 ### Added

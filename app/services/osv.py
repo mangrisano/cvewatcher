@@ -1,8 +1,9 @@
 """OSV.dev client: vulnerabilities for a package in a given ecosystem.
 
-NVD/CPE matching is weak for language-package dependencies (npm, PyPI, Go, …);
-OSV.dev covers those ecosystems well. This is a best-effort secondary source:
-any failure returns an empty list so it never breaks a lookup.
+NVD/CPE matching is weak for language-package dependencies (npm, PyPI, Go, …)
+and for distribution packages (Debian, Ubuntu, Alpine, …); OSV.dev covers both.
+A failed query raises :class:`OsvError`, so it is never mistaken for "no
+vulnerabilities".
 """
 
 import logging
@@ -16,6 +17,13 @@ from app.services.severity import KNOWN_SEVERITIES, band_from_score
 logger = logging.getLogger(__name__)
 
 OSV_QUERY_URL = "https://api.osv.dev/v1/query"
+# Distro packages such as Debian's "linux" span several pages of results.
+MAX_PAGES = 10
+
+
+class OsvError(Exception):
+    """OSV.dev did not answer the query."""
+
 
 # GHSA uses "MODERATE"; normalise to CVE Watcher's severity vocabulary.
 _SEVERITY_MAP = {"MODERATE": "MEDIUM"}
@@ -75,20 +83,37 @@ class OsvClient:
         body: dict[str, Any] = {"package": {"name": name, "ecosystem": ecosystem}}
         if version:
             body["version"] = version
+        vulns: list[dict[str, Any]] = []
         try:
-            response = await _http_post(OSV_QUERY_URL, json=body, timeout=self.timeout)
-            response.raise_for_status()
-            payload = response.json()
+            for _ in range(MAX_PAGES):
+                response = await _http_post(
+                    OSV_QUERY_URL, json=body, timeout=self.timeout
+                )
+                response.raise_for_status()
+                payload = response.json()
+                vulns.extend(payload.get("vulns", []))
+                token = payload.get("next_page_token")
+                if not token:
+                    break
+                body["page_token"] = token
+            else:
+                logger.warning(
+                    "OSV results truncated at %d pages for %s/%s",
+                    MAX_PAGES,
+                    ecosystem,
+                    name,
+                )
         except (httpx.HTTPError, ValueError) as e:
             logger.warning("OSV query failed for %s/%s: %s", ecosystem, name, e)
-            return []
-        return [self._to_finding(vuln) for vuln in payload.get("vulns", [])]
+            raise OsvError(f"OSV.dev query failed for {ecosystem}/{name}") from e
+        return [self._to_finding(vuln) for vuln in vulns]
 
     @staticmethod
     def _to_finding(vuln: dict[str, Any]) -> dict[str, Any]:
         osv_id = vuln.get("id", "")
-        aliases = vuln.get("aliases") or []
-        cve_id = next((a for a in aliases if a.startswith("CVE-")), osv_id)
+        # Distro records (e.g. DEBIAN-CVE-…) name the CVE under "upstream".
+        related = [*(vuln.get("aliases") or []), *(vuln.get("upstream") or [])]
+        cve_id = next((a for a in related if a.startswith("CVE-")), osv_id)
 
         # Score from the CVSS vector; band from the explicit GHSA severity when
         # present, otherwise derived from the computed score.

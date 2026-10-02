@@ -92,7 +92,7 @@ class Asset(Base):
 class CVE(Base):
     __tablename__ = "cves"
 
-    id = Column(String(20), primary_key=True)
+    id = Column(String(64), primary_key=True)
     summary = Column(Text)
     severity = Column(String(20))
     score = Column(Float)
@@ -163,7 +163,7 @@ class AssetCVE(Base):
         primary_key=True,
     )
     cve_id = Column(
-        String(20),
+        String(64),
         ForeignKey("cves.id", ondelete="CASCADE"),
         primary_key=True,
     )

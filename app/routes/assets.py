@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assets", tags=["Assets"])
 
-# CVE ids plus OSV ids (GHSA-…, PYSEC-…, GO-…, RUSTSEC-…); 20 = cves.id column size.
+# CVE ids plus OSV ids (GHSA-…, PYSEC-…, GO-…, RUSTSEC-…); 64 = cves.id column size.
 _FINDING_ID_PATTERN = r"^[A-Z][A-Z0-9]{1,15}-[A-Za-z0-9-]+$"
 
 # Fields that decide which CVEs match an asset.
@@ -243,7 +243,7 @@ def get_asset_vulnerabilities(
 )
 def set_vulnerability_status(
     update: FindingStatusUpdate,
-    cve_id: str = Path(max_length=20, pattern=_FINDING_ID_PATTERN),
+    cve_id: str = Path(max_length=64, pattern=_FINDING_ID_PATTERN),
     asset: Asset = Depends(get_owned_asset),
     findings: FindingRepository = Depends(get_findings_repository),
 ):
