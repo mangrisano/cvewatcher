@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790940852631,
+  "lastUpdate": 1790941854919,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -1890,6 +1890,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000003525737556599681",
             "extra": "mean: 43.626127420820765 usec\nrounds: 14817"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "9b832827fc3e54f3d85325b4ddd39198dbd146b0",
+          "message": "fix(assets): reject malformed asset versions\n\nDebian's version rules accept \"6.12..110-1\" and rank it above every 6.12.x, so OSV.dev treated the typo as an up-to-date kernel and returned only the never-fixed CVEs (815 instead of 2129), with no error anywhere.\n\nAsset versions with repeated or adjacent separators (.., .-, -., --), a leading or trailing '.' or '-', or spaces are now rejected with 422 on create and edit. Real forms such as 6.11~rc4-1~exp1, 2.4.0+~cs1.2.3-1, 1:2.3-1, v1.8.0 and 1.0.0-rc.1+build.5 stay valid.",
+          "timestamp": "2026-10-02T13:50:28+02:00",
+          "tree_id": "712d5d1d2904eaf809584c91f697d2cb90a50d53",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/9b832827fc3e54f3d85325b4ddd39198dbd146b0"
+        },
+        "date": 1790941854602,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 82992.94473980363,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000003387823629793744",
+            "extra": "mean: 12.049216992301725 usec\nrounds: 26918"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 48514.985209559345,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000023988944830469947",
+            "extra": "mean: 20.612188083342154 usec\nrounds: 19821"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 18426.500923468542,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000032509092545287417",
+            "extra": "mean: 54.269663250409636 usec\nrounds: 12392"
           }
         ]
       }
