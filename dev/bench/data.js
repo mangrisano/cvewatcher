@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790939003873,
+  "lastUpdate": 1790940554983,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -1800,6 +1800,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.0000027708558175367382",
             "extra": "mean: 53.09667361278127 usec\nrounds: 12093"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "b5dbfb6361f916fc07e9aba7327f970eeefadd9c",
+          "message": "fix(scan): survive an asset deleted while it is being scanned\n\nStoring the findings of an asset deleted mid-scan hit a foreign key error outside the save guard, which aborted the whole scan: Rescan answered 500 and the other assets' results were lost (the scheduled scan failed the same way).\n\nEach asset's results are now stored in one guarded step. A deleted asset is reported as \"deleted\" and skipped, without alerts; any other storage failure stays an error for that asset only. Asset fields are read before any write, since a commit or rollback expires them.",
+          "timestamp": "2026-10-02T13:27:59+02:00",
+          "tree_id": "a53f66c5076119cb0248ec0cad8f6f9e678678ce",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/b5dbfb6361f916fc07e9aba7327f970eeefadd9c"
+        },
+        "date": 1790940554441,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 93621.493823732,
+            "unit": "iter/sec",
+            "range": "stddev: 8.126277627064592e-7",
+            "extra": "mean: 10.681307883024946 usec\nrounds: 41035"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 53980.5836234336,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000027793733838466778",
+            "extra": "mean: 18.525179478902267 usec\nrounds: 19395"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 20533.01182073873,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000002317800097426597",
+            "extra": "mean: 48.70206128211454 usec\nrounds: 13446"
           }
         ]
       }
