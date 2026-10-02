@@ -640,15 +640,25 @@
         return "/findings?" + params;
     }
 
-    async function loadFindings(refresh = false) {
-        const btn = $("findRefresh");
-        if (refresh && btn) btn.classList.add("is-busy");
-        $("findingsLoading").textContent = refresh
+    // Only the latest request may render: a rescan answers long after the
+    // user may have moved to another page or filter.
+    let findRequest = 0;
+    let scansRunning = 0;
+
+    function showFindingsLoading() {
+        $("findingsLoading").textContent = scansRunning
             ? "Scanning your assets\u2026 this can take a while."
             : "Loading vulnerabilities\u2026";
         $("findingsLoading").classList.remove("hidden");
+        $("findRefresh")?.classList.toggle("is-busy", scansRunning > 0);
+    }
+
+    async function loadFindings(refresh = false, carriedNotice = "") {
+        const request = ++findRequest;
+        if (refresh) scansRunning++;
+        showFindingsLoading();
         let data = { findings: [], matched: 0 };
-        let notice = "";
+        let notice = carriedNotice;
         try {
             let res = await apiFetch(findingsQuery(refresh));
             if (res.status === 429) {
@@ -657,9 +667,17 @@
             }
             if (res.ok) data = await res.json();
         } finally {
-            if (btn) btn.classList.remove("is-busy");
+            if (refresh) scansRunning--;
         }
-        $("findingsLoading").classList.add("hidden");
+        if (request !== findRequest) {
+            // A newer request owns the table; re-read it once the scan is done.
+            if (refresh) loadFindings(false, notice);
+            return;
+        }
+        if (scansRunning === 0) {
+            $("findingsLoading").classList.add("hidden");
+            $("findRefresh")?.classList.remove("is-busy");
+        }
         findState.matched = data.matched || 0;
         renderScanInfo(data, notice);
         renderFindings(data.findings || []);
