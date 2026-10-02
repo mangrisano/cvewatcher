@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790940554983,
+  "lastUpdate": 1790940852631,
   "repoUrl": "https://github.com/mangrisano/cvewatcher",
   "entries": {
     "cvewatcher benchmarks": [
@@ -1845,6 +1845,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.000002317800097426597",
             "extra": "mean: 48.70206128211454 usec\nrounds: 13446"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "committer": {
+            "email": "michele.angrisano@gmail.com",
+            "name": "Michele Angrisano",
+            "username": "mangrisano"
+          },
+          "distinct": true,
+          "id": "deb4a1aec23a5930fbdc4aa0a9f75f1810e39f97",
+          "message": "fix(dashboard): move to the last page when the findings shrink below it\n\nViewing page 4 of 200 findings, a scan that left 60 made the table ask for rows past the end and say \"No vulnerabilities match\", although two pages of results existed. The table now moves to the last page that exists, or back to the start when nothing matches. app.js cache-busting version bumped.",
+          "timestamp": "2026-10-02T13:33:49+02:00",
+          "tree_id": "ecd4ae1ea9f2c40f7ef9df66593f01146d4172ec",
+          "url": "https://github.com/mangrisano/cvewatcher/commit/deb4a1aec23a5930fbdc4aa0a9f75f1810e39f97"
+        },
+        "date": 1790940852324,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_perf.py::test_cpe_matches_name",
+            "value": 119374.48480790938,
+            "unit": "iter/sec",
+            "range": "stddev: 9.003668793062382e-7",
+            "extra": "mean: 8.376999503781256 usec\nrounds: 50378"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_version_affected",
+            "value": 58185.14396333141,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0000027918251617782884",
+            "extra": "mean: 17.186517586520115 usec\nrounds: 19475"
+          },
+          {
+            "name": "benchmarks/bench_perf.py::test_match_pipeline",
+            "value": 22922.043718295874,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000003525737556599681",
+            "extra": "mean: 43.626127420820765 usec\nrounds: 14817"
           }
         ]
       }
