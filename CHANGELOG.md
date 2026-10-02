@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The asset **Ecosystem** field is free text with suggestions, so Linux
   distributions work too (`Debian:13`, `Ubuntu:24.04:LTS`, `Alpine:v3.22`).
   `GET /assets/ecosystems` lists the OSV.dev ecosystem names.
+- Findings table: numbered pages to jump directly to any page.
 - Findings show the asset's ecosystem next to its name (and the API and CSV
   export carry `asset_ecosystem`), so the same package followed in two
   ecosystems can be told apart. The findings search also matches the

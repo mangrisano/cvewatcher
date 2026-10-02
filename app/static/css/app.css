@@ -363,6 +363,10 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-we
 .section-note { margin-bottom: 14px; }
 .pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; font-size: 13px; }
 .pager .btn:disabled { opacity: 0.4; pointer-events: none; }
+.pager__pages { display: flex; align-items: center; gap: 4px; }
+.pager__pages .btn { min-width: 32px; justify-content: center; }
+.pager__pages .btn.is-active { background: var(--accent); border-color: var(--accent); color: #fff; pointer-events: none; }
+.pager__gap { padding: 0 2px; color: var(--text-muted); }
 
 /* Table */
 .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; box-shadow: var(--shadow); }

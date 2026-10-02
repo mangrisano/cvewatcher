@@ -681,10 +681,26 @@
     }
 
     function pageFindings(step) {
-        const next = findState.offset + step * FIND_PAGE;
-        if (next < 0 || next >= findState.matched) return;
+        goToFindingsPage(findState.offset / FIND_PAGE + step);
+    }
+
+    function goToFindingsPage(index) {
+        const next = index * FIND_PAGE;
+        if (next < 0 || next >= findState.matched || next === findState.offset) return;
         findState.offset = next;
         loadFindings();
+    }
+
+    // First, last and two pages around the current one; gaps become "null".
+    function pageWindow(current, total) {
+        const pages = [];
+        for (let i = 0; i < total; i++) {
+            if (i === 0 || i === total - 1 || Math.abs(i - current) <= 2) {
+                if (pages.length && i - pages[pages.length - 1] > 1) pages.push(null);
+                pages.push(i);
+            }
+        }
+        return pages;
     }
 
     function sortFindingsBy(key) {
@@ -733,6 +749,26 @@
         $("findRange").textContent = `${from}\u2013${findState.offset + shown} of ${findState.matched}`;
         $("findPrev").disabled = findState.offset === 0;
         $("findNext").disabled = findState.offset + FIND_PAGE >= findState.matched;
+
+        const current = Math.floor(findState.offset / FIND_PAGE);
+        const total = Math.ceil(findState.matched / FIND_PAGE);
+        const pages = $("findPages");
+        pages.replaceChildren(
+            ...pageWindow(current, total).map((i) => {
+                if (i === null) {
+                    const gap = document.createElement("span");
+                    gap.className = "pager__gap";
+                    gap.textContent = "\u2026";
+                    return gap;
+                }
+                const btn = document.createElement("button");
+                btn.className = "btn btn--sm" + (i === current ? " is-active" : "");
+                btn.dataset.page = i;
+                btn.textContent = i + 1;
+                if (i === current) btn.setAttribute("aria-current", "page");
+                return btn;
+            })
+        );
     }
 
     function renderFindings(list) {
@@ -1196,6 +1232,10 @@
     on("findRefresh", "click", refreshFindings);
     on("findPrev", "click", () => pageFindings(-1));
     on("findNext", "click", () => pageFindings(1));
+    on("findPages", "click", (event) => {
+        const btn = event.target.closest("button[data-page]");
+        if (btn) goToFindingsPage(Number(btn.dataset.page));
+    });
     on("exportCsv", "click", () => exportFindings("csv"));
     on("exportJson", "click", () => exportFindings("json"));
     on("assetModalClose", "click", closeAssetModal);
